@@ -11105,6 +11105,78 @@ const Q = {
     const failed = g.halls.flatMap((h) => h.racks).filter((p) => p.status === "failed").map((p) => ({ id: p.id, part: p.failedPart ? getItem(p.failedPart)?.name ?? "" : "burn-in failure", readyMonth: p.readyMonth }));
     return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o) => o.spare && o.itemId === id).reduce((n, o) => n + o.qty, 0), adv: recommendedSpares(g, id) })) };
   },
+  slotOptions: (chassisId, kind) => {
+    const ch = getItem(chassisId);
+    if (!ch) return [];
+    const slot = ch.slots.find((s) => s.kind === kind);
+    return ALL_ITEMS.filter((i) => partFitsSlot({ kind, accepts: slot?.accepts }, i)).map((i) => offerAt(i, G().month)).sort((a, b) => Number(b.available) - Number(a.available) || b.item.availableFrom - a.item.availableFrom);
+  },
+  traySizing: (design) => {
+    const g = G();
+    const month = g.month;
+    const utility = g.utilityUSDPerKWh;
+    const ch = getItem(design.chassisId);
+    if (!ch) return null;
+    const v2 = validateTray(design, getItem);
+    const year = 2020 + month / 12;
+    const parts = design.parts.map((p) => ({ ...p, it: getItem(p.itemId) })).filter((p) => p.it);
+    const n = (k2) => parts.filter((p) => p.it.kind === k2).reduce((a, p) => a + p.count, 0);
+    const gpus = v2.stats.accels || 0;
+    const draw = v2.stats.watts + ch.overheadW;
+    const psus = parts.filter((p) => p.slot === "psu");
+    const psuW = psus.reduce((a, p) => a + (p.it.capacityKW ?? 0) * 1e3 * p.count, 0), psuCount = psus.reduce((a, p) => a + p.count, 0);
+    const unitW = psuCount ? psuW / psuCount : 0, need = unitW ? Math.ceil(draw / (unitW * 0.9)) : 0;
+    const redundantOK = psuCount >= 2 && psuW - unitW >= draw * 0.9;
+    const cpu2 = parts.find((p) => p.it.kind === "cpu");
+    const cpuItem = cpu2?.it;
+    const cpuN = cpu2?.count ?? 0;
+    const lanesAvail = Math.min(ch.pcieLanesAvail, (cpuItem?.pcieLanes ?? 0) * cpuN || ch.pcieLanesAvail);
+    const dimms = n("memory");
+    const channels = (cpuItem?.memChannels ?? 0) * cpuN;
+    const nics = parts.filter((p) => p.it.kind === "nic");
+    const nicGbps = nics.reduce((a, p) => a + p.it.gbps * p.count, 0);
+    const perGpu = gpus ? nicGbps / 8 / gpus : 0, tier = scaleOutTier(year);
+    const bestNic = ITEMS_BY_KIND("nic").filter((x) => x.nicClass === "nic" && offerAt(x, month).available).sort((a, b) => b.gbps - a.gbps)[0];
+    const nicNeed = bestNic && gpus ? Math.ceil(tier * 8 * gpus / bestNic.gbps) : 0;
+    const hbm = v2.stats.memGB, hostRam = parts.filter((p) => p.it.kind === "memory").reduce((a, p) => a + p.it.capacityGB * p.count, 0);
+    const capex = v2.stats.costUSD;
+    const powerMo = draw / 1e3 * 1.3 * 730 * utility;
+    const hours = 5 * 8760;
+    const costHr = gpus ? (capex / hours + powerMo * 12 * 5 / hours) / gpus : 0;
+    const price = gpuHourAnchor(year);
+    const cpuOpt = ITEMS_BY_KIND("cpu").filter((c) => offerAt(c, month).available && c.arch === (cpuItem?.arch ?? "x86")).sort((a, b) => b.availableFrom - a.availableFrom)[0];
+    return {
+      gpus,
+      draw,
+      psuW,
+      psuCount,
+      unitW,
+      need,
+      redundantOK,
+      chassisMaxW: ch.maxPowerW,
+      lanesUsed: v2.stats.pcieLanesUsed,
+      lanesAvail: lanesAvail || ch.pcieLanesAvail,
+      chassisLanes: ch.pcieLanesAvail,
+      cpuN,
+      cpuLanes: cpuItem?.pcieLanes ?? 0,
+      cpuHint: cpuOpt ? { name: cpuOpt.name, lanes: cpuOpt.pcieLanes, channels: cpuOpt.memChannels, tdp: cpuOpt.tdpW, price: cpuOpt.priceUSD } : null,
+      dimms,
+      channels,
+      nicCount: nics.reduce((a, p) => a + p.count, 0),
+      nicGbps,
+      perGpu,
+      tier,
+      year,
+      bestNic: bestNic ? { name: bestNic.name, gbps: bestNic.gbps, lanes: bestNic.pcieLanes } : null,
+      nicNeed,
+      hbm,
+      hostRam,
+      capex,
+      powerMo,
+      costHr,
+      price
+    };
+  },
   failureRates: (designId) => rackRates(G(), designId),
   rackParts: (designId) => rackParts(G(), designId),
   spareQty: (id, qty) => spareQty(id, qty),

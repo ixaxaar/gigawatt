@@ -1,29 +1,23 @@
 # GIGAWATT Godot — parity with the web build
 
-Web build (src/) is the reference. Status: DONE / PARTIAL / TODO.
+Architecture: Godot is the front-end. All rules run in the real TypeScript engine (`sidecar/bridge.mjs`,
+built from `src/bridge.ts` with `vite build -c vite.bridge.config.ts`) over a pipe, so numbers match the web build exactly.
+Run: `./run.sh` (uses the NVIDIA GPU + Vulkan Forward+). Needs Node 18+.
 
-| Area | Web | Godot |
-|---|---|---|
-| 3D hall, racks, aisles, plant | isometric SVG | DONE (1:1 scale PBR scene, shader rack faces) |
-| Real-time clock, speeds, pause | monthly button | DONE |
-| Procure prebuilt systems | templates | DONE |
-| Hall power/cooling caps + throttling | yes | DONE (simplified) |
-| Spot + contracts revenue | detailed (SLA, tokens/s, MFU) | PARTIAL (GPU-count contracts) |
-| Failures + spares + RMA | per-part | PARTIAL (per-rack, global spares) |
-| Incidents (decision cards), objectives, win/lose | n/a (new) | DONE |
-| Design Lab: tray -> rack from parts, validation | yes | TODO |
-| Procure individual parts + warehouse ledger | yes | TODO |
-| Network / supercomputer: fabrics, topologies, clusters | yes | TODO |
-| Training/inference perf model (perf.ts) | yes | TODO |
-| Power market: PPAs, spot power | yes | TODO |
-| Outage protection tiers (UPS/genset/ATS/N+1) | yes | TODO |
-| Internet uplinks | yes | TODO |
-| Hall cooling classes air/rdhx/dlc/immersion, PUE | yes | PARTIAL (air/dlc) |
-| Easy-path autopilot | yes | TODO |
-| Modes (learner/operator/tycoon) + concepts/codex/advisor | yes | PARTIAL (modes only) |
-| Save/load | yes | TODO |
-| Sound | yes | TODO |
-
-Port order: (1) save/load + sound, (2) resilience + internet + power market on the existing sim,
-(3) validate.ts + Design Lab, (4) perf.ts + contracts with real SLAs, (5) network, (6) codex/advisor/easy-path.
-Pure-sim ports are verified against golden vectors exported from the TS sim (godot/tests/*_golden.json).
+| Screen / feature | Status |
+|---|---|
+| Datacenter (3D hall, plaques, projects, missions, customers, log) | DONE |
+| Procure: Guided planner (4 steps, BOM, hall checks, order) | DONE |
+| Procure: Parts bin (kinds, vendors, unreleased, specs, codex, spares, orders) | DONE (no part art yet) |
+| Design Lab: Tray bench (motherboard, sockets, install, fill all, autofill, templates, validation, sizing advisor, save) | DONE (click-select; no drag & drop, simplified PCB art) |
+| Design Lab: Rack bench (42U, arm+place, count/nudge/remove, validation, save, adopt/open) | DONE (no drag & drop) |
+| Build (floor place, gauges, install, buy plant, outage protection, internet, hall checks, new hall) | DONE |
+| Warehouse (rack assembly, missing parts, deploy, spares, transit, floor, ledger) | DONE |
+| Energy (power position, PPAs, spot market, idle capacity) | DONE |
+| Supercomputer (racks, auto-design, advanced fabric, topology, model table, checks, build) | DONE |
+| Customers (offers, fit verdicts, needs, Easy path, rack assign, pending, serving) | DONE |
+| Codex (parts, Datacenter 101, accelerator timeline), Guide, Concepts | DONE |
+| Modes, save/load, sound, pause menu/quit | DONE |
+| Advisor "ADA" bubble, Tip toggle by mode, item/part art (ItemArt) | TODO |
+| 3D hall: racks show per-cluster colours / cabling per cluster | TODO |
+| Game-first layer (objectives, incidents, real-time) from the first Godot prototype | removed — to be re-added inside the engine |
