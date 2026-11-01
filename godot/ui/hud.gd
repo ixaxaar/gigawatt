@@ -8,6 +8,7 @@ signal hall_selected(i: int)
 signal new_game_requested(mode: String)
 signal panel_toggled(open: bool)
 signal continue_requested
+signal menu_action(a: String)
 signal cue(kind: String)
 
 const C_BG := Color(0.04, 0.06, 0.09, 0.92)
@@ -336,4 +337,20 @@ func show_title() -> void:
 	for m in [["LEARNER", "learner", "$80M · forgiving start"], ["OPERATOR", "operator", "$50M · the intended game"], ["TYCOON", "tycoon", "$30M · tight and unforgiving"]]:
 		var b := _btn("%s     %s" % [m[0], m[2]], func(): holder.queue_free(); new_game_requested.emit(m[1]), m[1] == "operator", 24); b.custom_minimum_size = Vector2(560, 64); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(b)
 	if Sim.has_save(): var cb := _btn("CONTINUE", func(): holder.queue_free(); continue_requested.emit(), true, 24); cb.custom_minimum_size = Vector2(560, 64); cb.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(cb)
+	var qb := _btn("QUIT", func(): menu_action.emit("quit"), false, 20); qb.custom_minimum_size = Vector2(560, 48); vb.add_child(qb)
 	vb.add_child(_label("Right-drag orbit · wheel zoom · WASD pan · Space pause · 1/2/3 speed · T heat · F5 save · M mute · Esc cancel", 15, C_DIM))
+
+# ---------- pause menu ----------
+var _menu_ui: Control
+func toggle_menu() -> void:
+	if _menu_ui != null: _menu_ui.queue_free(); _menu_ui = null; panel_toggled.emit(open_panel != ""); return
+	var holder := Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(holder); _menu_ui = holder
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); holder.add_child(dim)
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -190; vb.offset_bottom = 190; vb.add_theme_constant_override("separation", 12); holder.add_child(vb)
+	vb.add_child(_label("PAUSED", 44, C_CY))
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
+		var b := _btn(a[0], func(): menu_action.emit(a[1]), a[1] == "resume", 22); b.custom_minimum_size = Vector2(0, 52); vb.add_child(b)
+	panel_toggled.emit(true)
+
+func close_menu() -> void:
+	if _menu_ui != null: _menu_ui.queue_free(); _menu_ui = null; panel_toggled.emit(open_panel != "")

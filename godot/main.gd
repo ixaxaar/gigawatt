@@ -19,6 +19,8 @@ func _ready() -> void:
 	audio = GameAudio.new(); add_child(audio)
 	hud.cue.connect(audio.play)
 	hud.continue_requested.connect(_continue)
+	hud.menu_action.connect(_menu)
+	get_tree().set_auto_accept_quit(false)
 	hud.speed_changed.connect(func(v): speed = v)
 	hud.panel_toggled.connect(func(o): panel_open = o)
 	hud.place_requested.connect(_begin_place)
@@ -55,6 +57,21 @@ func _start(mode: String) -> void:
 	hud.set_chrome(true); hud.sim = sim; hud.hall_i = 0; hud.set_speed(1); hud.refresh(); started = true; clock = 0.0
 	for e in sim.s.log: hud.push_feed(e.level, e.text)
 
+func _menu(a: String) -> void:
+	match a:
+		"resume": hud.close_menu()
+		"save": sim.save_game(); hud.push_feed("info", "Saved."); hud.close_menu()
+		"mute": audio.muted = not audio.muted
+		"title": sim.save_game(); get_tree().reload_current_scene()
+		"quit":
+			if started: sim.save_game()
+			get_tree().quit()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if started: sim.save_game()
+		get_tree().quit()
+
 func _continue() -> void:
 	var ns := Sim.new()
 	if not ns.load_game(): return
@@ -79,11 +96,15 @@ func _slot_clicked(slot: int) -> void:
 	hud.refresh()
 
 func _unhandled_key_input(e: InputEvent) -> void:
-	if not (e is InputEventKey) or not e.pressed or e.echo or not started: return
+	if not (e is InputEventKey) or not e.pressed or e.echo: return
+	if e.keycode == KEY_ESCAPE and not started: get_tree().quit(); return
+	if not started: return
 	match e.keycode:
 		KEY_ESCAPE:
 			if placing != "": _end_place()
-			elif panel_open: hud.close_panel()
+			elif hud._menu_ui != null: hud.close_menu()
+			elif hud.open_panel != "": hud.close_panel()
+			else: hud.toggle_menu()
 		KEY_SPACE: hud.set_speed(0 if speed > 0 else 1)
 		KEY_1: hud.set_speed(1)
 		KEY_2: hud.set_speed(2)
