@@ -2,7 +2,8 @@ extends Node
 ## App shell: engine bridge + 3D hall + top bar, dock, screens, toasts. Screens live in ui/screens.
 
 const SCREENS := [["dash", "", "Datacenter"], ["shop", "", "Procure"], ["design", "", "Design Lab"], ["facility", "", "Build"], ["stock", "", "Warehouse"], ["energy", "", "Energy"], ["network", "", "Supercomputer"], ["contracts", "", "Customers"], ["codex", "", "Codex"]]
-const SCRIPTS := {"shop": "res://ui/screens/procure.gd"}
+const SCRIPTS := {"dash": "res://ui/screens/dash.gd", "shop": "res://ui/screens/procure.gd", "stock": "res://ui/screens/stock.gd", "contracts": "res://ui/screens/contracts.gd", "facility": "res://ui/screens/facility.gd", "codex": "res://ui/screens/codex.gd", "energy": "res://ui/screens/energy.gd"}
+const OVERLAY := ["dash", "facility"]
 const SECS := [0.0, 4.0, 1.6, 0.6]
 
 var b: Bridge
@@ -24,6 +25,7 @@ var bar_month: ProgressBar
 var dock_btns := {}
 var menu_ui: Control
 var banner: Label
+var guide: GuideOverlay
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
@@ -37,8 +39,9 @@ func _ready() -> void:
 	ui.add_child(root)
 	_build_shell(); _title()
 	b.changed.connect(_on_changed)
+	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
-	if auto != "": _new_game(auto); if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN"))
+	if auto != "": _new_game(auto); if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 
 func _fatal(msg: String) -> void:
 	var l := Label.new(); l.text = "GIGAWATT engine failed to start:\n" + msg; l.position = Vector2(60, 60); add_child(l)
@@ -53,7 +56,7 @@ func _build_shell() -> void:
 		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 19); v.add_child(lbl[p[1]]); hb.add_child(v)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
 	lbl.mode = Kit.btn("", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); hb.add_child(lbl.mode)
-	hb.add_child(Kit.btn("How to play", func(): show_screen("guide"), "", 14))
+	hb.add_child(Kit.btn("How to play", func(): guide.visible = true; guide.open(), "", 14))
 	hb.add_child(Kit.btn("Sound", func(): audio.muted = not audio.muted, "", 14))
 	hb.add_child(Kit.btn("Save", func(): var r := b.act("save"); toast("Game saved.", "good"), "", 14))
 	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
@@ -64,6 +67,7 @@ func _build_shell() -> void:
 	for i in SCREENS.size():
 		var s: Array = SCREENS[i]
 		var d := Kit.btn("%s [%d]" % [s[2], i + 1], func(): show_screen(s[0]), "", 14); d.custom_minimum_size = Vector2(118, 60); dock.add_child(d); dock_btns[s[0]] = d
+	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
 	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
 	banner = Kit.label("", 30, Kit.AM); banner.set_anchors_preset(Control.PRESET_CENTER_TOP); banner.offset_top = 140; banner.offset_left = -400; banner.offset_right = 400; banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; root.add_child(banner)
 	_shell_visible(false)
@@ -111,6 +115,7 @@ func _on_changed() -> void:
 		if e.level != "info": toast(e.text, e.level)
 	_seen_log = g.log.size()
 	hall.rebuild()
+	if hall.get_meta("n", 0) == 0: pass
 	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
 
 func toast(text: String, level := "info") -> void:
@@ -134,6 +139,9 @@ func show_screen(id: String) -> void:
 
 func go(id: String) -> void: show_screen(id)
 
+var learn_id := ""
+func learn(id: String) -> void: learn_id = id; show_screen("codex")
+
 func _make_screen(id: String) -> Control:
 	var path: String = SCRIPTS.get(id, "")
 	var c: Control
@@ -141,7 +149,7 @@ func _make_screen(id: String) -> Control:
 	else:
 		c = Control.new(); c.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var l := Kit.label("%s — coming next in the Godot port." % id, 22, Kit.DIM); l.position = Vector2(40, 40); c.add_child(l)
-	if id != "dash":
+	if not OVERLAY.has(id):
 		var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Kit.LINE, 12, 1, 14)); bg.mouse_filter = Control.MOUSE_FILTER_STOP
 		c.set_anchors_preset(Control.PRESET_FULL_RECT); c.offset_left = 16; c.offset_top = 14; c.offset_right = -16; c.offset_bottom = -14
 		var w := ScreenWrap.new(); w.set_anchors_preset(Control.PRESET_FULL_RECT); w.add_child(bg); w.add_child(c); w.inner = c; return w
@@ -161,6 +169,10 @@ func _process(dt: float) -> void:
 	if not started or speed == 0 or menu_ui != null: return
 	clock += dt / SECS[speed]; bar_month.value = clock
 	if clock >= 1.0: clock = 0.0; next_month()
+
+func _dbg() -> void:
+	for k in screens: print(k, " rect=", screens[k].get_global_rect(), " vis=", screens[k].visible)
+	print("holder=", holder.get_global_rect())
 
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not (e is InputEventKey) or not e.pressed or e.echo: return

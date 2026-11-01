@@ -38,6 +38,10 @@ static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
 	b.add_theme_stylebox_override("pressed", sb(base.darkened(0.2), CY, 8, 2, 10)); b.add_theme_stylebox_override("disabled", sb(Color(0.06, 0.08, 0.1), Color(0.12, 0.16, 0.2), 8, 1, 10))
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.pressed.connect(cb); return b
 
+static func link(text: String, cb: Callable, size := 14) -> Button:
+	var b := Button.new(); b.text = text; b.flat = true; b.focus_mode = Control.FOCUS_NONE; b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.add_theme_font_size_override("font_size", size)
+	b.add_theme_color_override("font_color", CY); b.add_theme_color_override("font_hover_color", Color.WHITE); b.pressed.connect(cb); return b
+
 static func tabs(parent: Control, names: Array, current: String, cb: Callable) -> HBoxContainer:
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 6)
 	for n in names:
@@ -102,8 +106,9 @@ static func row(parent: Control, left: Control, right: Array = []) -> HBoxContai
 
 ## Table: headers = [text...], rows = Array of Array[Control|String]; widths optional stretch ratios.
 static func table(headers: Array, rows: Array, ratios: Array = []) -> GridContainer:
-	var g := GridContainer.new(); g.columns = headers.size(); g.add_theme_constant_override("h_separation", 14); g.add_theme_constant_override("v_separation", 5); g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for h in headers: g.add_child(label(str(h).to_upper(), 11, DIM))
+	var g := GridContainer.new(); g.columns = maxi(headers.size(), (rows[0].size() if rows.size() > 0 else 1)); g.add_theme_constant_override("h_separation", 14); g.add_theme_constant_override("v_separation", 5); g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if headers.size() > 0:
+		for h in headers: g.add_child(label(str(h).to_upper(), 11, DIM))
 	for r in rows:
 		for c in r:
 			if c is Control: g.add_child(c)

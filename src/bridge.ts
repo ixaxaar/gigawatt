@@ -24,7 +24,7 @@ import { hallResilience } from './sim/resilience';
 import { uplinkGbps, uplinkMonthlyUSD, carrierCount, totalNeedGbps, contractNeedGbps } from './sim/internet';
 import { monthlyOpex, HOURS_PER_MONTH } from './sim/economy';
 import { POWER_SOURCES, settlePower, spotAnchor, spotRevenue, spotUtilization } from './sim/power';
-import { recommendedSpares, spareQty, rackParts, rackRates } from './sim/failures';
+import { recommendedSpares, spareQty, rackParts, rackRates, partClass, PART_LABEL } from './sim/failures';
 import { validateRack as vr } from './sim/validate';
 import type { Cluster } from './types';
 
@@ -64,12 +64,15 @@ const Q: Record<string, (...a: any[]) => any> = {
   models: () => { const y = 2020 + G().month / 12; return { all: MODELS, tier: scaleOutTier(y), anchor: gpuHourAnchor(y) }; },
   autoFabric: (rackIds, target) => autoFabric(G(), rackIds, target),
   contractFit: (cid) => { const g = G(); const c = g.availableContracts.find(x => x.id === cid) ?? g.activeContracts.find(a => a.contract.id === cid)?.contract; return c ? contractFit(g, c) : null; },
-  buildOptions: (cid) => { const g = G(); const c = g.availableContracts.find(x => x.id === cid) ?? g.activeContracts.find(a => a.contract.id === cid)?.contract; return c ? buildOptions(g, c) : []; },
+  buildOptions: (cid, signedAt) => { const g = G(); const c = g.availableContracts.find(x => x.id === cid) ?? g.activeContracts.find(a => a.contract.id === cid)?.contract; return c ? buildOptions(g, c, signedAt ?? undefined) : []; },
   pipeline: () => pipeline(G()),
   powerPreview: () => { const g = G(); const o = monthlyOpex(g); const drawMW = (o.itPowerKW * o.pue) / 1000; return { drawMW, opex: o, settle: settlePower(g, drawMW, () => 0.5, () => {}), spotAnchor: spotAnchor(g.month), spotPrice: g.spotPrice ?? spotAnchor(g.month), spotUtil: spotUtilization(g.spotPrice ?? spotAnchor(g.month), g.month), hours: HOURS_PER_MONTH }; },
   spotRevenue: () => { const g = G(); return spotRevenue(g, new Set(g.activeContracts.flatMap(a => a.clusterIds)), d => { const rd = g.racks.find(r => r.id === d); return rd ? vr(rd, g.trays, getItem).stats.accels : 0; }); },
   powerSources: () => POWER_SOURCES,
   spares: () => { const g = G(); return { shelf: g.spareStock ?? {}, rec: Object.fromEntries(Object.keys(g.inventory).map(id => [id, recommendedSpares(g, id)])) }; },
+  sparesView: () => { const g = G(); const ids = new Set<string>(); g.halls.forEach(h => h.racks.forEach(p => Object.keys(rackParts(g, p.designId)).forEach(id => partClass(id) && ids.add(id))));
+    const failed = g.halls.flatMap(h => h.racks).filter(p => p.status === 'failed').map(p => ({ id: p.id, part: p.failedPart ? getItem(p.failedPart)?.name ?? '' : 'burn-in failure', readyMonth: p.readyMonth }));
+    return { failed, rows: [...ids].map(id => ({ id, name: getItem(id)!.name, label: PART_LABEL[partClass(id)!], have: (g.spareStock?.[id] ?? 0) + g.orders.filter(o => o.spare && o.itemId === id).reduce((n, o) => n + o.qty, 0), adv: recommendedSpares(g, id) })) }; },
   failureRates: (designId) => rackRates(G(), designId),
   rackParts: (designId) => rackParts(G(), designId),
   spareQty: (id, qty) => spareQty(id, qty),

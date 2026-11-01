@@ -10857,7 +10857,7 @@ function buildOptions(g, c, signedAt) {
   const hall = g.halls[0];
   const cls = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
   const ramp = c.rampMonths ?? 4;
-  const deployBy = g.month + ramp;
+  const deployBy = signedAt != null ? signedAt : g.month + ramp;
   const out = [];
   for (const t of TEMPLATES) {
     if (t.availableFrom > year || t.eolAfter && year > t.eolAfter || t.tier === "turnkey" && false) continue;
@@ -11073,10 +11073,10 @@ const Q = {
     const c = g.availableContracts.find((x) => x.id === cid) ?? g.activeContracts.find((a) => a.contract.id === cid)?.contract;
     return c ? contractFit(g, c) : null;
   },
-  buildOptions: (cid) => {
+  buildOptions: (cid, signedAt) => {
     const g = G();
     const c = g.availableContracts.find((x) => x.id === cid) ?? g.activeContracts.find((a) => a.contract.id === cid)?.contract;
-    return c ? buildOptions(g, c) : [];
+    return c ? buildOptions(g, c, signedAt ?? void 0) : [];
   },
   pipeline: () => pipeline(G()),
   powerPreview: () => {
@@ -11097,6 +11097,13 @@ const Q = {
   spares: () => {
     const g = G();
     return { shelf: g.spareStock ?? {}, rec: Object.fromEntries(Object.keys(g.inventory).map((id) => [id, recommendedSpares(g, id)])) };
+  },
+  sparesView: () => {
+    const g = G();
+    const ids = /* @__PURE__ */ new Set();
+    g.halls.forEach((h) => h.racks.forEach((p) => Object.keys(rackParts(g, p.designId)).forEach((id) => partClass(id) && ids.add(id))));
+    const failed = g.halls.flatMap((h) => h.racks).filter((p) => p.status === "failed").map((p) => ({ id: p.id, part: p.failedPart ? getItem(p.failedPart)?.name ?? "" : "burn-in failure", readyMonth: p.readyMonth }));
+    return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o) => o.spare && o.itemId === id).reduce((n, o) => n + o.qty, 0), adv: recommendedSpares(g, id) })) };
   },
   failureRates: (designId) => rackRates(G(), designId),
   rackParts: (designId) => rackParts(G(), designId),

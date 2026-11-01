@@ -18,7 +18,7 @@ var bmsg := ""
 const KINDS := ["accelerator", "cpu", "nic", "switch", "cable", "chassis", "rack", "power", "cooling", "storage", "memory", "nvme"]
 const TIER := {"diy": ["DIY", "Build it yourself"], "oem": ["OEM", "OEM integrated rack"], "turnkey": ["TURNKEY", "Turnkey / reference"]}
 
-func _ready() -> void: set_anchors_preset(Control.PRESET_FULL_RECT)
+func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func refresh() -> void:
 	for c in get_children(): c.queue_free()
