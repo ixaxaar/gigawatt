@@ -35,6 +35,19 @@ func new_game(seed_: int, mode: String = "operator") -> void:
 func make_hall(name: String, cool: String, slots: int, it_kw: float, cool_kw: float, plant: Dictionary) -> Dictionary:
 	return {"name": name, "cool": cool, "slots": slots, "it_kw": it_kw, "cool_kw": cool_kw, "racks": [], "plant": plant}
 
+# ---------- save / load ----------
+const SAVE_PATH := "user://gigawatt.save"
+static func has_save() -> bool: return FileAccess.file_exists(SAVE_PATH)
+func save_game() -> void:
+	s["rng_a"] = rng.a
+	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE); f.store_var(s, false)
+func load_game() -> bool:
+	Data.load_all()
+	if not has_save(): return false
+	var f := FileAccess.open(SAVE_PATH, FileAccess.READ); var d = f.get_var(false)
+	if typeof(d) != TYPE_DICTIONARY: return false
+	s = d; rng = Rng.new(0); rng.a = s.get("rng_a", 0); return true
+
 # ---------- helpers ----------
 func year() -> float: return 2020.0 + s.month / 12.0
 func date_of(m: int) -> String: return "%s %d" % [["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m % 12], 2020 + m / 12]

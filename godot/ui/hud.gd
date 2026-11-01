@@ -7,6 +7,8 @@ signal place_requested(sys_id: String)
 signal hall_selected(i: int)
 signal new_game_requested(mode: String)
 signal panel_toggled(open: bool)
+signal continue_requested
+signal cue(kind: String)
 
 const C_BG := Color(0.04, 0.06, 0.09, 0.92)
 const C_LINE := Color(0.16, 0.27, 0.38)
@@ -49,6 +51,7 @@ func _btn(t: String, cb: Callable, primary := false, size := 17) -> Button:
 	b.add_theme_stylebox_override("pressed", _sb(base.darkened(0.2), C_CY, 8, 2, 10))
 	b.add_theme_stylebox_override("disabled", _sb(Color(0.06, 0.08, 0.1), Color(0.12, 0.16, 0.2), 8, 1, 10))
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5))
+	b.pressed.connect(func(): cue.emit("click"))
 	b.pressed.connect(cb); return b
 
 func _bar(col: Color) -> ProgressBar:
@@ -148,6 +151,7 @@ func set_month_frac(f: float) -> void: bar_month.value = f
 
 # ---------- feed & tooltips ----------
 func push_feed(level: String, text: String) -> void:
+	cue.emit("good" if level == "good" else ("bad" if level == "bad" else "month"))
 	var col := C_GR if level == "good" else (C_RD if level == "bad" else C_DIM)
 	var pc := PanelContainer.new(); pc.add_theme_stylebox_override("panel", _sb(Color(0.03, 0.05, 0.08, 0.8), col, 8, 1, 8)); pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var l := _label(text, 15, col.lightened(0.25)); l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l.custom_minimum_size = Vector2(520, 0); l.mouse_filter = Control.MOUSE_FILTER_IGNORE; pc.add_child(l); feed.add_child(pc)
@@ -291,6 +295,7 @@ func _try(err: String) -> void:
 var _incident_ui: Control
 func show_incident(on_choice: Callable) -> void:
 	if _incident_ui != null: return
+	cue.emit("incident")
 	var inc: Dictionary = sim.s.incident; var card := Incidents.card(sim, inc.kind, inc.params)
 	var holder := Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(holder); _incident_ui = holder
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.62); dim.set_anchors_preset(Control.PRESET_FULL_RECT); holder.add_child(dim)
@@ -330,4 +335,5 @@ func show_title() -> void:
 	var p := _label("Buy real GPUs. Fill the floor. Keep the power on. Lease capacity to the AI boom — and survive 2020 → 2028.", 22); p.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; vb.add_child(p)
 	for m in [["LEARNER", "learner", "$80M · forgiving start"], ["OPERATOR", "operator", "$50M · the intended game"], ["TYCOON", "tycoon", "$30M · tight and unforgiving"]]:
 		var b := _btn("%s     %s" % [m[0], m[2]], func(): holder.queue_free(); new_game_requested.emit(m[1]), m[1] == "operator", 24); b.custom_minimum_size = Vector2(560, 64); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(b)
-	vb.add_child(_label("Right-drag orbit · wheel zoom · WASD pan · Space pause · 1/2/3 speed · Esc cancel", 15, C_DIM))
+	if Sim.has_save(): var cb := _btn("CONTINUE", func(): holder.queue_free(); continue_requested.emit(), true, 24); cb.custom_minimum_size = Vector2(560, 64); cb.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(cb)
+	vb.add_child(_label("Right-drag orbit · wheel zoom · WASD pan · Space pause · 1/2/3 speed · T heat · F5 save · M mute · Esc cancel", 15, C_DIM))

@@ -10,11 +10,15 @@ var speed := 1
 var panel_open := false
 var placing := ""
 var started := false
+var audio: GameAudio
 
 func _ready() -> void:
 	Data.load_all()
 	hall = HallView.new(); add_child(hall)
 	hud = Hud.new(); add_child(hud)
+	audio = GameAudio.new(); add_child(audio)
+	hud.cue.connect(audio.play)
+	hud.continue_requested.connect(_continue)
 	hud.speed_changed.connect(func(v): speed = v)
 	hud.panel_toggled.connect(func(o): panel_open = o)
 	hud.place_requested.connect(_begin_place)
@@ -51,6 +55,14 @@ func _start(mode: String) -> void:
 	hud.set_chrome(true); hud.sim = sim; hud.hall_i = 0; hud.set_speed(1); hud.refresh(); started = true; clock = 0.0
 	for e in sim.s.log: hud.push_feed(e.level, e.text)
 
+func _continue() -> void:
+	var ns := Sim.new()
+	if not ns.load_game(): return
+	sim = ns; sim.logged.connect(hud.push_feed)
+	hall.cam.h_offset = 0.0; hall.sim = sim; hall.hall_i = 0; hall.thermal = false; hall.place_mode = ""; hall.auto_orbit = true; hall.dist = 17.0; hall.pitch = 0.42; hall.rebuild()
+	hud.set_chrome(true); hud.sim = sim; hud.hall_i = 0; hud.set_speed(1); hud.refresh(); started = true; clock = 0.0
+	hud.push_feed("info", "Game loaded.")
+
 func _begin_place(sys_id: String) -> void:
 	placing = sys_id; hall.place_mode = sys_id; hall.rebuild(); hud.place_banner.text = "PLACE: %s — click a slot  (Esc to cancel)" % Data.system(sys_id).name
 
@@ -76,6 +88,8 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		KEY_1: hud.set_speed(1)
 		KEY_2: hud.set_speed(2)
 		KEY_3: hud.set_speed(3)
+		KEY_F5: sim.save_game(); hud.push_feed("info", "Saved.")
+		KEY_M: audio.muted = not audio.muted
 		KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
 		KEY_P: hud.toggle_panel("procure")
 		KEY_B: hud.toggle_panel("plant")
@@ -98,6 +112,7 @@ func _process(dt: float) -> void:
 	if clock >= 1.0:
 		clock = 0.0
 		sim.advance(); hall.rebuild(); hud.refresh()
+		if sim.s.month % 12 == 0: sim.save_game()
 
 ## Screenshot/dev hook: GW_AUTOSTART=operator [GW_PANEL=procure] [GW_MONTHS=14]
 func _demo_setup() -> void:
