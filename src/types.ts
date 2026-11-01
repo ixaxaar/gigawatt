@@ -476,6 +476,8 @@ export interface GameState {
   spotRacks?: string[];
   /** Internet circuits: Uplink id -> count. Undefined on legacy saves (treated as unlimited). */
   uplinks?: Record<string, number>;
+  /** Spare-parts shelf (kept apart from build stock so racks cannot cannibalise it). */
+  spareStock?: Record<string, number>;
   mode?: GameMode;
   /** "Easy path" projects: the game executes the build steps for a signed contract. */
   projects?: Project[];
@@ -495,7 +497,7 @@ export interface PowerOffer {
   offerUntil: number;
 }
 export interface PowerContract extends PowerOffer { startMonth: number; endMonth: number }
-export interface Order { id: string; itemId: string; qty: number; unitPrice: number; arriveMonth: number; }
+export interface Order { id: string; itemId: string; qty: number; unitPrice: number; arriveMonth: number; /** Delivered to the spares shelf instead of general stock. */ spare?: boolean; }
 export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number; }
 export interface LogEntry { month: number; level: 'info' | 'good' | 'bad'; text: string; }
 

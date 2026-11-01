@@ -349,11 +349,13 @@ describe('advanceMonth: spare parts', () => {
     expect(r0.failedPart).toBeTruthy();
     expect(r0.readyMonth).toBe(noSpare.month + 4);
     const g2 = online(JSON.parse(JSON.stringify(g)));
-    g2.inventory[r0.failedPart!] = 50;
+    g2.spareStock = { [r0.failedPart!]: 50 };
     const spare = advanceMonth(g2, failing);
     const r1 = spare.halls[0].racks[0];
     expect(r1.status).toBe('failed');
     expect(r1.readyMonth).toBe(spare.month + 1);
-    expect(spare.inventory[r0.failedPart!]).toBeLessThan(50);
+    expect(spare.spareStock![r0.failedPart!]).toBeLessThan(50);
+    // build stock is untouched: spares are on their own shelf
+    expect(spare.inventory[r0.failedPart!] ?? 0).toBe(g2.inventory[r0.failedPart!] ?? 0);
   });
 });

@@ -3,7 +3,7 @@ import { getItem } from './data';
 import { offerAt, rackBom, volumeDiscount } from './store';
 import type { GameState } from './types';
 
-export interface LedgerRow { id: string; name: string; kind: string; vendor: string; warehouse: number; onOrder: number; nextEta?: number; deployed: number; }
+export interface LedgerRow { id: string; name: string; kind: string; vendor: string; warehouse: number; spares?: number; onOrder: number; nextEta?: number; deployed: number; }
 
 export function ledger(g: GameState): LedgerRow[] {
   const rows = new Map<string, LedgerRow>();
@@ -13,6 +13,7 @@ export function ledger(g: GameState): LedgerRow[] {
     return r;
   };
   for (const [id, n] of Object.entries(g.inventory)) if (n > 0) row(id).warehouse += n;
+  for (const [id, n] of Object.entries(g.spareStock ?? {})) if (n > 0) row(id).spares = (row(id).spares ?? 0) + n;
   for (const o of g.orders) { const r = row(o.itemId); r.onOrder += o.qty; r.nextEta = Math.min(r.nextEta ?? 1e9, o.arriveMonth); }
   for (const h of g.halls) {
     for (const [id, n] of Object.entries({ ...h.powerEquip, ...h.coolingEquip })) row(id).deployed += n;
@@ -29,7 +30,7 @@ export function rackReadiness(g: GameState, designId: string, racks = 1) {
   if (!bom) return undefined;
   const lines: MissingLine[] = Object.entries(bom).map(([id, per]) => {
     const need = per * racks, have = g.inventory[id] ?? 0;
-    const onOrder = g.orders.filter((o) => o.itemId === id).reduce((n, o) => n + o.qty, 0);
+    const onOrder = g.orders.filter((o) => o.itemId === id && !o.spare).reduce((n, o) => n + o.qty, 0);
     const it = getItem(id)!;
     const o = it ? offerAt(it, g.month) : undefined;
     return { id, name: it?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o?.available, unitPrice: o?.unitPrice ?? 0, leadMonths: o?.leadMonths ?? 0, reason: o?.reason };

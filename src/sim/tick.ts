@@ -29,7 +29,7 @@ import {
 } from './economy';
 import { computePUE } from './validate';
 import { rackRates, PART_LABEL, partClass } from './failures';
-import { uplinkGbps, uplinkMonthlyUSD, totalNeedGbps } from './internet';
+import { uplinkGbps, totalNeedGbps } from './internet';
 import { powerMarketTick, settlePower, spotRevenue, stepSpotPrice } from './power';
 
 export interface TickOptions {
@@ -110,7 +110,10 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
     }
     return true;
   });
-  for (const od of arrived) s.inventory[od.itemId] = (s.inventory[od.itemId] ?? 0) + od.qty;
+  for (const od of arrived) {
+    if (od.spare) { s.spareStock = s.spareStock ?? {}; s.spareStock[od.itemId] = (s.spareStock[od.itemId] ?? 0) + od.qty; }
+    else s.inventory[od.itemId] = (s.inventory[od.itemId] ?? 0) + od.qty;
+  }
   if (arrived.length) {
     const units = arrived.reduce((n, od) => n + od.qty, 0);
     log('good', `Delivered ${units} unit(s) from ${arrived.length} order(s) into inventory.`);
@@ -163,8 +166,8 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
       const label = PART_LABEL[partClass(part) ?? ''] ?? 'part';
       rack.status = 'failed';
       rack.failedPart = part;
-      if ((s.inventory[part] ?? 0) > 0) {
-        s.inventory[part] -= 1;
+      if ((s.spareStock?.[part] ?? 0) > 0) {
+        s.spareStock![part] -= 1;
         rack.readyMonth = s.month + 1;
         log('info', `${rack.id}: ${label} failed (${getItem(part)?.name}); swapping from your spares — back next month.`);
       } else {
@@ -311,8 +314,7 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
   // ---------- 8. finances ----------
   const opex0 = monthlyOpex(s);
   const pw = settlePower(s, (opex0.itPowerKW * opex0.pue) / 1000, rng, log);
-  const netUSD = uplinkMonthlyUSD(s);
-  const opex = { ...opex0, powerUSD: pw.netUSD, totalUSD: opex0.totalUSD - opex0.powerUSD + pw.netUSD + netUSD };
+  const opex = { ...opex0, powerUSD: pw.netUSD, totalUSD: opex0.totalUSD - opex0.powerUSD + pw.netUSD };
   const depreciation = monthlyDepreciation(estimateCapexBasis(s));
   const interest = monthlyInterest(s.debt);
   const prevCash = s.cash;

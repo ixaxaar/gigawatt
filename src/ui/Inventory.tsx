@@ -13,7 +13,7 @@ export function MissingParts({ designId, racks = 1, onMsg, setLearn }: { designI
   const r = rackReadiness(g, designId, racks);
   if (!r) return null;
   if (r.complete) return <div className="pos" style={{ fontSize: 12 }}>✓ All parts for {racks} rack{racks > 1 ? 's' : ''} are in the warehouse.</div>;
-  const order = () => { const st = useGame.getState(); const out: string[] = []; for (const l of r.toBuy) if (l.buyable) { const m = st.buy(l.id, l.short - l.onOrder + (sp ? spareQty(l.id, l.need) : 0)); out.push(m.ok ? '✓' : m.message); } onMsg?.(out.every(x => x === '✓') ? `Ordered ${r.toBuy.length} part type(s) · arrives within ~${r.etaMonths} mo.` : out.filter(x => x !== '✓').join(' ')); };
+  const order = () => { const st = useGame.getState(); const out: string[] = []; for (const l of r.toBuy) if (l.buyable) { const m = st.buy(l.id, l.short - l.onOrder); out.push(m.ok ? '✓' : m.message); if (sp && spareQty(l.id, l.need) > 0) st.buy(l.id, spareQty(l.id, l.need), true); } onMsg?.(out.every(x => x === '✓') ? `Ordered ${r.toBuy.length} part type(s) · arrives within ~${r.etaMonths} mo.` : out.filter(x => x !== '✓').join(' ')); };
   return <div>
     <table style={{ fontSize: 12 }}><thead><tr><th>Missing part</th><th>Need</th><th>Have</th><th>On order</th><th>Unit</th><th>Lead</th></tr></thead><tbody>
       {r.lines.filter(l => l.short > 0).map(l => <tr key={l.id}><td><a style={{ cursor: 'pointer' }} onClick={() => setLearn?.(l.id)}>{l.name}</a>{!l.buyable && <div className="neg" style={{ fontSize: 11 }}>{l.reason ?? 'Unavailable now'}</div>}</td>
@@ -57,9 +57,9 @@ export default function Inventory({ go, setLearn }: { go: (s: string) => void; s
           const failed = g.halls.flatMap(h => h.racks).filter(p => p.status === 'failed');
           if (!ids.size) return <span className="dim">Deploy racks first; then keep a few spare GPUs, PSUs, NICs and drives on the shelf. A failed rack with a spare is back in 1 month; without one it waits ~4 months for RMA.</span>;
           return <>{failed.map(p => <div key={p.id} className="neg" style={{ fontSize: 12 }}>✗ {p.id}: {p.failedPart ? getItem(p.failedPart)?.name : 'burn-in failure'} · back month {p.readyMonth}</div>)}
-          <table style={{ fontSize: 12 }}><thead><tr><th>Part</th><th>Spare</th><th>Advised</th><th /></tr></thead><tbody>{[...ids].map(id => { const it = getItem(id)!, have = g.inventory[id] ?? 0, adv = recommendedSpares(g, id);
+          <table style={{ fontSize: 12 }}><thead><tr><th>Part</th><th>Spare</th><th>Advised</th><th /></tr></thead><tbody>{[...ids].map(id => { const it = getItem(id)!, have = (g.spareStock?.[id] ?? 0) + g.orders.filter(o => o.spare && o.itemId === id).reduce((n, o) => n + o.qty, 0), adv = recommendedSpares(g, id);
             return <tr key={id}><td>{it.name}<div className="dim" style={{ fontSize: 10 }}>{PART_LABEL[partClass(id)!]}</div></td><td className={'mono ' + (have >= adv ? 'pos' : 'neg')}>{have}</td><td className="mono">{adv}</td>
-              <td><button className="btn sm" disabled={have >= adv} onClick={() => setMsg(st.buy(id, adv - have).message)}>Buy {Math.max(0, adv - have)}</button></td></tr>; })}</tbody></table></>; })()}</Panel>
+              <td><button className="btn sm" disabled={have >= adv} onClick={() => setMsg(st.buy(id, adv - have, true).message)}>Buy {Math.max(0, adv - have)}</button></td></tr>; })}</tbody></table></>; })()}</Panel>
         <Panel title="In transit">{g.orders.length === 0 ? <span className="dim">Nothing on order. <a style={{ cursor: 'pointer' }} onClick={() => go('shop')}>Open Procure →</a></span>
           : [...g.orders].sort((a, b) => a.arriveMonth - b.arriveMonth).map(o => <div key={o.id} className="mono" style={{ fontSize: 12 }}>{o.qty}× {rows.find(r => r.id === o.itemId)?.name ?? o.itemId} → {dateOf(o.arriveMonth)} <span className="dim">({o.arriveMonth - g.month} mo)</span></div>)}</Panel>
         <Panel title="Racks on the floor">{g.halls.flatMap(h => h.racks.map(p => ({ h, p }))).length === 0 ? <span className="dim">None deployed.</span>
@@ -67,7 +67,7 @@ export default function Inventory({ go, setLearn }: { go: (s: string) => void; s
     <Panel title={`Full inventory ledger (${value} units in warehouse)`}>
       <div><table><thead><tr><th>Part</th><th>Kind</th><th>Warehouse</th><th>On order</th><th>Deployed</th></tr></thead><tbody>
         {kinds.flatMap(kd => rows.filter(r => r.kind === kd).map(r => <tr key={r.id}><td><a style={{ cursor: 'pointer' }} onClick={() => setLearn(r.id)}>{r.name}</a><div className="dim" style={{ fontSize: 11 }}>{r.vendor}</div></td><td className="dim">{r.kind}</td>
-          <td className="mono">{r.warehouse || '—'}</td><td className="mono">{r.onOrder ? `${r.onOrder} · ${dateOf(r.nextEta!)}` : '—'}</td><td className="mono">{r.deployed || '—'}</td></tr>))}
+          <td className="mono">{r.warehouse || '—'}{r.spares ? <span className="dim"> +{r.spares} spare</span> : ''}</td><td className="mono">{r.onOrder ? `${r.onOrder} · ${dateOf(r.nextEta!)}` : '—'}</td><td className="mono">{r.deployed || '—'}</td></tr>))}
         {rows.length === 0 && <tr><td colSpan={5} className="dim">Empty. Buy something in Procure.</td></tr>}
       </tbody></table></div></Panel>
       </div></div></div>;

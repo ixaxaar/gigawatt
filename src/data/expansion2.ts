@@ -8,7 +8,7 @@ const base = (id: string, name: string, vendor: Vendor, from: number, price: num
 const pw = (o: Omit<PowerEquip, 'kind'>): PowerEquip => ({ kind: 'power', ...o });
 const co = (o: Omit<CoolingEquip, 'kind'>): CoolingEquip => ({ kind: 'cooling', ...o });
 const gen = (id: string, name: string, v: Vendor, price: number, kw: number, lead: number, c: Cx, from = 2020) =>
-  pw({ ...base(id, name, v, from, price, lead, c), powerType: 'genset', capacityKW: kw, efficiency: 0.96, installMonths: 3 });
+  pw({ ...base(id, name, v, from, price, lead, c), powerType: id.startsWith('bloom') ? 'gas-turbine' : 'genset', capacityKW: kw, efficiency: 0.96, installMonths: 3 });
 
 export const EXP2_POWER: PowerEquip[] = [
   gen('cat-3516-2500', 'Caterpillar 3516 Diesel Genset (2.5 MW)', 'caterpillar', 920000, 2500, 6, ['Cat 3516: the classic 2.5 MW data-centre diesel standby set.', 'Caterpillar dominates datacenter standby power: Cat 3500-series sets start in about 10 seconds and take full load in one step. You need fuel storage, emissions permits and monthly load tests.', ['Proven, fast start, strong dealer service', 'Diesel permits and fuel logistics']]),

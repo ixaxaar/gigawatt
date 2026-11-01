@@ -190,7 +190,7 @@ export interface ActionResult {
 export interface GameStore {
   game: GameState;
   newGame: (seed?: number, mode?: GameMode) => void;
-  buy: (itemId: string, qty: number) => ActionResult;
+  buy: (itemId: string, qty: number, spare?: boolean) => ActionResult;
   /** Adopt a template's tray+rack designs and order the full bill of materials for `racks` racks, atomically. */
   buyTemplate: (templateId: string, racks: number, spares?: boolean) => ActionResult;
   adoptTemplate: (templateId: string) => ActionResult;
@@ -234,7 +234,7 @@ const usd = (n: number): string => Math.round(n).toLocaleString('en-US');
 const COOL_LEVEL: Record<CoolingClass, number> = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 
 const POWER_FEED_TYPES = [
-  'transformer', 'switchgear', 'ups', 'genset', 'busway', 'power-shelf', 'solar-ppa', 'gas-turbine',
+  'transformer', 'ups', 'busway', 'power-shelf', 'solar-ppa', 'gas-turbine',
 ];
 
 export const useGame = create<GameStore>()((set, get) => {
@@ -265,10 +265,11 @@ export const useGame = create<GameStore>()((set, get) => {
     startEasy: (contractId, templateId, racks) => { const r = startProject(get(), contractId, templateId, racks); if (r.ok) stepAllProjects(get); return r; },
     stepEasy: () => stepAllProjects(get),
 
-    buy: (itemId, qty) =>
+    buy: (itemId, qty, spare = false) =>
       commit((g) => {
         const item = getItem(itemId);
         if (!item) return fail(`Unknown item '${itemId}'.`);
+        if (item.kind === 'uplink') return fail('Internet circuits are added on Build → Internet.');
         if (!Number.isFinite(qty) || qty <= 0) return fail('Order quantity must be positive.');
         const offer = offerAt(item, g.month);
         if (!offer.available) {
@@ -294,11 +295,12 @@ export const useGame = create<GameStore>()((set, get) => {
           qty: n,
           unitPrice: Math.round(offer.unitPrice * (1 - discount)),
           arriveMonth: g.month + offer.leadMonths,
+          ...(spare ? { spare: true } : {}),
         });
         logln(
           g,
           'info',
-          `Ordered ${n} × ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ''}; arriving month ${g.month + offer.leadMonths}.${note}`,
+          `Ordered ${n} ${spare ? 'spare ' : ''}× ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ''}; arriving month ${g.month + offer.leadMonths}.${note}`,
         );
         return ok(`Ordered ${n} × ${item.name}; arrives month ${g.month + offer.leadMonths}.${note}`);
       }),
@@ -321,10 +323,12 @@ export const useGame = create<GameStore>()((set, get) => {
       if (!adopted.ok) return adopted;
       return commit((g) => {
         const bom = templateBom(t, nRacks);
-        if (spares) for (const id of Object.keys(bom)) { const sp = spareQty(id, bom[id]); if (sp) bom[id] += sp; }
+        const spareBom: Record<string, number> = {};
+        if (spares) for (const id of Object.keys(bom)) { const sp = spareQty(id, bom[id]); if (sp) spareBom[id] = sp; }
         let cost = 0, lead = 1;
-        const lines: { itemId: string; n: number; unit: number; lead: number }[] = [];
-        for (const [itemId, n] of Object.entries(bom)) {
+        const lines: { itemId: string; n: number; unit: number; lead: number; spare?: boolean }[] = [];
+        const wanted: [string, number, boolean][] = [...Object.entries(bom).map(([i, n]): [string, number, boolean] => [i, n, false]), ...Object.entries(spareBom).map(([i, n]): [string, number, boolean] => [i, n, true])];
+        for (const [itemId, n, isSpare] of wanted) {
           const item = getItem(itemId)!;
           const offer = offerAt(item, g.month);
           if (!offer.available) return fail(`${item.name} is not purchasable yet: ${offer.reason}`);
@@ -333,11 +337,11 @@ export const useGame = create<GameStore>()((set, get) => {
           cost += unit * n;
           const l = Math.max(1, Math.round(offer.leadMonths * t.leadFactor));
           lead = Math.max(lead, l);
-          lines.push({ itemId, n, unit, lead: l });
+          lines.push({ itemId, n, unit, lead: l, spare: isSpare });
         }
         if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
-        for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead });
+        for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...(l.spare ? { spare: true } : {}) });
         logln(g, 'info', `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium). Full bill of materials arrives by month ${g.month + lead}.`);
         return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.`);
       });
