@@ -28,6 +28,7 @@ import {
   monthlyOpex,
 } from './economy';
 import { computePUE } from './validate';
+import { rackRates, PART_LABEL, partClass } from './failures';
 import { powerMarketTick, settlePower, spotRevenue, stepSpotPrice } from './power';
 
 export interface TickOptions {
@@ -44,7 +45,7 @@ export interface TickOptions {
 export const DEFAULT_TICK: Required<TickOptions> = {
   accelFailureProbPerMonth: 1 / 8000,
   commissionFailProb: 0.04,
-  repairMonths: 2,
+  repairMonths: 4, // RMA turnaround when no spare is on the shelf
   maxAvailableContracts: 10,
 };
 
@@ -74,18 +75,6 @@ const ctxOf = (state: GameState): ClusterContext => ({
   getTray: (id) => state.trays.find((t) => t.id === id),
   getItem,
 });
-
-/** Spare-parts policy: a failed rack with a spare accelerator in the warehouse is back in 1 month instead of the full repair time. */
-const spareRepair = (state: GameState, designId: string, full: number): number => {
-  const design = state.racks.find((r) => r.id === designId);
-  const ids = new Set<string>();
-  for (const item of design?.items ?? []) {
-    if (item.type !== 'tray') continue;
-    for (const p of state.trays.find((t) => t.id === item.trayId)?.parts ?? []) if (getItem(p.itemId)?.kind === 'accelerator') ids.add(p.itemId);
-  }
-  for (const id of ids) if ((state.inventory[id] ?? 0) > 0) { state.inventory[id] -= 1; return 1; }
-  return full;
-};
 
 const rackAccels = (state: GameState, designId: string): number => {
   const design = state.racks.find((r) => r.id === designId);
@@ -143,6 +132,7 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
       }
     } else if (rack.status === 'failed' && s.month >= rack.readyMonth) {
       rack.status = 'online';
+      rack.failedPart = undefined;
       log('good', `Rack ${rack.id} repaired and back online.`);
     }
   }
@@ -163,19 +153,30 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
   let failedNow = 0;
   for (const rack of placed) {
     if (rack.status !== 'online') continue;
-    const p = rackFailureProb(rackAccels(s, rack.designId), stressed, o.accelFailureProbPerMonth);
+    const rates = rackRates(s, rack.designId);
+    const total = rates.reduce((n, r) => n + r.rate, 0) * (o.accelFailureProbPerMonth * 8000);
+    const p = 1 - Math.exp(-total * (stressed ? 3 : 1));
     if (p > 0 && rng() < p) {
+      let pick = rng() * rates.reduce((n, r) => n + r.rate, 0);
+      const part = (rates.find((r) => (pick -= r.rate) <= 0) ?? rates[0]).id;
+      const label = PART_LABEL[partClass(part) ?? ''] ?? 'part';
       rack.status = 'failed';
-      const fix = spareRepair(s, rack.designId, o.repairMonths);
-      rack.readyMonth = s.month + fix;
-      if (fix < o.repairMonths) log('info', `Swapped a spare accelerator from the warehouse into ${rack.id}: back in ${fix} month.`);
+      rack.failedPart = part;
+      if ((s.inventory[part] ?? 0) > 0) {
+        s.inventory[part] -= 1;
+        rack.readyMonth = s.month + 1;
+        log('info', `${rack.id}: ${label} failed (${getItem(part)?.name}); swapping from your spares — back next month.`);
+      } else {
+        rack.readyMonth = s.month + o.repairMonths;
+        log('bad', `${rack.id}: ${label} failed (${getItem(part)?.name}) and you have NO SPARE. Waiting on RMA until month ${rack.readyMonth}. Keep spares in the warehouse.`);
+      }
       failedNow++;
     }
   }
   if (failedNow) {
     log(
       'bad',
-      `${failedNow} rack(s) went down${stressed ? ' — cooling capacity is below IT load, heat is killing hardware (3x failure rate)' : ''}. Repairs ETA month ${s.month + o.repairMonths}.`,
+      `${failedNow} rack(s) went down${stressed ? ' — cooling capacity is below IT load, heat is killing hardware (3x failure rate)' : ''}.`,
     );
     refreshStats();
   }

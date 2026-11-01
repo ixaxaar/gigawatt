@@ -3,6 +3,8 @@ import { useGame } from '../store';
 import { ledger, rackReadiness } from '../ledger';
 import { Panel, usd, dateOf } from './common';
 import Tip from './Tip';
+import { recommendedSpares, rackParts, PART_LABEL, partClass } from '../sim/failures';
+import { getItem } from '../data';
 
 /** Per-design "what am I missing" with one-click ordering. Used by Warehouse and Build screens. */
 export function MissingParts({ designId, racks = 1, onMsg, setLearn }: { designId: string; racks?: number; onMsg?: (m: string) => void; setLearn?: (id: string) => void }) {
@@ -50,6 +52,13 @@ export default function Inventory({ go, setLearn }: { go: (s: string) => void; s
         {g.racks.length > 0 && <div className="dim" style={{ marginTop: 8 }}>Plan for <input type="number" min={1} value={n} onChange={e => setN(Math.max(1, +e.target.value || 1))} style={{ width: 56 }} /> rack(s) of each design.</div>}
       </Panel></div>
       <div className="col">
+        <Panel title="Spares — parts WILL break">{(() => { const ids = new Set<string>(); g.halls.forEach(h => h.racks.forEach(p => Object.keys(rackParts(g, p.designId)).forEach(id => partClass(id) && ids.add(id))));
+          const failed = g.halls.flatMap(h => h.racks).filter(p => p.status === 'failed');
+          if (!ids.size) return <span className="dim">Deploy racks first; then keep a few spare GPUs, PSUs, NICs and drives on the shelf. A failed rack with a spare is back in 1 month; without one it waits ~4 months for RMA.</span>;
+          return <>{failed.map(p => <div key={p.id} className="neg" style={{ fontSize: 12 }}>✗ {p.id}: {p.failedPart ? getItem(p.failedPart)?.name : 'burn-in failure'} · back month {p.readyMonth}</div>)}
+          <table style={{ fontSize: 12 }}><thead><tr><th>Part</th><th>Spare</th><th>Advised</th><th /></tr></thead><tbody>{[...ids].map(id => { const it = getItem(id)!, have = g.inventory[id] ?? 0, adv = recommendedSpares(g, id);
+            return <tr key={id}><td>{it.name}<div className="dim" style={{ fontSize: 10 }}>{PART_LABEL[partClass(id)!]}</div></td><td className={'mono ' + (have >= adv ? 'pos' : 'neg')}>{have}</td><td className="mono">{adv}</td>
+              <td><button className="btn sm" disabled={have >= adv} onClick={() => setMsg(st.buy(id, adv - have).message)}>Buy {Math.max(0, adv - have)}</button></td></tr>; })}</tbody></table></>; })()}</Panel>
         <Panel title="In transit">{g.orders.length === 0 ? <span className="dim">Nothing on order. <a style={{ cursor: 'pointer' }} onClick={() => go('shop')}>Open Procure →</a></span>
           : [...g.orders].sort((a, b) => a.arriveMonth - b.arriveMonth).map(o => <div key={o.id} className="mono" style={{ fontSize: 12 }}>{o.qty}× {rows.find(r => r.id === o.itemId)?.name ?? o.itemId} → {dateOf(o.arriveMonth)} <span className="dim">({o.arriveMonth - g.month} mo)</span></div>)}</Panel>
         <Panel title="Racks on the floor">{g.halls.flatMap(h => h.racks.map(p => ({ h, p }))).length === 0 ? <span className="dim">None deployed.</span>

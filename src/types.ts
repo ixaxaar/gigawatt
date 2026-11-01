@@ -322,6 +322,8 @@ export interface PlacedRack {
   status: 'ordered' | 'installing' | 'commissioning' | 'online' | 'failed';
   readyMonth: number;
   clusterId?: string;
+  /** Part id that broke (needs a spare, otherwise a slow RMA). */
+  failedPart?: string;
 }
 
 export type Topology = 'fat-tree-rail-optimized' | 'fat-tree' | 'dragonfly' | 'torus-ish' | 'single-domain';

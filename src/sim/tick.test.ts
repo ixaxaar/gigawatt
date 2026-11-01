@@ -211,7 +211,7 @@ describe('advanceMonth: rack commissioning', () => {
 
   it('a burn-in failure sends the rack to repair instead', () => {
     const g = rackAt('commissioning', 11);
-    const s = advanceMonth(g, { accelFailureProbPerMonth: 0, commissionFailProb: 1 });
+    const s = advanceMonth(g, { accelFailureProbPerMonth: 0, commissionFailProb: 1, repairMonths: 2 });
     const rack = s.halls[0].racks[0];
     expect(rack.status).toBe('failed');
     expect(rack.readyMonth).toBe(11 + 2);
@@ -278,7 +278,7 @@ describe('advanceMonth: failures & MTBF scaling', () => {
 
   it('takes racks down, misses SLA, then repairs them and revenue resumes', () => {
     const g = baseGame({ activeContracts: [active(trainContract())] });
-    const t1 = advanceMonth(g, { accelFailureProbPerMonth: 1, commissionFailProb: 0 });
+    const t1 = advanceMonth(g, { accelFailureProbPerMonth: 1, commissionFailProb: 0, repairMonths: 2 });
     expect(t1.halls[0].racks.every((r) => r.status === 'failed')).toBe(true);
     expect(t1.history[0].revenue).toBe(0);
     expect(t1.activeContracts[0].slaMisses).toBe(1);
@@ -335,5 +335,25 @@ describe('advanceMonth: finances', () => {
     expect(s.cash).toBeLessThan(0);
     expect(s.log.some((l) => l.level === 'bad' && l.text.includes('Bankruptcy'))).toBe(true);
     expect(s.history[0].cash).toBeLessThan(0);
+  });
+});
+
+describe('advanceMonth: spare parts', () => {
+  const failing = { accelFailureProbPerMonth: 1, commissionFailProb: 0 };
+  it('a spare shortens repair to 1 month and is consumed; no spare means a 4-month RMA', () => {
+    const g = baseGame({ activeContracts: [] });
+    const online = (x: GameState) => { x.halls[0].racks.forEach((r) => { r.status = 'online'; }); return x; };
+    const noSpare = advanceMonth(online(JSON.parse(JSON.stringify(g))), failing);
+    const r0 = noSpare.halls[0].racks[0];
+    expect(r0.status).toBe('failed');
+    expect(r0.failedPart).toBeTruthy();
+    expect(r0.readyMonth).toBe(noSpare.month + 4);
+    const g2 = online(JSON.parse(JSON.stringify(g)));
+    g2.inventory[r0.failedPart!] = 50;
+    const spare = advanceMonth(g2, failing);
+    const r1 = spare.halls[0].racks[0];
+    expect(r1.status).toBe('failed');
+    expect(r1.readyMonth).toBe(spare.month + 1);
+    expect(spare.inventory[r0.failedPart!]).toBeLessThan(50);
   });
 });
