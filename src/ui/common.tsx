@@ -31,6 +31,7 @@ export function CodexCard({ codex, name }: { codex: Codex; name?: string }) {
 export function specsOf(i: CatalogItem): [string, string][] {
   switch (i.kind) {
     case 'accelerator': return [['Memory', `${i.memGB} GB ${i.memType.toUpperCase()}`], ['Mem BW', `${i.memBWTBs} TB/s`], ['FP8', `${i.tflops.fp8 ?? '–'} TF`], ['BF16', `${i.tflops.bf16 ?? '–'} TF`], ['TDP', `${i.tdpW} W`], ['Scale-up', `${i.scaleUp} ${i.scaleUpGBs} GB/s ×${i.maxScaleUpDomain}`], ['Scale-out', `${i.nativeScaleOutGbps} Gb/s`], ['Cooling', i.cooling.join('/')]];
+    case 'uplink': return [['Speed', `${i.gbps} Gb/s`], ['Service', i.service], ['Carrier', i.carrier], ['Monthly', `$${i.mrcUSD.toLocaleString('en-US')}`]];
     case 'cpu': return [['Cores', `${i.cores} ${i.arch}`], ['TDP', `${i.tdpW} W`], ['Mem BW', `${i.memBWGBs} GB/s`], ['PCIe', `Gen${i.pcieGen} ×${i.pcieLanes}`]];
     case 'nic': return [['Class', i.nicClass], ['Rate', `${i.gbps} Gb/s ×${i.ports}`], ['Power', `${i.watts} W`], ['Features', i.features.slice(0, 4).join(', ')]];
     case 'switch': return [['Role', i.role], ['Ports', `${i.portCount} × ${i.portGbps}G`], ['Capacity', `${i.capacityTbps} Tb/s`], ['Power', `${i.watts} W`], ['Size', `${i.rackUnits}U`]];

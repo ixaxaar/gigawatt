@@ -5,6 +5,7 @@ import { getTemplate } from './data/templates';
 import { evaluateCluster } from './sim/network';
 import { offerAt, rackBom, useGame, type GameStore } from './store';
 const G = () => useGame.getState().game;
+import { uplinkGbps, contractNeedGbps } from './sim/internet';
 import { rackIdOf, templateFacts } from './plan';
 import type { Cluster, FabricDesign, GameState, Project, ScaleOutTech, Topology } from './types';
 
@@ -83,7 +84,18 @@ export function stepProject(st: GameStore, pid: string): void {
 const useStoreHall = (_st: GameStore, hid: string) => G().halls.find(h => h.id === hid)!;
 const templateFactsOfDesign = (g: GameState, designId: string) => { const d = g.racks.find(r => r.id === designId); if (!d) return 0; const t = (g.projects ?? []).map(p => getTemplate(p.templateId)).find(tt => tt && rackIdOf(tt) === designId); return t ? templateFacts(t).kWPerRack : 30; };
 
-export function stepAllProjects(getSt: () => GameStore): void { for (const p of getSt().game.projects ?? []) stepProject(getSt(), p.id); }
+/** Keep internet capacity ahead of demand (signed + in-flight contracts), buying the cheapest transit that covers the gap. */
+function ensureUplink(st: GameStore) {
+  const g = G(); if (!g.uplinks) return;
+  const live = new Set(g.activeContracts.map(a => a.contract.id));
+  let need = g.activeContracts.reduce((n, a) => n + contractNeedGbps(a.contract as never), 0);
+  for (const p of g.projects ?? []) if (p.stage !== 'done' && p.stage !== 'failed' && !live.has(p.contractId)) { const c = g.availableContracts.find(x => x.id === p.contractId); if (c) need += contractNeedGbps(c as never); }
+  const have = uplinkGbps(g); if (have >= need * 1.1) return;
+  const opts = ITEMS_BY_KIND('uplink').filter(u => u.service === 'transit' && u.availableFrom * 12 - 2020 * 12 <= g.month).sort((a, b) => a.mrcUSD / a.gbps - b.mrcUSD / b.gbps);
+  const fit = opts.filter(u => u.gbps >= need * 1.1 - have).sort((a, b) => a.mrcUSD - b.mrcUSD)[0] ?? opts[opts.length - 1];
+  if (fit) st.buyUplink(fit.id);
+}
+export function stepAllProjects(getSt: () => GameStore): void { ensureUplink(getSt()); for (const p of getSt().game.projects ?? []) stepProject(getSt(), p.id); }
 
 /** Start an easy-path project: sign, order the build, order any missing hall plant. Returns a message. */
 export function startProject(st: GameStore, contractId: string, templateId: string, racks: number): { ok: boolean; message: string } {

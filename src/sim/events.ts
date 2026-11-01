@@ -2,6 +2,7 @@ import type { GameState } from '../types';
 import { generateContracts } from './market';
 import type { RNG } from './rng';
 import { hallResilience } from './resilience';
+import { carrierCount } from './internet';
 
 type Log = (level: 'info' | 'good' | 'bad', text: string) => void;
 export const BASE_POWER_PRICE = 0.07;
@@ -38,6 +39,14 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
     s.cash -= bill;
     log('bad', `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1000).toFixed(0)}k. Lesson: warm-water DLC tolerates hot days — air-cooled halls suffer first.`);
   });
+  if (racks > 0 && s.uplinks) {
+    pool.push(() => {
+      if (carrierCount(s) >= 2) { log('good', '🧵 A backhoe cuts a fiber route, but your second carrier on a diverse path keeps every customer online.'); return; }
+      s.activeContracts.forEach((a) => { a.slaMisses += 1; });
+      s.reputation = Math.max(0, s.reputation - 2);
+      log('bad', '🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit. Lesson: buy a second circuit from a different carrier on a diverse path.');
+    });
+  }
   if (racks > 0) {
     pool.push(() => {
       const live = s.halls.filter((h) => h.racks.some((r) => r.status === 'online'));

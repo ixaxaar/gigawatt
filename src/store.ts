@@ -208,6 +208,8 @@ export interface GameStore {
   save: () => void;
   load: () => ActionResult;
   signPower: (offerId: string, mw?: number) => ActionResult;
+  buyUplink: (itemId: string) => ActionResult;
+  dropUplink: (itemId: string) => ActionResult;
   setSpot: (clusterId: string, on: boolean) => ActionResult;
   setSpotReserve: (usd: number) => ActionResult;
   setSpotRack: (rackId: string, on: boolean) => ActionResult;
@@ -389,6 +391,24 @@ export const useGame = create<GameStore>()((set, get) => {
         return ok(`${hall.name} built. Install power & cooling next.`);
       }),
 
+    buyUplink: (itemId) =>
+      commit((g) => {
+        const item = getItem(itemId);
+        if (!item || item.kind !== 'uplink') return fail('Pick an internet circuit.');
+        if (item.availableFrom * 12 - 2020 * 12 > g.month) return fail(`${item.name} is not offered yet.`);
+        if (g.cash < item.priceUSD) return fail(`Install fee is $${usd(item.priceUSD)}; you have $${usd(g.cash)}.`);
+        g.cash -= item.priceUSD;
+        g.uplinks = { ...(g.uplinks ?? {}), [itemId]: ((g.uplinks ?? {})[itemId] ?? 0) + 1 };
+        logln(g, 'info', `Turned up ${item.name}: $${usd(item.priceUSD)} install, then $${usd(item.mrcUSD)}/month.`);
+        return ok(`${item.name} is live. Billing $${usd(item.mrcUSD)}/month.`);
+      }),
+    dropUplink: (itemId) =>
+      commit((g) => {
+        const c = g.uplinks?.[itemId] ?? 0;
+        if (c <= 0) return fail('You have no such circuit.');
+        g.uplinks = { ...g.uplinks, [itemId]: c - 1 };
+        return ok('Circuit cancelled; billing stops next month.');
+      }),
     installPower: (hallId, itemId, qty) =>
       commit((g) => {
         const hall = g.halls.find((h) => h.id === hallId);
@@ -815,6 +835,7 @@ export function newGameState(seed: number): GameState {
     log: [],
     staff: 2,
     utilityUSDPerKWh: 0.07,
+    uplinks: { 'transit-10g-a': 1 },
     codexSeen: [],
     missionsDone: [],
     history: [],

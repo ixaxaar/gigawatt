@@ -29,6 +29,7 @@ import {
 } from './economy';
 import { computePUE } from './validate';
 import { rackRates, PART_LABEL, partClass } from './failures';
+import { uplinkGbps, uplinkMonthlyUSD, totalNeedGbps } from './internet';
 import { powerMarketTick, settlePower, spotRevenue, stepSpotPrice } from './power';
 
 export interface TickOptions {
@@ -190,6 +191,9 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
   const completed: ActiveContract[] = [];
   const defaulted: ActiveContract[] = [];
   const usedFrac: Record<string, number> = {};
+  const needGbps = totalNeedGbps(s);
+  const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s) / needGbps) : 1;
+  if (netFactor < 1) log('bad', `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
   for (const ac of s.activeContracts) {
     const c = ac.contract;
     if (ac.clusterIds.length === 0) {
@@ -246,6 +250,7 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
       tokensPerSec = Math.min(capacity, c.tokensPerSec);
     }
 
+    availability *= netFactor;
     const res =
       c.kind === 'training'
         ? contractRevenue(ac, { accelerators, availability })
@@ -306,7 +311,8 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
   // ---------- 8. finances ----------
   const opex0 = monthlyOpex(s);
   const pw = settlePower(s, (opex0.itPowerKW * opex0.pue) / 1000, rng, log);
-  const opex = { ...opex0, powerUSD: pw.netUSD, totalUSD: opex0.totalUSD - opex0.powerUSD + pw.netUSD };
+  const netUSD = uplinkMonthlyUSD(s);
+  const opex = { ...opex0, powerUSD: pw.netUSD, totalUSD: opex0.totalUSD - opex0.powerUSD + pw.netUSD + netUSD };
   const depreciation = monthlyDepreciation(estimateCapexBasis(s));
   const interest = monthlyInterest(s.debt);
   const prevCash = s.cash;

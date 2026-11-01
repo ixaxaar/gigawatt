@@ -10,6 +10,7 @@ import Concepts from './Concepts';
 import { offerAt } from '../store';
 import { hallResilience } from '../sim/resilience';
 import { ALL_ITEMS } from '../data';
+import { uplinkGbps, uplinkMonthlyUSD, carrierCount, totalNeedGbps } from '../sim/internet';
 
 const Gauge = ({ label, v, max, unit }: { label: string; v: number; max: number; unit: string }) => { const p = max ? v / max : v ? 2 : 0; return <div style={{ marginBottom: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="dim">{label}</span><span className="mono">{num(v)} / {num(max)} {unit}</span></div>
   <div className="bar"><div style={{ width: `${Math.min(100, p * 100)}%`, background: p > 1 ? 'var(--rd)' : p > .85 ? 'var(--am)' : 'var(--gr)' }} /></div></div>; };
@@ -58,6 +59,14 @@ export default function Facility({ setLearn, go }: { setLearn: (id: string) => v
         <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>UPS {num(r.upsKW)} kW · battery {num(r.batteryKW)} kW · generator {num(r.gensetKW)} kW</div>
         {r.gaps.map(x => <div key={x} className="warn" style={{ fontSize: 12 }}>✗ {x}</div>)}
         {r.gaps.length === 0 && <div className="good" style={{ fontSize: 12 }}>✓ Full chain: UPS + battery + generator + transfer switch</div>}</>; })()}</Panel>
+      <Panel title="🌐 Internet" glow>{(() => { const have = uplinkGbps(g), need = totalNeedGbps(g), cs = carrierCount(g); return <>
+        {g.uplinks ? <><div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{num(have)} Gb/s live · {cs} carrier{cs === 1 ? '' : 's'}</span><span className="mono">demand ~{need.toFixed(1)} Gb/s · {usd(uplinkMonthlyUSD(g))}/mo</span></div>
+          <div className="bar"><div style={{ width: `${Math.min(100, (need / Math.max(1, have)) * 100)}%`, background: need > have ? 'var(--rd)' : need > have * .8 ? 'var(--am)' : 'var(--gr)' }} /></div>
+          {cs < 2 && <div className="warn" style={{ fontSize: 12 }}>✗ Single carrier: one fiber cut takes every customer offline. Add a circuit from a different carrier.</div>}
+          {Object.entries(g.uplinks).filter(([, c]) => c > 0).map(([id, c]) => <div key={id} style={{ display: 'flex', gap: 6, fontSize: 12 }}><span style={{ flex: 1 }}>{c}× {getItem(id)?.name}</span><button className="btn sm" onClick={() => say(st.dropUplink(id))}>cancel 1</button></div>)}
+          <div style={{ marginTop: 6, maxHeight: 150, overflow: 'auto' }}>{ALL_ITEMS.filter(i => i.kind === 'uplink' && i.availableFrom * 12 - 2020 * 12 <= g.month).map(i => i.kind === 'uplink' && <div key={i.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 3, fontSize: 12 }}>
+            <span style={{ flex: 1 }}>{i.name}<div className="dim" style={{ fontSize: 11 }}>{usd(i.priceUSD)} install · {usd(i.mrcUSD)}/mo · {i.carrier}</div></span>
+            <button className="btn sm" disabled={i.priceUSD > g.cash} onClick={() => say(st.buyUplink(i.id))}>Add</button></div>)}</div></> : <span className="dim">Legacy save: unlimited internet.</span>}</>; })()}</Panel>
       <Panel title="Hall checks"><Issues issues={issues} onLearn={setLearn} /></Panel>
       <Panel title="Build new hall"><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><input value={nh.name} onChange={e => setNh({ ...nh, name: e.target.value })} style={{ width: 100 }} />
         <select value={nh.cool} onChange={e => setNh({ ...nh, cool: e.target.value as CoolingClass })}>{['air', 'rdhx', 'dlc', 'immersion'].map(c => <option key={c}>{c}</option>)}</select><input type="number" value={nh.slots} onChange={e => setNh({ ...nh, slots: +e.target.value || 4 })} />

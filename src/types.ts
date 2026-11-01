@@ -9,6 +9,7 @@ export type Vendor =
   | 'broadcom' | 'arista' | 'cisco' | 'marvell' | 'supermicro' | 'dell' | 'hpe'
   | 'gigabyte' | 'quanta' | 'foxconn' | 'ocp'
   | 'vertiv' | 'schneider' | 'eaton' | 'delta' | 'submer' | 'coolit' | 'motivair'
+  | 'caterpillar' | 'cummins' | 'mtu' | 'kohler' | 'bloom' | 'abb' | 'siemens' | 'trane' | 'carrier' | 'jci' | 'daikin'
   | 'vast' | 'weka' | 'ddn' | 'samsung' | 'micron' | 'skhynix' | 'generic';
 
 /** Learning text attached to every catalog entry. Plain text, no markdown. */
@@ -242,8 +243,19 @@ export interface StorageSystem extends CatalogBase {
 }
 
 // ---------- union ----------
+/** Internet / WAN circuit. Bought and live immediately; one-time install fee (priceUSD) plus monthly recurring charge. */
+export interface Uplink extends CatalogBase {
+  kind: 'uplink';
+  gbps: number;
+  /** Monthly recurring charge, USD. */
+  mrcUSD: number;
+  /** Carrier id: two circuits from different carriers survive a fiber cut. */
+  carrier: 'carrier-a' | 'carrier-b' | 'carrier-c' | 'ixp' | 'cloud';
+  service: 'transit' | 'peering' | 'dark-fiber' | 'cloud-onramp';
+}
+
 export type CatalogItem =
-  | Accelerator | Cpu | MemoryModule | Storage | Nic | Switch | CableOrOptic
+  | Uplink | Accelerator | Cpu | MemoryModule | Storage | Nic | Switch | CableOrOptic
   | Chassis | RackSpec | PowerEquip | CoolingEquip | StorageSystem;
 
 // ---------- vendor ----------
@@ -462,6 +474,8 @@ export interface GameState {
   spotClusters?: string[];
   /** Individual placed racks offered on spot (no cluster needed). */
   spotRacks?: string[];
+  /** Internet circuits: Uplink id -> count. Undefined on legacy saves (treated as unlimited). */
+  uplinks?: Record<string, number>;
   mode?: GameMode;
   /** "Easy path" projects: the game executes the build steps for a signed contract. */
   projects?: Project[];
