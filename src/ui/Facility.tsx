@@ -8,6 +8,7 @@ import World from './World';
 import { MissingParts } from './Inventory';
 import Concepts from './Concepts';
 import { offerAt } from '../store';
+import { hallResilience } from '../sim/resilience';
 import { ALL_ITEMS } from '../data';
 
 const Gauge = ({ label, v, max, unit }: { label: string; v: number; max: number; unit: string }) => { const p = max ? v / max : v ? 2 : 0; return <div style={{ marginBottom: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="dim">{label}</span><span className="mono">{num(v)} / {num(max)} {unit}</span></div>
@@ -51,6 +52,12 @@ export default function Facility({ setLearn, go }: { setLearn: (id: string) => v
           <span style={{ flex: 1 }}>{o.item.name}<div className="dim" style={{ fontSize: 11 }}>{cap} kW · {usd(o.unitPrice)} · {o.leadMonths} mo</div></span>
           <button className="btn sm" disabled={o.unitPrice > g.cash} onClick={() => say(st.buy(o.item.id, 1))}>Buy 1</button></div>; })}</div>
         <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>Arrives in Warehouse, then use “Install 1” above.</div></Panel>
+      <Panel title="Outage protection" glow>{(() => { const r = hallResilience(hall); return <>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>Tier: {r.tier}</b><span className="mono">rides through {Math.round(r.score * 100)}% of outages</span></div>
+        <div className="bar"><div style={{ width: `${r.score * 100}%`, background: r.score >= .9 ? 'var(--gr)' : r.score >= .5 ? 'var(--am)' : 'var(--rd)' }} /></div>
+        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>UPS {num(r.upsKW)} kW · battery {num(r.batteryKW)} kW · generator {num(r.gensetKW)} kW</div>
+        {r.gaps.map(x => <div key={x} className="warn" style={{ fontSize: 12 }}>✗ {x}</div>)}
+        {r.gaps.length === 0 && <div className="good" style={{ fontSize: 12 }}>✓ Full chain: UPS + battery + generator + transfer switch</div>}</>; })()}</Panel>
       <Panel title="Hall checks"><Issues issues={issues} onLearn={setLearn} /></Panel>
       <Panel title="Build new hall"><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><input value={nh.name} onChange={e => setNh({ ...nh, name: e.target.value })} style={{ width: 100 }} />
         <select value={nh.cool} onChange={e => setNh({ ...nh, cool: e.target.value as CoolingClass })}>{['air', 'rdhx', 'dlc', 'immersion'].map(c => <option key={c}>{c}</option>)}</select><input type="number" value={nh.slots} onChange={e => setNh({ ...nh, slots: +e.target.value || 4 })} />

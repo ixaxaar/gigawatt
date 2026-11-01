@@ -1,6 +1,7 @@
 import type { GameState } from '../types';
 import { generateContracts } from './market';
 import type { RNG } from './rng';
+import { hallResilience } from './resilience';
 
 type Log = (level: 'info' | 'good' | 'bad', text: string) => void;
 export const BASE_POWER_PRICE = 0.07;
@@ -39,9 +40,17 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
   });
   if (racks > 0) {
     pool.push(() => {
+      const live = s.halls.filter((h) => h.racks.some((r) => r.status === 'online'));
+      const weakest = live.map(hallResilience).sort((a, b) => a.score - b.score)[0];
+      const score = weakest?.score ?? 0;
+      if (rng() < score) {
+        log('good', `🔌 Utility outage: your ${weakest?.tier} power chain (UPS → generator → transfer switch) carried the halls through with no customer impact.`);
+        return;
+      }
       s.activeContracts.forEach((a) => { a.slaMisses += 1; });
       s.reputation = Math.max(0, s.reputation - 2);
-      log('bad', '🔌 Grid dip trips an unprotected feeder: running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + genset sizing (N+1) and frequent checkpoints keep training alive.');
+      const why = weakest?.gaps[0] ?? 'no backup power installed';
+      log('bad', `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + battery + generator + transfer switch, sized N+1, keep training alive.`);
     });
     pool.push(() => {
       const bonus = Math.round(racks * 40_000);

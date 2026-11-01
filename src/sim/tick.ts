@@ -75,6 +75,18 @@ const ctxOf = (state: GameState): ClusterContext => ({
   getItem,
 });
 
+/** Spare-parts policy: a failed rack with a spare accelerator in the warehouse is back in 1 month instead of the full repair time. */
+const spareRepair = (state: GameState, designId: string, full: number): number => {
+  const design = state.racks.find((r) => r.id === designId);
+  const ids = new Set<string>();
+  for (const item of design?.items ?? []) {
+    if (item.type !== 'tray') continue;
+    for (const p of state.trays.find((t) => t.id === item.trayId)?.parts ?? []) if (getItem(p.itemId)?.kind === 'accelerator') ids.add(p.itemId);
+  }
+  for (const id of ids) if ((state.inventory[id] ?? 0) > 0) { state.inventory[id] -= 1; return 1; }
+  return full;
+};
+
 const rackAccels = (state: GameState, designId: string): number => {
   const design = state.racks.find((r) => r.id === designId);
   if (!design) return 0;
@@ -154,7 +166,9 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
     const p = rackFailureProb(rackAccels(s, rack.designId), stressed, o.accelFailureProbPerMonth);
     if (p > 0 && rng() < p) {
       rack.status = 'failed';
-      rack.readyMonth = s.month + o.repairMonths;
+      const fix = spareRepair(s, rack.designId, o.repairMonths);
+      rack.readyMonth = s.month + fix;
+      if (fix < o.repairMonths) log('info', `Swapped a spare accelerator from the warehouse into ${rack.id}: back in ${fix} month.`);
       failedNow++;
     }
   }
