@@ -1,156 +1,198 @@
 extends Node
-## Composition root: sim + 3D hall + HUD + the real-time clock.
+## App shell: engine bridge + 3D hall + top bar, dock, screens, toasts. Screens live in ui/screens.
 
-const SECS_PER_MONTH := [0.0, 7.0, 3.2, 1.2]
-var sim := Sim.new()
+const SCREENS := [["dash", "", "Datacenter"], ["shop", "", "Procure"], ["design", "", "Design Lab"], ["facility", "", "Build"], ["stock", "", "Warehouse"], ["energy", "", "Energy"], ["network", "", "Supercomputer"], ["contracts", "", "Customers"], ["codex", "", "Codex"]]
+const SCRIPTS := {"shop": "res://ui/screens/procure.gd"}
+const SECS := [0.0, 4.0, 1.6, 0.6]
+
+var b: Bridge
 var hall: HallView
-var hud: Hud
-var clock := 0.0
-var speed := 1
-var panel_open := false
-var placing := ""
-var started := false
 var audio: GameAudio
+var ui: CanvasLayer
+var root: Control
+var holder: Control
+var screens := {}
+var cur := "dash"
+var started := false
+var speed := 0
+var clock := 0.0
+var _seen_log := 0
+var toasts: VBoxContainer
+var top: PanelContainer
+var lbl := {}
+var bar_month: ProgressBar
+var dock_btns := {}
+var menu_ui: Control
+var banner: Label
 
 func _ready() -> void:
-	Data.load_all()
-	hall = HallView.new(); add_child(hall)
-	hud = Hud.new(); add_child(hud)
-	audio = GameAudio.new(); add_child(audio)
-	hud.cue.connect(audio.play)
-	hud.continue_requested.connect(_continue)
-	hud.menu_action.connect(_menu)
 	get_tree().set_auto_accept_quit(false)
-	hud.speed_changed.connect(func(v): speed = v)
-	hud.panel_toggled.connect(func(o): panel_open = o)
-	hud.place_requested.connect(_begin_place)
-	hud.hall_selected.connect(func(i): hall.hall_i = i; hall.rebuild())
-	hud.new_game_requested.connect(_start)
-	hall.slot_clicked.connect(_slot_clicked)
-	hall.hover_changed.connect(func(s, r): hud.show_hover(s, r, placing))
-	_title_scene()
+	b = Bridge.new(); add_child(b)
+	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
+	hall = HallView.new(); add_child(hall); hall.b = b
+	audio = GameAudio.new(); add_child(audio)
+	ui = CanvasLayer.new(); ui.layer = 10; add_child(ui)
+	root = Control.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var th := Theme.new(); th.default_font_size = 17; th.default_font = Fonts.regular; th.set_font("bold_font", "RichTextLabel", Fonts.bold); th.set_font("normal_font", "RichTextLabel", Fonts.regular); root.theme = th
+	ui.add_child(root)
+	_build_shell(); _title()
+	b.changed.connect(_on_changed)
 	var auto := OS.get_environment("GW_AUTOSTART")
-	if auto != "":
-		var holder := hud.root.get_node_or_null("title")
-		if holder: holder.queue_free()
-		_start(auto)
-		_demo_setup()
+	if auto != "": _new_game(auto); if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN"))
 
-func _title_scene() -> void:
-	started = false
-	sim = Sim.new(); sim.new_game(7, "operator")
-	var h: Dictionary = sim.s.halls[0]
-	var sy := Data.system("tpl-hgx-h100-supermicro-oem")
-	for i in [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 24, 25, 26]:
-		h.racks.append({"slot": i, "sys": sy.id, "status": "online" if i != 11 else "failed", "ready": 0, "until": 99, "born": 0})
-	sim.s.halls[0].plant["et-padmount-2500"] = 1; h.it_kw = 900; h.cool_kw = 1000
-	hall.sim = sim; hall.hall_i = 0; hall.dist = 20.0; hall.rebuild(); hud.sim = sim; hud.hall_i = 0
-	hud.set_chrome(false)
-	hud.show_title()
-	hall.dist = 13.0; hall.pitch = 0.32; hall._update_cam(); hall.cam.h_offset = -4.5
+func _fatal(msg: String) -> void:
+	var l := Label.new(); l.text = "GIGAWATT engine failed to start:\n" + msg; l.position = Vector2(60, 60); add_child(l)
 
-func _start(mode: String) -> void:
-	hall.cam.h_offset = 0.0
-	sim = Sim.new(); sim.new_game(int(Time.get_unix_time_from_system()) % 100000, mode)
-	sim.logged.connect(hud.push_feed)
-	hall.sim = sim; hall.hall_i = 0; hall.thermal = false; hall.place_mode = ""; hall.auto_orbit = true; hall.dist = 17.0; hall.pitch = 0.42; hall.rebuild()
-	hud.set_chrome(true); hud.sim = sim; hud.hall_i = 0; hud.set_speed(1); hud.refresh(); started = true; clock = 0.0
-	for e in sim.s.log: hud.push_feed(e.level, e.text)
+# ---------- shell ----------
+func _build_shell() -> void:
+	top = PanelContainer.new(); top.set_anchors_preset(Control.PRESET_TOP_WIDE); top.offset_bottom = 66; top.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.94), Kit.LINE, 0, 1, 14)); root.add_child(top)
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 20); top.add_child(hb)
+	hb.add_child(Kit.label("GIGAWATT", 24, Kit.CY))
+	var dv := VBoxContainer.new(); dv.custom_minimum_size = Vector2(110, 0); lbl.date = Kit.label("", 20); bar_month = Kit.bar(0, 1); dv.add_child(lbl.date); dv.add_child(bar_month); hb.add_child(dv)
+	for p in [["CASH", "cash"], ["DEBT", "debt"], ["NET WORTH", "nw"], ["REPUTATION", "rep"]]:
+		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 19); v.add_child(lbl[p[1]]); hb.add_child(v)
+	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
+	lbl.mode = Kit.btn("", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); hb.add_child(lbl.mode)
+	hb.add_child(Kit.btn("How to play", func(): show_screen("guide"), "", 14))
+	hb.add_child(Kit.btn("Sound", func(): audio.muted = not audio.muted, "", 14))
+	hb.add_child(Kit.btn("Save", func(): var r := b.act("save"); toast("Game saved.", "good"), "", 14))
+	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
+		var bt := Kit.btn(s[0], func(): set_speed(s[1]), "", 15); bt.custom_minimum_size = Vector2(46, 0); lbl["sp%d" % s[1]] = bt; hb.add_child(bt)
+	hb.add_child(Kit.btn("NEXT MONTH ▶", next_month, "go", 17))
+	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
+	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -560; dock.offset_right = 560; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
+	for i in SCREENS.size():
+		var s: Array = SCREENS[i]
+		var d := Kit.btn("%s [%d]" % [s[2], i + 1], func(): show_screen(s[0]), "", 14); d.custom_minimum_size = Vector2(118, 60); dock.add_child(d); dock_btns[s[0]] = d
+	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
+	banner = Kit.label("", 30, Kit.AM); banner.set_anchors_preset(Control.PRESET_CENTER_TOP); banner.offset_top = 140; banner.offset_left = -400; banner.offset_right = 400; banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; root.add_child(banner)
+	_shell_visible(false)
 
-func _menu(a: String) -> void:
-	match a:
-		"resume": hud.close_menu()
-		"save": sim.save_game(); hud.push_feed("info", "Saved."); hud.close_menu()
-		"mute": audio.muted = not audio.muted
-		"title": sim.save_game(); get_tree().reload_current_scene()
-		"quit":
-			if started: sim.save_game()
-			get_tree().quit()
+func _shell_visible(v: bool) -> void:
+	top.visible = v; holder.visible = v
+	for d in dock_btns.values(): d.get_parent().visible = v
+	toasts.visible = v
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if started: sim.save_game()
-		get_tree().quit()
+func _title() -> void:
+	started = false; _shell_visible(false); hall.b = b
+	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); h.name = "title"; root.add_child(h)
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -270; vb.offset_bottom = 270; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110, Kit.CY))
+	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
+	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
+		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): h.queue_free(); _new_game(m[0]), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
+	b.act("newGame", [7, "operator"]); _demo_hall()
+	vb.add_child(Kit.btn("CONTINUE SAVED GAME", func(): var r := b.act("load"); if r.get("ok", false): h.queue_free(); _begin(), "", 18))
+	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
+	vb.add_child(Kit.label("Right-drag orbit · wheel zoom · WASD pan · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
+	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
 
-func _continue() -> void:
-	var ns := Sim.new()
-	if not ns.load_game(): return
-	sim = ns; sim.logged.connect(hud.push_feed)
-	hall.cam.h_offset = 0.0; hall.sim = sim; hall.hall_i = 0; hall.thermal = false; hall.place_mode = ""; hall.auto_orbit = true; hall.dist = 17.0; hall.pitch = 0.42; hall.rebuild()
-	hud.set_chrome(true); hud.sim = sim; hud.hall_i = 0; hud.set_speed(1); hud.refresh(); started = true; clock = 0.0
-	hud.push_feed("info", "Game loaded.")
+func _demo_hall() -> void: pass
 
-func _begin_place(sys_id: String) -> void:
-	placing = sys_id; hall.place_mode = sys_id; hall.rebuild(); hud.place_banner.text = "PLACE: %s — click a slot  (Esc to cancel)" % Data.system(sys_id).name
+func _new_game(mode: String) -> void:
+	b.act("newGame", [int(Time.get_unix_time_from_system()) % 100000, mode]); b.act("setMode", [mode]); _begin()
 
-func _end_place() -> void:
-	placing = ""; hall.place_mode = ""; hud.place_banner.text = ""; hall.rebuild()
+func _begin() -> void:
+	var tt := root.get_node_or_null("title")
+	if tt: tt.queue_free()
+	started = true; _seen_log = b.g.log.size(); speed = 0; clock = 0.0
+	hall.cam.h_offset = 0.0; hall.hall_i = 0; hall.dist = 17.0; hall.pitch = 0.42; hall.auto_orbit = true
+	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild()
 
-func _slot_clicked(slot: int) -> void:
-	if not started or placing == "": return
-	var err := sim.place(hall.hall_i, slot, placing)
-	if err != "": hud.push_feed("bad", err); return
-	hud.push_feed("good", "%s placed. Installing — online in ~3 months." % Data.system(placing).name)
-	if sim.s.crates.get(placing, 0) <= 0: _end_place()
-	else: hall.rebuild()
-	hud.refresh()
+func _on_changed() -> void:
+	if not started: return
+	var g := b.g
+	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.add_theme_color_override("font_color", Kit.GR if g.cash >= 0 else Kit.RD)
+	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
+	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
+	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == speed else Color.WHITE
+	for i in range(_seen_log, g.log.size()):
+		var e: Dictionary = g.log[i]
+		if e.level != "info": toast(e.text, e.level)
+	_seen_log = g.log.size()
+	hall.rebuild()
+	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
+
+func toast(text: String, level := "info") -> void:
+	audio.play("good" if level == "good" else ("bad" if level == "bad" else "click"))
+	var p := PanelContainer.new(); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
+	p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.12, 0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
+	while toasts.get_child_count() > 5: toasts.get_child(0).queue_free(); toasts.remove_child(toasts.get_child(0))
+	var tw := create_tween(); tw.tween_interval(6.0); tw.tween_property(p, "modulate:a", 0.0, 1.0); tw.tween_callback(p.queue_free)
+
+func sfx(k: String) -> void: audio.play(k)
+
+func show_screen(id: String) -> void:
+	for s in screens.values(): s.visible = false
+	cur = id
+	if id == "dash":
+		hall.visible = true
+	if not screens.has(id): screens[id] = _make_screen(id); holder.add_child(screens[id])
+	screens[id].visible = true
+	if screens[id].has_method("refresh"): screens[id].refresh()
+	for k in dock_btns: dock_btns[k].modulate = Color(0.5, 1.0, 0.9) if k == id else Color.WHITE
+
+func go(id: String) -> void: show_screen(id)
+
+func _make_screen(id: String) -> Control:
+	var path: String = SCRIPTS.get(id, "")
+	var c: Control
+	if path != "": c = load(path).new(); c.app = self
+	else:
+		c = Control.new(); c.set_anchors_preset(Control.PRESET_FULL_RECT)
+		var l := Kit.label("%s — coming next in the Godot port." % id, 22, Kit.DIM); l.position = Vector2(40, 40); c.add_child(l)
+	if id != "dash":
+		var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Kit.LINE, 12, 1, 14)); bg.mouse_filter = Control.MOUSE_FILTER_STOP
+		c.set_anchors_preset(Control.PRESET_FULL_RECT); c.offset_left = 16; c.offset_top = 14; c.offset_right = -16; c.offset_bottom = -14
+		var w := ScreenWrap.new(); w.set_anchors_preset(Control.PRESET_FULL_RECT); w.add_child(bg); w.add_child(c); w.inner = c; return w
+	return c
+
+func set_speed(v: int) -> void: speed = v; clock = 0.0; _on_changed()
+
+func next_month() -> void:
+	if not started: return
+	audio.play("month"); b.act("nextMonth"); b.act("stepEasy"); _claim()
+	if OS.get_environment("GW_NOAUTOSAVE") == "": pass
+
+func _claim() -> void:
+	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("good"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
+
+func _process(dt: float) -> void:
+	if not started or speed == 0 or menu_ui != null: return
+	clock += dt / SECS[speed]; bar_month.value = clock
+	if clock >= 1.0: clock = 0.0; next_month()
 
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not (e is InputEventKey) or not e.pressed or e.echo: return
-	if e.keycode == KEY_ESCAPE and not started: get_tree().quit(); return
-	if not started: return
-	match e.keycode:
-		KEY_ESCAPE:
-			if placing != "": _end_place()
-			elif hud._menu_ui != null: hud.close_menu()
-			elif hud.open_panel != "": hud.close_panel()
-			else: hud.toggle_menu()
-		KEY_SPACE: hud.set_speed(0 if speed > 0 else 1)
-		KEY_1: hud.set_speed(1)
-		KEY_2: hud.set_speed(2)
-		KEY_3: hud.set_speed(3)
-		KEY_F5: sim.save_game(); hud.push_feed("info", "Saved.")
-		KEY_M: audio.muted = not audio.muted
-		KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
-		KEY_P: hud.toggle_panel("procure")
-		KEY_B: hud.toggle_panel("plant")
-		KEY_C: hud.toggle_panel("customers")
-		KEY_V: hud.toggle_panel("warehouse")
-		KEY_F: hud.toggle_panel("finance")
-
-func _process(dt: float) -> void:
-	if not started: return
-	if sim.s.over != "":
-		if not has_node("end"):
-			var n := Node.new(); n.name = "end"; add_child(n); hud.show_end(func(): get_tree().reload_current_scene())
+	var tgt := get_viewport().gui_get_focus_owner()
+	if tgt is LineEdit or tgt is SpinBox: return
+	if not started:
+		if e.keycode == KEY_ESCAPE: get_tree().quit()
 		return
-	if not sim.s.incident.is_empty():
-		hud.show_incident(func(i): var msg := sim.resolve_incident(i); hud.push_feed("info", msg); hall.rebuild(); hud.refresh())
-		return
-	if speed == 0 or panel_open: return
-	clock += dt / SECS_PER_MONTH[speed]
-	hud.set_month_frac(clock)
-	if clock >= 1.0:
-		clock = 0.0
-		sim.advance(); hall.rebuild(); hud.refresh()
-		if sim.s.month % 12 == 0: sim.save_game()
+	if e.keycode == KEY_ESCAPE: _menu(); return
+	if e.keycode == KEY_SPACE: next_month(); return
+	if e.keycode >= KEY_1 and e.keycode <= KEY_9: show_screen(SCREENS[e.keycode - KEY_1][0])
+	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
 
-## Screenshot/dev hook: GW_AUTOSTART=operator [GW_PANEL=procure] [GW_MONTHS=14]
-func _demo_setup() -> void:
-	for i in int(OS.get_environment("GW_MONTHS") if OS.get_environment("GW_MONTHS") != "" else "0"):
-		var av := sim.available_systems().filter(func(x): return x.cooling == "air" and x.tier == "oem")
-		if sim.s.orders.size() < 2 and sim.s.cash > 3e6: sim.order_system(av[av.size() - 1].id, 3)
-		for id in sim.s.crates.keys():
-			var h: Dictionary = sim.s.halls[0]
-			for slot in h.slots:
-				if sim.s.crates.get(id, 0) <= 0: break
-				if h.racks.filter(func(r): return r.slot == slot).is_empty() and sim.hall_heat(h) + Data.system(id).kW < h.it_kw: sim.place(0, slot, id)
-		sim.s.incident = {}
-		sim.advance()
-	hall.rebuild(); hud.refresh()
-	if OS.get_environment("GW_PANEL") != "": hud.toggle_panel(OS.get_environment("GW_PANEL"))
-	if OS.get_environment("GW_PLACE") != "" and not sim.s.crates.is_empty(): _begin_place(sim.s.crates.keys()[0])
-	hud.set_speed(0)
-	if OS.get_environment("GW_CAM") != "":
-		var c := OS.get_environment("GW_CAM").split(","); hall.auto_orbit = false; hall.yaw = float(c[0]); hall.pitch = float(c[1]); hall.dist = float(c[2]); if c.size() > 3: hall.target = Vector3(float(c[3]), 1.0, float(c[4]))
-		hall._update_cam()
+func _menu() -> void:
+	if menu_ui != null: menu_ui.queue_free(); menu_ui = null; return
+	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); menu_ui = h
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -190; vb.offset_bottom = 190; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
+		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
+
+func _menu_do(a: String) -> void:
+	match a:
+		"resume": _menu()
+		"save": b.act("save"); toast("Game saved.", "good"); _menu()
+		"mute": audio.muted = not audio.muted
+		"title": b.act("save"); b.stop(); get_tree().reload_current_scene()
+		"quit": b.act("save"); b.stop(); get_tree().quit()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if started and b != null: b.act("save")
+		if b != null: b.stop()
+		get_tree().quit()

@@ -15,7 +15,8 @@ const HOT := 1.2
 static var RACK_SHADER: Shader = load("res://assets/shaders/rack_face.gdshader")
 static var FLOOR_SHADER: Shader = load("res://assets/shaders/floor.gdshader")
 
-var sim: Sim
+var b: Bridge
+var _rs: Dictionary = {}
 var hall_i := 0
 var place_mode := ""
 var thermal := false
@@ -81,7 +82,7 @@ func _cyl(parent: Node3D, pos: Vector3, r: float, len_: float, mat: Material, ax
 	parent.add_child(mi); return mi
 
 func _vendor_color(sy: Dictionary) -> Color:
-	var p: String = sy.platform
+	var p: String = str(sy.platform)
 	if p.contains("MI3"): return Color(1.0, 0.3, 0.15)
 	if p.contains("Gaudi"): return Color(0.2, 0.55, 1.0)
 	if p.contains("Galaxy") or p.contains("CS-3"): return Color(0.7, 0.35, 1.0)
@@ -91,8 +92,8 @@ func _vendor_color(sy: Dictionary) -> Color:
 func slot_pos(i: int) -> Vector3: return Vector3((i % cols) * PITCH, 0, row_z[i / cols])
 
 func _layout(hall: Dictionary) -> void:
-	cols = clampi(int(ceil(sqrt(hall.slots * 1.6))), 5, 12)
-	var rows := int(ceil(float(hall.slots) / cols))
+	cols = clampi(int(ceil(sqrt(int(hall.rackSlots) * 1.6))), 5, 12)
+	var rows := int(ceil(float(int(hall.rackSlots)) / cols))
 	row_z.clear(); var z := 0.0
 	for k in rows:
 		if k > 0: z += RD + (COLD if k % 2 == 1 else HOT)
@@ -102,21 +103,22 @@ func hall_size() -> Vector2: return Vector2((cols - 1) * PITCH + RW, row_z[row_z
 
 # ---------- build ----------
 func rebuild() -> void:
-	if sim == null: return
+	if b == null: return
+	_rs = b.q("rackStatsAll")
 	for c in dyn.get_children(): c.queue_free()
 	_rack_boxes.clear(); _beacon = null
-	var hall: Dictionary = sim.s.halls[hall_i]
+	var hall: Dictionary = b.g.halls[hall_i]
 	_layout(hall)
 	var sz := hall_size(); var cx := (cols - 1) * PITCH * 0.5; var cz := row_z[row_z.size() - 1] * 0.5
 	target = Vector3(cx, 0.9, cz)
-	var heat := sim.hall_heat(hall)
-	var cap := minf(hall.cool_kw, hall.it_kw)
+	var heat := _heat(hall)
+	var cap := minf(hall.coolingKW, hall.itPowerKW)
 	var ratio := (heat / cap) if cap > 0.0 else (2.0 if heat > 0 else 0.0)
 	_build_shell(hall, sz, cx, cz)
 	_build_aisles(sz, cx, ratio)
 	var occupied := {}
-	for r in hall.racks: occupied[r.slot] = r
-	for i in hall.slots:
+	for r in hall.racks: occupied[int(r.slot)] = r
+	for i in int(hall.rackSlots):
 		var p := slot_pos(i)
 		if occupied.has(i): _build_rack(i, p, occupied[i])
 		else: _build_slot(i, p)
@@ -177,12 +179,12 @@ func _build_slot(i: int, p: Vector3) -> void:
 	if valid: _box(dyn, p + Vector3(0, 0.005, 0), Vector3(RW - 0.06, 0.003, RD - 0.06), _emit(Color(0.2, 1.0, 0.5, 0.12), 1.0, true))
 
 func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
-	var sy := Data.system(r.sys)
+	var sy := _sysinfo(r.designId)
 	var row := i / cols
 	var st: String = r.status
 	var parent := Node3D.new(); parent.position = p; parent.rotation.y = 0.0 if row % 2 == 0 else PI; dyn.add_child(parent)
 	_box(parent, Vector3(0, 0.002, 0), Vector3(RW + 0.04, 0.004, RD + 0.04), _emit(Color(0, 0, 0, 0.45), 0.0, true))   # contact shadow
-	if st == "installing":
+	if st == "installing" or st == "ordered":
 		_box(parent, Vector3(0, 0.08, 0), Vector3(0.7, 0.16, 1.2), _solid(Color(0.45, 0.32, 0.18), 0.9, 0.0))              # pallet
 		_box(parent, Vector3(0, 0.95, 0), Vector3(0.62, 1.55, 1.05), _solid(Color(0.62, 0.5, 0.33), 0.95, 0.0))             # carton
 		_box(parent, Vector3(0, 0.95, 0), Vector3(0.64, 1.58, 1.07), _glass(Color(0.85, 0.9, 1.0, 0.13)))                   # stretch wrap
@@ -201,24 +203,46 @@ func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
 			var fl := OmniLight3D.new(); fl.light_color = Color(1, 0.15, 0.1); fl.light_energy = 1.2; fl.omni_range = 3.0; fl.position = Vector3(0, 1.6, 0.9); parent.add_child(fl)
 	_rack_boxes.append({"slot": i, "aabb": AABB(p + Vector3(-RW * 0.5, 0, -RD * 0.5), Vector3(RW, RH, RD)), "rack": r})
 
+func _heat(hall: Dictionary) -> float:
+	var kw := 0.0
+	for r in hall.racks:
+		if r.status == "online" or r.status == "commissioning": kw += _rs.get(r.designId, {}).get("kW", 0.0)
+	return kw
+
+func _sysinfo(design_id: String) -> Dictionary:
+	var st: Dictionary = _rs.get(design_id, {})
+	var plat := "nvidia"
+	for d in b.g.racks:
+		if d.id == design_id:
+			for it in d.items:
+				if it.type == "tray":
+					for tr in b.g.trays:
+						if tr.id == it.trayId:
+							var cid: String = tr.chassisId
+							plat = "Galaxy" if cid.begins_with("tt") else ("CS-3" if cid.begins_with("cb") else ("Gaudi" if cid.begins_with("int") else ("MI3" if (cid.contains("mi") or cid.begins_with("gig") or cid.begins_with("sm-ubb")) else "nvidia")))
+	return {"kW": st.get("kW", 10.0), "accels": st.get("accels", 8), "platform": plat}
+
 func _face(i: int, sy: Dictionary, st: String, rear: bool) -> MeshInstance3D:
 	var mi := MeshInstance3D.new(); var q := QuadMesh.new(); q.size = Vector2(RW - 0.03, 1.87); mi.mesh = q
 	var m := ShaderMaterial.new(); m.shader = RACK_SHADER
-	m.set_shader_parameter("seed", float(i * 7 + 3)); m.set_shader_parameter("fill", clampf(0.4 + sy.kW / 80.0, 0.4, 1.0))
+	m.set_shader_parameter("seed", float(i * 7 + 3)); m.set_shader_parameter("fill", clampf(0.4 + float(sy.kW) / 80.0, 0.4, 1.0))
 	var c := _vendor_color(sy); m.set_shader_parameter("accent", Vector3(c.r, c.g, c.b))
 	m.set_shader_parameter("state", 0 if st == "online" else (1 if st == "commissioning" else 2)); m.set_shader_parameter("rear", rear)
-	m.set_shader_parameter("heat", clampf(sy.kW / 60.0, 0.0, 1.0) if thermal and st == "online" else -1.0)
+	m.set_shader_parameter("heat", clampf(float(sy.kW) / 60.0, 0.0, 1.0) if thermal and st == "online" else -1.0)
 	mi.material_override = m; return mi
 
 func _build_plant(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 	var cool_n := 0; var pow_n := 0
 	var pipe_b := _solid(Color(0.1, 0.4, 0.9), 0.3, 0.2); var pipe_r := _solid(Color(0.85, 0.2, 0.15), 0.3, 0.2)
 	var cdu_z0 := 0.3
-	for id in hall.plant:
-		var it := Data.item(id)
-		for j in mini(hall.plant[id], 8):
+	var plant := {}
+	for id in hall.powerEquip: plant[id] = hall.powerEquip[id]
+	for id in hall.coolingEquip: plant[id] = hall.coolingEquip[id]
+	for id in plant:
+		var it := b.item(id)
+		for j in mini(int(plant[id]), 8):
 			if it.kind == "cooling":
-				var liquid: bool = it.serves == "dlc" or it.serves == "immersion"
+				var liquid: bool = it.get("serves", "") == "dlc" or it.get("serves", "") == "immersion"
 				var pos := Vector3(-3.6, 0, cdu_z0 + cool_n * 1.15)
 				var body := _solid(Color(0.16, 0.2, 0.26) if liquid else Color(0.72, 0.74, 0.77), 0.45, 0.4)
 				_box(dyn, pos + Vector3(0, 1.05, 0), Vector3(0.9, 2.1, 0.95), body)
@@ -230,18 +254,18 @@ func _build_plant(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 				cool_n += 1
 			else:
 				var pos2 := Vector3(cx - 3.0 + pow_n * 0.9, 0, -3.6)
-				var tall := 2.3 if it.powerType != "transformer" else 1.7
+				var tall := 2.3 if it.get("powerType", "") != "transformer" else 1.7
 				_box(dyn, pos2 + Vector3(0, tall * 0.5, 0), Vector3(0.85, tall, 0.9), _solid(Color(0.14, 0.15, 0.17), 0.5, 0.7))
 				_box(dyn, pos2 + Vector3(0, tall * 0.5, 0.455), Vector3(0.72, tall - 0.2, 0.012), _solid(Color(0.2, 0.21, 0.23), 0.45, 0.7))     # door panel
 				_box(dyn, pos2 + Vector3(0.3, tall * 0.5, 0.47), Vector3(0.03, 0.18, 0.02), _solid(Color(0.7, 0.7, 0.72), 0.3, 0.9))              # handle
 				_box(dyn, pos2 + Vector3(-0.25, tall - 0.4, 0.47), Vector3(0.12, 0.08, 0.01), _emit(Color(1.0, 0.65, 0.1), 1.8, false))            # status
 				_box(dyn, pos2 + Vector3(-0.1, tall - 0.4, 0.47), Vector3(0.04, 0.04, 0.01), _emit(Color(0.2, 1.0, 0.4), 2.0, false))
 				pow_n += 1
-	if hall.cool == "dlc" and cool_n > 0:
+	if hall.coolingClass == "dlc" and cool_n > 0:
 		var zlen := row_z[row_z.size() - 1] + 1.0
 		_cyl(dyn, Vector3(-0.55, 0.14, zlen * 0.5), 0.05, zlen, pipe_b, "z"); _cyl(dyn, Vector3(-0.7, 0.14, zlen * 0.5), 0.05, zlen, pipe_r, "z")
 		for z in row_z: _cyl(dyn, Vector3(-0.3, 0.14, z), 0.03, 0.6, pipe_b, "x")
-	if hall.plant.is_empty():
+	if plant.is_empty():
 		var l := OmniLight3D.new(); l.light_color = Color(1, 0.3, 0.2); l.light_energy = 1.0; l.omni_range = 8.0; l.position = Vector3(cx, 2.5, cz); dyn.add_child(l)
 
 func _build_overhead(sz: Vector2, cx: float) -> void:
@@ -297,14 +321,14 @@ func _ray_pick(mp: Vector2) -> int:
 	var t := -o.y / d.y
 	if t < 0: return -1
 	var g := o + d * t
-	var hall: Dictionary = sim.s.halls[hall_i]
-	for i in hall.slots:
+	var hall: Dictionary = b.g.halls[hall_i]
+	for i in int(hall.rackSlots):
 		var p := slot_pos(i)
 		if absf(g.x - p.x) <= RW * 0.5 and absf(g.z - p.z) <= RD * 0.5: return i
 	return -1
 
 func _unhandled_input(e: InputEvent) -> void:
-	if sim == null: return
+	if b == null: return
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP: dist = maxf(2.5, dist * 0.9); auto_orbit = false; _update_cam()
