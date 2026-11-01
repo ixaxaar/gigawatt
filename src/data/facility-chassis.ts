@@ -1163,6 +1163,19 @@ export const VENDORS: VendorInfo[] = [
     },
   },
   {
+    id: 'weka',
+    name: 'WEKA',
+    sells: ['storage'],
+    reliability: 0.9,
+    support: 0.88,
+    volumeDiscountPerDoublingPct: 4,
+    codex: {
+      summary: 'Software-defined parallel filesystem vendor tuned for GPU clusters.',
+      explain: 'WEKA runs on commodity NVMe servers and exposes a POSIX namespace over RDMA, feeding GPUs hundreds of GB/s. You license the software per capacity and own the hardware choices.',
+      tradeoffs: ['Flexible hardware, fast data path', 'Software licence is a recurring cost'],
+    },
+  },
+  {
     id: 'vast',
     name: 'VAST Data',
     sells: ['storage'],
