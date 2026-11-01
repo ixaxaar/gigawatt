@@ -3,23 +3,24 @@ import { useGame } from '../store';
 import { ledger, rackReadiness } from '../ledger';
 import { Panel, usd, dateOf } from './common';
 import Tip from './Tip';
-import { recommendedSpares, rackParts, PART_LABEL, partClass } from '../sim/failures';
+import { spareQty, recommendedSpares, rackParts, PART_LABEL, partClass } from '../sim/failures';
 import { getItem } from '../data';
 
 /** Per-design "what am I missing" with one-click ordering. Used by Warehouse and Build screens. */
 export function MissingParts({ designId, racks = 1, onMsg, setLearn }: { designId: string; racks?: number; onMsg?: (m: string) => void; setLearn?: (id: string) => void }) {
   const g = useGame(s => s.game);
+  const [sp, setSp] = useState(true);
   const r = rackReadiness(g, designId, racks);
   if (!r) return null;
   if (r.complete) return <div className="pos" style={{ fontSize: 12 }}>✓ All parts for {racks} rack{racks > 1 ? 's' : ''} are in the warehouse.</div>;
-  const order = () => { const st = useGame.getState(); const out: string[] = []; for (const l of r.toBuy) if (l.buyable) { const m = st.buy(l.id, l.short - l.onOrder); out.push(m.ok ? '✓' : m.message); } onMsg?.(out.every(x => x === '✓') ? `Ordered ${r.toBuy.length} part type(s) · arrives within ~${r.etaMonths} mo.` : out.filter(x => x !== '✓').join(' ')); };
+  const order = () => { const st = useGame.getState(); const out: string[] = []; for (const l of r.toBuy) if (l.buyable) { const m = st.buy(l.id, l.short - l.onOrder + (sp ? spareQty(l.id, l.need) : 0)); out.push(m.ok ? '✓' : m.message); } onMsg?.(out.every(x => x === '✓') ? `Ordered ${r.toBuy.length} part type(s) · arrives within ~${r.etaMonths} mo.` : out.filter(x => x !== '✓').join(' ')); };
   return <div>
     <table style={{ fontSize: 12 }}><thead><tr><th>Missing part</th><th>Need</th><th>Have</th><th>On order</th><th>Unit</th><th>Lead</th></tr></thead><tbody>
       {r.lines.filter(l => l.short > 0).map(l => <tr key={l.id}><td><a style={{ cursor: 'pointer' }} onClick={() => setLearn?.(l.id)}>{l.name}</a>{!l.buyable && <div className="neg" style={{ fontSize: 11 }}>{l.reason ?? 'Unavailable now'}</div>}</td>
         <td className="mono">{l.need}</td><td className="mono">{l.have}</td><td className="mono">{l.onOrder || '—'}</td><td className="mono">{l.buyable ? usd(l.unitPrice) : '—'}</td><td className="mono">{l.buyable ? l.leadMonths + ' mo' : '—'}</td></tr>)}
     </tbody></table>
     {r.blocked.length > 0 ? <div className="warn" style={{ marginTop: 6 }}>⚠ {r.blocked.map(b => b.name).join(', ')} cannot be bought this month — redesign the tray/rack with a part that is shipping (Design Lab), or wait for it.</div>
-      : r.toBuy.length > 0 ? <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}><button className="btn go" disabled={r.cost > g.cash} onClick={order}>ORDER ALL MISSING · {usd(r.cost)}</button><span className="dim">arrives in ~{r.etaMonths} mo</span></div>
+      : r.toBuy.length > 0 ? <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}><label className="dim" style={{ fontSize: 11 }}><input type="checkbox" checked={sp} onChange={e => setSp(e.target.checked)} /> + spares</label><button className="btn go" disabled={r.cost > g.cash} onClick={order}>ORDER ALL MISSING · {usd(r.cost)}</button><span className="dim">arrives in ~{r.etaMonths} mo</span></div>
         : <div className="dim" style={{ marginTop: 6 }}>Everything missing is already on order.</div>}
   </div>;
 }

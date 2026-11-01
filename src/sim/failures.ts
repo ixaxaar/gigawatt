@@ -38,3 +38,9 @@ export function recommendedSpares(state: GameState, id: string): number {
   if (!c || total === 0) return 0;
   return Math.max(1, Math.ceil(total * PART_RATE[c] * 3));
 }
+
+/** Spares to bundle with an order of `qty` units: ~6 months of expected failures, at least 1 per part type that can fail. */
+export function spareQty(id: string, qty: number): number {
+  const c = partClass(id);
+  return c ? Math.max(1, Math.ceil(qty * PART_RATE[c] * 6)) : 0;
+}

@@ -4,6 +4,7 @@
 // to React + localStorage persistence.
 // ===========================================================================
 import { getTemplate } from './data/templates';
+import { spareQty } from './sim/failures';
 import { templateBom, trayOf, rackOf, trayIdOf, rackIdOf } from './plan';
 import { create } from 'zustand';
 import { ALL_ITEMS, getItem, VENDORS } from './data';
@@ -191,7 +192,7 @@ export interface GameStore {
   newGame: (seed?: number, mode?: GameMode) => void;
   buy: (itemId: string, qty: number) => ActionResult;
   /** Adopt a template's tray+rack designs and order the full bill of materials for `racks` racks, atomically. */
-  buyTemplate: (templateId: string, racks: number) => ActionResult;
+  buyTemplate: (templateId: string, racks: number, spares?: boolean) => ActionResult;
   adoptTemplate: (templateId: string) => ActionResult;
   saveTray: (tray: TrayDesign) => ActionResult;
   saveRack: (rack: RackDesign) => ActionResult;
@@ -309,7 +310,7 @@ export const useGame = create<GameStore>()((set, get) => {
       return { ok: true, message: `Saved designs for ${t.name}.` };
     },
 
-    buyTemplate: (templateId, racks) => {
+    buyTemplate: (templateId, racks, spares = true) => {
       const t = getTemplate(templateId);
       const nRacks = Math.floor(racks);
       if (!t) return { ok: false, message: 'Unknown template.' };
@@ -318,6 +319,7 @@ export const useGame = create<GameStore>()((set, get) => {
       if (!adopted.ok) return adopted;
       return commit((g) => {
         const bom = templateBom(t, nRacks);
+        if (spares) for (const id of Object.keys(bom)) { const sp = spareQty(id, bom[id]); if (sp) bom[id] += sp; }
         let cost = 0, lead = 1;
         const lines: { itemId: string; n: number; unit: number; lead: number }[] = [];
         for (const [itemId, n] of Object.entries(bom)) {

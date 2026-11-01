@@ -5,6 +5,7 @@ import { useGame, offerAt, volumeDiscount } from '../store';
 import { Panel, CodexCard, specsOf, usd, num, vendorColor } from './common';
 import { ItemArt } from './art';
 import Planner from './Planner';
+import { spareQty } from '../sim/failures';
 
 const KINDS = ['accelerator', 'cpu', 'nic', 'switch', 'cable', 'chassis', 'rack', 'power', 'cooling', 'storage', 'memory', 'nvme'] as const;
 
@@ -16,6 +17,7 @@ export default function Shop({ go }: { go: (s: string) => void }) {
   const [future, setFuture] = useState(false);
   const [sel, setSel] = useState<CatalogItem | null>(null);
   const [qty, setQty] = useState(8);
+  const [spares, setSpares] = useState(true);
   const [msg, setMsg] = useState('');
   const items = useMemo(() => ALL_ITEMS.filter(i => i.kind === kind && (vendor === 'all' || i.vendor === vendor)).map(i => offerAt(i, g.month)).filter(o => future || o.available).sort((a, b) => a.item.availableFrom - b.item.availableFrom), [kind, vendor, future, g.month]);
   const vendors = [...new Set(ALL_ITEMS.filter(i => i.kind === kind).map(i => i.vendor))];
@@ -41,7 +43,7 @@ export default function Shop({ go }: { go: (s: string) => void }) {
           <div style={{ display: 'flex', gap: 14 }}><ItemArt item={sel} size={110} /><table><tbody>{specsOf(sel).map(([a, b]) => <tr key={a}><td className="dim">{a}</td><td className="mono">{b}</td></tr>)}</tbody></table></div>
           <div style={{ margin: '12px 0' }}><CodexCard codex={sel.codex} /></div>
           {so.available ? <><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>Qty <input type="number" min={1} value={qty} onChange={e => setQty(Math.max(1, +e.target.value || 1))} />
-            <button className="btn go" disabled={total > g.cash} onClick={() => setMsg(useGame.getState().buy(sel.id, qty).message)}>BUY {usd(total)}</button></div>
+            <button className="btn go" disabled={total > g.cash} onClick={() => setMsg(useGame.getState().buy(sel.id, qty + (spares ? spareQty(sel.id, qty) : 0)).message)}>BUY {usd(total + (spares ? spareQty(sel.id, qty) * so.unitPrice : 0))}</button>{spareQty(sel.id, qty) > 0 && <label className="dim" style={{ fontSize: 11 }}><input type="checkbox" checked={spares} onChange={e => setSpares(e.target.checked)} /> + {spareQty(sel.id, qty)} spare{spareQty(sel.id, qty) > 1 ? 's' : ''}</label>}</div>
             <div className="dim" style={{ marginTop: 6 }}>{usd(so.unitPrice)} ea{disc > 0 && <span className="pos"> · −{(disc * 100).toFixed(0)}% volume</span>} · arrives in {so.leadMonths} mo{so.qtyCap ? ` · allocation ${num(so.qtyCap)}/qtr` : ''}</div></>
             : <div className="warn">{so.reason}</div>}
           {msg && <div className="dim" style={{ marginTop: 8 }}>{msg}</div>}
