@@ -2,3 +2,5 @@ node_modules
 dist
 .work
 *.log
+godot/.godot/
+*.import
