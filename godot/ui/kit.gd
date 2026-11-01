@@ -180,3 +180,34 @@ static func codex_card(parent: Control, codex: Dictionary, name := "") -> void:
 	v.add_child(label(codex.summary, 14, TX, true)); v.add_child(label(codex.explain, 13, DIM, true))
 	for t in codex.tradeoffs: v.add_child(label("•  " + t, 13, Color(0.85, 0.9, 0.95), true))
 	parent.add_child(p)
+
+
+## Rebuild a screen without losing scroll positions (rebuild frees old ScrollContainers; restore by index).
+static func refresh_keep(node: Control) -> void:
+	if not node.has_method("refresh"): return
+	var vals := []
+	for sc in node.find_children("*", "ScrollContainer", true, false): vals.append((sc as ScrollContainer).scroll_vertical)
+	node.refresh()
+	if vals.is_empty() or not node.is_inside_tree(): return
+	var tree := node.get_tree()
+	await tree.process_frame; await tree.process_frame
+	if not is_instance_valid(node): return
+	var scs := node.find_children("*", "ScrollContainer", true, false)
+	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
+
+## Collapsible panel. `folds` is a persistent Dictionary (key -> bool collapsed); toggling calls `on_toggle`.
+static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle: Callable, glow := false, parent: Control = null, default_collapsed := false) -> Array:
+	var collapsed: bool = folds.get(key, default_collapsed)
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(PANEL, CY if glow else LINE, 12, 2 if glow else 1, 14)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); p.add_child(v)
+	var hb := btn(("▸ " if collapsed else "▾ ") + title.to_upper(), func(): folds[key] = not collapsed; on_toggle.call(), "", 14)
+	hb.alignment = HORIZONTAL_ALIGNMENT_LEFT; v.add_child(hb)
+	var body := VBoxContainer.new(); body.add_theme_constant_override("separation", 7); body.visible = not collapsed; v.add_child(body)
+	if parent: parent.add_child(p)
+	return [p, body]
+
+static func cluster_color(g: Dictionary, id) -> Color:
+	var idx := 0
+	for k in g.clusters.size():
+		if g.clusters[k].id == id: idx = k
+	return Color.from_hsv(fmod(idx * 0.137 + 0.02, 1.0), 0.75, 1.0)

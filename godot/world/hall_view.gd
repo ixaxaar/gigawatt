@@ -132,20 +132,13 @@ func _build_shell(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 	var fw := sz.x + 9.0; var fd := sz.y + 8.0
 	var fm := MeshInstance3D.new(); var pm := PlaneMesh.new(); pm.size = Vector2(fw, fd); fm.mesh = pm; fm.position = Vector3(cx, 0, cz)
 	var sm := ShaderMaterial.new(); sm.shader = FLOOR_SHADER; sm.set_shader_parameter("area", Vector2(fw, fd)); fm.material_override = sm; dyn.add_child(fm)
-	var wall := _solid(Color(0.34, 0.35, 0.38), 0.92, 0.0)
-	var trim := _solid(Color(0.85, 0.7, 0.1), 0.7, 0.0)
-	_box(dyn, Vector3(cx, 2.25, cz - fd * 0.5), Vector3(fw, 4.5, 0.3), wall)
-	_box(dyn, Vector3(cx - fw * 0.5, 2.25, cz), Vector3(0.3, 4.5, fd), wall)
-	_box(dyn, Vector3(cx + fw * 0.5, 2.25, cz), Vector3(0.3, 4.5, fd), wall)
-	_box(dyn, Vector3(cx, 0.08, cz - fd * 0.5 + 0.17), Vector3(fw, 0.16, 0.04), trim)           # safety-yellow skirting
-	_box(dyn, Vector3(cx - fw * 0.5 + 0.17, 0.08, cz), Vector3(0.04, 0.16, fd), trim)
-	_box(dyn, Vector3(cx + fw * 0.5 - 0.17, 0.08, cz), Vector3(0.04, 0.16, fd), trim)
-	for k in 3:                                                                                  # structural columns
-		var x := cx - fw * 0.5 + 0.6 + k * (fw - 1.2) / 2.0
-		_box(dyn, Vector3(x, 2.25, cz - fd * 0.5 + 0.55), Vector3(0.5, 4.5, 0.5), _solid(Color(0.28, 0.29, 0.31), 0.9, 0.0))
-		_box(dyn, Vector3(x, 0.5, cz - fd * 0.5 + 0.55), Vector3(0.52, 1.0, 0.52), _solid(Color(0.8, 0.65, 0.08), 0.8, 0.0))
-	_box(dyn, Vector3(cx + fw * 0.5 - 0.2, 1.1, cz + fd * 0.25), Vector3(0.1, 2.2, 1.4), _solid(Color(0.1, 0.11, 0.13), 0.4, 0.6))    # personnel door
-	_box(dyn, Vector3(cx + fw * 0.5 - 0.27, 2.4, cz + fd * 0.25), Vector3(0.04, 0.2, 0.5), _emit(Color(0.2, 1.0, 0.45), 1.8, false))   # exit sign
+	var red := _emit(Color(0.9, 0.08, 0.06), 1.1, false)
+	var m := 0.7; var lw := 0.12                                                                  # painted red boundary line
+	var x0 := cx - sz.x * 0.5 - m; var x1 := cx + sz.x * 0.5 + m; var z0 := cz - sz.y * 0.5 - m; var z1 := cz + sz.y * 0.5 + m
+	_box(dyn, Vector3(cx, 0.004, z0), Vector3(x1 - x0, 0.008, lw), red)
+	_box(dyn, Vector3(cx, 0.004, z1), Vector3(x1 - x0, 0.008, lw), red)
+	_box(dyn, Vector3(x0, 0.004, cz), Vector3(lw, 0.008, z1 - z0), red)
+	_box(dyn, Vector3(x1, 0.004, cz), Vector3(lw, 0.008, z1 - z0), red)
 
 func _build_aisles(sz: Vector2, cx: float, ratio: float) -> void:
 	var rows := row_z.size()
@@ -201,7 +194,27 @@ func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
 			var qm := SphereMesh.new(); qm.radius = 0.5; qm.height = 1.0; sm.mesh = qm
 			var smat := StandardMaterial3D.new(); smat.albedo_color = Color(0.3, 0.3, 0.32, 0.35); smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; sm.material_override = smat; parent.add_child(sm)
 			var fl := OmniLight3D.new(); fl.light_color = Color(1, 0.15, 0.1); fl.light_energy = 1.2; fl.omni_range = 3.0; fl.position = Vector3(0, 1.6, 0.9); parent.add_child(fl)
+	var ci := _cluster_of(r)
+	if not ci.is_empty() and st != "ordered":
+		var cc: Color = ci.color
+		_box(parent, Vector3(0, RH + 0.03, 0), Vector3(RW - 0.004, 0.04, RD - 0.03), _emit(cc, 1.6, false))        # cluster-coloured crown
+		_box(parent, Vector3(0, 0.006, RD * 0.5 + 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false))    # floor tag, front
+		_box(parent, Vector3(0, 0.006, -RD * 0.5 - 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false))   # floor tag, rear
 	_rack_boxes.append({"slot": i, "aabb": AABB(p + Vector3(-RW * 0.5, 0, -RD * 0.5), Vector3(RW, RH, RD)), "rack": r})
+
+## Cluster + customer that a placed rack belongs to ({} if unclustered). Colour is stable per cluster id.
+func _cluster_of(r: Dictionary) -> Dictionary:
+	var cid = r.get("clusterId")
+	if cid == null or cid == "": return {}
+	var idx := 0; var nm := str(cid)
+	for k in b.g.clusters.size():
+		if b.g.clusters[k].id == cid: idx = k; nm = b.g.clusters[k].name
+	var cust := ""
+	for a in b.g.activeContracts:
+		if a.clusterIds.has(cid): cust = (cust + ", " if cust != "" else "") + str(a.contract.customer)
+	return {"id": cid, "name": nm, "customer": cust, "color": Color.from_hsv(fmod(idx * 0.137 + 0.02, 1.0), 0.75, 1.0)}
+
+func cluster_info(r: Dictionary) -> Dictionary: return _cluster_of(r)
 
 func _heat(hall: Dictionary) -> float:
 	var kw := 0.0

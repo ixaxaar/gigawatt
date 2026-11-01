@@ -5,4 +5,4 @@ var inner: Control
 var app:
 	set(v): app = v; if inner: inner.app = v
 func refresh() -> void:
-	if inner and inner.has_method("refresh"): inner.refresh()
+	if inner and inner.has_method("refresh"): Kit.refresh_keep(inner)

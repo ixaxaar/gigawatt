@@ -17,7 +17,8 @@ static func build(app, parent: Control, only: Array = [], on_toggle: Callable = 
 		nm.add_child(Kit.label(c.name, 14, Kit.TX, true)); nm.add_child(Kit.label(c.status.text, 12, col, true))
 		h.add_child(Kit.tag(LBL[c.status.level], col))
 		var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Control.FOCUS_NONE
-		click.pressed.connect(func(): open_id = "" if open_id == c.id else c.id; if on_toggle.is_valid(): on_toggle.call()); p.add_child(click)
+		click.pressed.connect(func(): open_id = "" if open_id == c.id else c.id; if on_toggle.is_valid(): on_toggle.call()); p.add_child(click); p.move_child(click, 0)
+		for n in [v, h, nm]: n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if open_id == c.id:
 			v.add_child(Kit.rich("[b]What it is:[/b] %s\n[b]Why you care:[/b] %s\n[b]When you need it:[/b] %s" % [c.what, c.why, c.when], 12))
 			if c.get("go") != null: v.add_child(Kit.btn("Take me there →", func(): app.go(c.go), "", 12))

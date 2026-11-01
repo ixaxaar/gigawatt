@@ -9862,7 +9862,8 @@ function assignFromRacks(st2, contractId, rackIds) {
   if (!r.ok) return r;
   const cl = G$1().clusters[G$1().clusters.length - 1];
   const a = st2.assignContract(contractId, [cl.id]);
-  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (the racks were grouped into '${cl.name}' — add more racks or fix and assign from Customers.)` };
+  if (!a.ok) st2.disbandCluster(cl.id);
+  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
 }
 const DEMAND_CURVE = [
   [2020, 0.2],
@@ -10306,7 +10307,8 @@ const useGame = create()((set, get) => {
       if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(", ")}.`);
       const claimed = ids.filter((id) => placed2.get(id)?.clusterId);
       if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(", ")}.`);
-      const cluster = { id: `cl-${g.clusters.length + 1}`, name, rackIds: ids, fabric };
+      const nextN = g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, "")) || 0), 0) + 1;
+      const cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
       const stats = evaluateCluster(cluster, {
         getRack: (id) => {
           const pid = placed2.get(id)?.designId ?? id;
@@ -10442,6 +10444,29 @@ const useGame = create()((set, get) => {
       const names = ids.map((id) => g.clusters.find((x) => x.id === id)?.name ?? id).join(" + ");
       logln(g, "good", `${contract.customer} (${contract.model.name}) now served by ${names}.`);
       return ok(`Serving ${contract.customer}.`, issues);
+    }),
+    unassignContract: (contractId) => commit((g) => {
+      const ac = g.activeContracts.find((a) => a.contract.id === contractId);
+      if (!ac) return fail("Active contract not found.");
+      if (!ac.clusterIds.length) return fail("This contract has no cluster assigned.");
+      ac.clusterIds = [];
+      ac.deployBy = Math.max(ac.deployBy ?? g.month, g.month + 2);
+      logln(g, "info", `${ac.contract.customer}: cluster released. Re-assign a qualifying cluster by ${g.month + 2 >= (ac.deployBy ?? 0) ? "month " + ac.deployBy : "the deadline"} or they walk.`);
+      return ok("Cluster released; the contract is awaiting deployment again (2 months grace).");
+    }),
+    disbandCluster: (clusterId) => commit((g) => {
+      const cl = g.clusters.find((c) => c.id === clusterId);
+      if (!cl) return fail("Unknown cluster.");
+      for (const h of g.halls) for (const r of h.racks) if (r.clusterId === clusterId) r.clusterId = void 0;
+      for (const ac of g.activeContracts) {
+        if (!ac.clusterIds.includes(clusterId)) continue;
+        ac.clusterIds = ac.clusterIds.filter((x) => x !== clusterId);
+        if (!ac.clusterIds.length) ac.deployBy = Math.max(ac.deployBy ?? g.month, g.month + 2);
+      }
+      g.clusters = g.clusters.filter((c) => c.id !== clusterId);
+      g.spotClusters = (g.spotClusters ?? []).filter((x) => x !== clusterId);
+      logln(g, "info", `Cluster '${cl.name}' disbanded — its racks are free to re-cluster.`);
+      return ok(`Cluster '${cl.name}' disbanded; racks are free again.`);
     }),
     signPower: (offerId, mwOverride) => commit((g) => {
       const i = (g.powerOffers ?? []).findIndex((o2) => o2.id === offerId);
@@ -11183,7 +11208,7 @@ const Q = {
   concepts: () => CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G()) })),
   missions: () => MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go, done: m.done(G()) }))
 };
-const ACTIONS = ["newGame", "setMode", "buy", "buyTemplate", "adoptTemplate", "saveTray", "saveRack", "buildHall", "installPower", "installCooling", "placeRack", "createCluster", "acceptContract", "assignContract", "takeLoan", "nextMonth", "save", "load", "signPower", "buyUplink", "dropUplink", "setSpot", "setSpotReserve", "setSpotRack", "assignRacks", "startEasy", "stepEasy"];
+const ACTIONS = ["newGame", "setMode", "buy", "buyTemplate", "adoptTemplate", "saveTray", "saveRack", "buildHall", "installPower", "installCooling", "placeRack", "createCluster", "acceptContract", "assignContract", "unassignContract", "disbandCluster", "takeLoan", "nextMonth", "save", "load", "signPower", "buyUplink", "dropUplink", "setSpot", "setSpotReserve", "setSpotRack", "assignRacks", "startEasy", "stepEasy"];
 function snapshot() {
   const g = JSON.parse(JSON.stringify(G()));
   g.log = g.log.slice(-150);

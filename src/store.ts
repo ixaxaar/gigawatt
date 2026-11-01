@@ -203,6 +203,8 @@ export interface GameStore {
   createCluster: (name: string, rackIds: string[], fabric: FabricDesign) => ActionResult;
   acceptContract: (contractId: string) => ActionResult;
   assignContract: (contractId: string, clusterIds: string[]) => ActionResult;
+  unassignContract: (contractId: string) => ActionResult;
+  disbandCluster: (clusterId: string) => ActionResult;
   takeLoan: (amountUSD: number) => ActionResult;
   nextMonth: () => void;
   save: () => void;
@@ -573,7 +575,8 @@ export const useGame = create<GameStore>()((set, get) => {
         if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(', ')}.`);
         const claimed = ids.filter((id) => placed.get(id)?.clusterId);
         if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(', ')}.`);
-        const cluster: Cluster = { id: `cl-${g.clusters.length + 1}`, name, rackIds: ids, fabric };
+        const nextN = g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, '')) || 0), 0) + 1;
+        const cluster: Cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
         const stats = evaluateCluster(cluster, {
           getRack: (id) => { const pid = placed.get(id)?.designId ?? id; return g.racks.find((r) => r.id === pid); },
           getTray: (id) => g.trays.find((t) => t.id === id),
@@ -706,6 +709,33 @@ export const useGame = create<GameStore>()((set, get) => {
         const names = ids.map((id) => g.clusters.find((x) => x.id === id)?.name ?? id).join(' + ');
         logln(g, 'good', `${contract.customer} (${contract.model.name}) now served by ${names}.`);
         return ok(`Serving ${contract.customer}.`, issues);
+      }),
+
+    unassignContract: (contractId) =>
+      commit((g) => {
+        const ac = g.activeContracts.find((a) => a.contract.id === contractId);
+        if (!ac) return fail('Active contract not found.');
+        if (!ac.clusterIds.length) return fail('This contract has no cluster assigned.');
+        ac.clusterIds = [];
+        ac.deployBy = Math.max(ac.deployBy ?? g.month, g.month + 2);
+        logln(g, 'info', `${ac.contract.customer}: cluster released. Re-assign a qualifying cluster by ${g.month + 2 >= (ac.deployBy ?? 0) ? 'month ' + ac.deployBy : 'the deadline'} or they walk.`);
+        return ok('Cluster released; the contract is awaiting deployment again (2 months grace).');
+      }),
+
+    disbandCluster: (clusterId) =>
+      commit((g) => {
+        const cl = g.clusters.find((c) => c.id === clusterId);
+        if (!cl) return fail('Unknown cluster.');
+        for (const h of g.halls) for (const r of h.racks) if (r.clusterId === clusterId) r.clusterId = undefined;
+        for (const ac of g.activeContracts) {
+          if (!ac.clusterIds.includes(clusterId)) continue;
+          ac.clusterIds = ac.clusterIds.filter((x) => x !== clusterId);
+          if (!ac.clusterIds.length) ac.deployBy = Math.max(ac.deployBy ?? g.month, g.month + 2);
+        }
+        g.clusters = g.clusters.filter((c) => c.id !== clusterId);
+        g.spotClusters = (g.spotClusters ?? []).filter((x) => x !== clusterId);
+        logln(g, 'info', `Cluster '${cl.name}' disbanded — its racks are free to re-cluster.`);
+        return ok(`Cluster '${cl.name}' disbanded; racks are free again.`);
       }),
 
     signPower: (offerId, mwOverride) =>

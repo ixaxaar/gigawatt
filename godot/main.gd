@@ -62,12 +62,17 @@ func _build_shell() -> void:
 	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
 		var bt := Kit.btn(s[0], func(): set_speed(s[1]), "", 15); bt.custom_minimum_size = Vector2(46, 0); lbl["sp%d" % s[1]] = bt; hb.add_child(bt)
 	hb.add_child(Kit.btn("NEXT MONTH ▶", next_month, "go", 17))
+	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
+	hb.add_child(Kit.btn("QUIT ✕", func(): _menu_do("quit"), "danger", 14))
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
 	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -560; dock.offset_right = 560; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
 	for i in SCREENS.size():
 		var s: Array = SCREENS[i]
 		var d := Kit.btn("%s [%d]" % [s[2], i + 1], func(): show_screen(s[0]), "", 14); d.custom_minimum_size = Vector2(118, 60); dock.add_child(d); dock_btns[s[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
+	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1, 0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
+	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
+	hall.hover_changed.connect(_on_rack_hover)
 	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
 	banner = Kit.label("", 30, Kit.AM); banner.set_anchors_preset(Control.PRESET_CENTER_TOP); banner.offset_top = 140; banner.offset_left = -400; banner.offset_right = 400; banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; root.add_child(banner)
 	_shell_visible(false)
@@ -116,7 +121,7 @@ func _on_changed() -> void:
 	_seen_log = g.log.size()
 	hall.rebuild()
 	if hall.get_meta("n", 0) == 0: pass
-	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
+	if screens.has(cur): Kit.refresh_keep(screens[cur])
 
 func toast(text: String, level := "info") -> void:
 	audio.play("good" if level == "good" else ("bad" if level == "bad" else "click"))
@@ -130,8 +135,7 @@ func sfx(k: String) -> void: audio.play(k)
 func show_screen(id: String) -> void:
 	for s in screens.values(): s.visible = false
 	cur = id
-	if id == "dash":
-		hall.visible = true
+	hall.visible = OVERLAY.has(id)
 	if not screens.has(id): screens[id] = _make_screen(id); holder.add_child(screens[id])
 	screens[id].visible = true
 	if screens[id].has_method("refresh"): screens[id].refresh()
@@ -150,7 +154,7 @@ func _make_screen(id: String) -> Control:
 		c = Control.new(); c.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var l := Kit.label("%s — coming next in the Godot port." % id, 22, Kit.DIM); l.position = Vector2(40, 40); c.add_child(l)
 	if not OVERLAY.has(id):
-		var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Kit.LINE, 12, 1, 14)); bg.mouse_filter = Control.MOUSE_FILTER_STOP
+		var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 1.0), Kit.LINE, 12, 1, 14)); bg.mouse_filter = Control.MOUSE_FILTER_STOP
 		c.set_anchors_preset(Control.PRESET_FULL_RECT); c.offset_left = 16; c.offset_top = 14; c.offset_right = -16; c.offset_bottom = -14
 		var w := ScreenWrap.new(); w.set_anchors_preset(Control.PRESET_FULL_RECT); w.add_child(bg); w.add_child(c); w.inner = c; return w
 	return c
@@ -166,6 +170,7 @@ func _claim() -> void:
 	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("good"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
 
 func _process(dt: float) -> void:
+	_process_tip()
 	if not started or speed == 0 or menu_ui != null: return
 	clock += dt / SECS[speed]; bar_month.value = clock
 	if clock >= 1.0: clock = 0.0; next_month()
@@ -174,6 +179,26 @@ func _dbg() -> void:
 	for k in screens: print(k, " rect=", screens[k].get_global_rect(), " vis=", screens[k].visible)
 	print("holder=", holder.get_global_rect())
 
+func _input(e: InputEvent) -> void:
+	if e is InputEventKey and e.pressed and not e.echo:
+		if e.keycode == KEY_Q and e.ctrl_pressed: _menu_do("quit" if started else "quit")
+		elif e.keycode == KEY_ESCAPE and started: get_viewport().set_input_as_handled(); _menu()
+
+var tip_panel: PanelContainer
+var tip_lbl: RichTextLabel
+func _on_rack_hover(slot: int, rk: Dictionary) -> void:
+	if slot < 0 or rk.is_empty() or cur != "dash": tip_panel.visible = false; return
+	var dn := ""; for d in b.g.racks:
+		if d.id == rk.designId: dn = d.name
+	var ci: Dictionary = hall.cluster_info(rk)
+	var t := "[b]%s[/b]\nstatus: %s\n" % [dn, rk.status]
+	if ci.is_empty(): t += "[color=#8fb0c8]not in a cluster[/color]"
+	else: t += "cluster: [color=#%s][b]%s[/b][/color]\ncustomer: %s" % [ci.color.to_html(false), ci.name, ci.customer if ci.customer != "" else "— (unassigned)"]
+	tip_lbl.text = t; tip_panel.visible = true
+
+func _process_tip() -> void:
+	if tip_panel and tip_panel.visible: tip_panel.position = get_viewport().get_mouse_position() + Vector2(18, 18)
+
 func _unhandled_key_input(e: InputEvent) -> void:
 	if not (e is InputEventKey) or not e.pressed or e.echo: return
 	var tgt := get_viewport().gui_get_focus_owner()
@@ -181,7 +206,6 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if not started:
 		if e.keycode == KEY_ESCAPE: get_tree().quit()
 		return
-	if e.keycode == KEY_ESCAPE: _menu(); return
 	if e.keycode == KEY_SPACE: next_month(); return
 	if e.keycode >= KEY_1 and e.keycode <= KEY_9: show_screen(SCREENS[e.keycode - KEY_1][0])
 	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
@@ -201,7 +225,10 @@ func _menu_do(a: String) -> void:
 		"save": b.act("save"); toast("Game saved.", "good"); _menu()
 		"mute": audio.muted = not audio.muted
 		"title": b.act("save"); b.stop(); get_tree().reload_current_scene()
-		"quit": b.act("save"); b.stop(); get_tree().quit()
+		"quit":
+			if started and b != null: b.act("save")
+			if b != null: b.stop()
+			get_tree().quit()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:

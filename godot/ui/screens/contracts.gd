@@ -5,9 +5,18 @@ var app
 var msg := ""
 var pick := {}
 var rack_pick := {}
+var folds := {}
 const VERDICT := {
 	"ready": [Kit.GR, "✓ CAN SERVE NOW"], "building": [Kit.AM, "◔ CAN BUILD IN TIME"],
 	"short": [Kit.RD, "✗ NEED MORE / DIFFERENT HARDWARE"], "none": [Kit.RD, "✗ NO CLUSTER YET"]}
+
+func _say(r: Dictionary) -> String:
+	var t: String = str(r.get("message", ""))
+	var iss = r.get("issues")
+	if iss is Array:
+		for i in iss:
+			if i is Dictionary and i.get("severity", "error") == "error": t += "\n  ✗ " + str(i.message)
+	return t
 
 func refresh() -> void:
 	for c in get_children(): c.queue_free()
@@ -71,7 +80,7 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 
 func _offer(parent: Control, c: Dictionary) -> void:
 	var b: Bridge = app.b
-	var pn := Kit.panel("%s · %s" % [c.customer, c.archetype], true, parent); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · %s" % [c.customer, c.archetype, c.model.name], "o" + str(c.id), folds, refresh, true, parent); var v: VBoxContainer = pn[1]
 	var t: bool = c.kind == "training"
 	v.add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%sB%s · %s[/color]" % [c.model.name, Kit.num(c.model.paramsB, 1), (" (%sB active)" % Kit.num(c.model.activeParamsB, 1)) if c.model.activeParamsB != c.model.paramsB else "", c.kind], 15))
 	var head := ("%s+ GPUs · %s/GPU-hr" % [Kit.num(c.minAccelerators), Kit.usd(c.pricePerAccelHour)]) if t else ("%s tok/s · %s/Mtok" % [Kit.num(c.tokensPerSec), Kit.usd(c.pricePerMTok)])
@@ -83,8 +92,8 @@ func _offer(parent: Control, c: Dictionary) -> void:
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)
 	h.add_child(Kit.btn("SIGN & START SERVING" if f.verdict == "ready" else "SIGN NOW · DEPLOY LATER", func():
 		var a := b.act("acceptContract", [c.id])
-		if not a.ok: msg = a.message
-		elif f.verdict == "ready" and f.get("best") != null: msg = b.act("assignContract", [c.id, [f.best.cluster.id]]).message
+		if not a.ok: msg = _say(a)
+		elif f.verdict == "ready" and f.get("best") != null: msg = _say(b.act("assignContract", [c.id, [f.best.cluster.id]]))
 		else: msg = a.message
 		app.sfx("buy"); refresh(), "go" if f.verdict == "ready" else "pri", 15))
 	if f.verdict == "short": h.add_child(Kit.btn("Plan capacity →", func(): app.go("shop"), "", 13))
@@ -111,7 +120,7 @@ func _rack_assign(parent: Control, contract_id: String) -> void:
 func _pending(parent: Control, a: Dictionary) -> void:
 	var b: Bridge = app.b; var c: Dictionary = a.contract
 	var left: int = int(a.get("deployBy", a.startMonth + 4)) - int(b.g.month)
-	var pn := Kit.panel("%s · %s" % [c.customer, c.kind], true, parent); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · awaiting deployment" % [c.customer, c.kind], "p" + str(c.id), folds, refresh, true, parent); var v: VBoxContainer = pn[1]
 	v.add_child(Kit.label("deploy by %s · %d mo left" % [Kit.date_of(a.get("deployBy", a.startMonth + 4)), maxi(0, left)], 13, Kit.RD if left <= 1 else Kit.AM))
 	v.add_child(Kit.label(c.model.name, 15))
 	var f := _checks(v, c)
@@ -123,13 +132,13 @@ func _pending(parent: Control, a: Dictionary) -> void:
 		for cl in b.g.clusters:
 			var acc: float = cl.stats.accelerators if cl.get("stats") != null else 0.0
 			fl.add_child(Kit.check("%s (%s)" % [cl.name, Kit.num(acc)], base.has(cl.id), func(on): pick[c.id] = (base + [cl.id]) if on else base.filter(func(x): return x != cl.id); refresh()))
-		var go := Kit.btn("ASSIGN & GO LIVE", func(): msg = b.act("assignContract", [c.id, base]).message; app.sfx("buy"); refresh(), "go", 14); go.disabled = base.is_empty(); v.add_child(go)
+		var go := Kit.btn("ASSIGN & GO LIVE", func(): msg = _say(b.act("assignContract", [c.id, base])); app.sfx("buy"); refresh(), "go", 14); go.disabled = base.is_empty(); v.add_child(go)
 	else:
 		v.add_child(Kit.label("Build online racks into a cluster (Supercomputer), then come back and assign it.", 12, Kit.DIM, true)); v.add_child(Kit.link("Open Supercomputer →", func(): app.go("network"), 12))
 
 func _serving(parent: Control, a: Dictionary) -> void:
 	var b: Bridge = app.b; var c: Dictionary = a.contract
-	var pn := Kit.panel("%s · %s" % [c.customer, c.kind], false, parent); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · serving" % [c.customer, c.kind], "s" + str(c.id), folds, refresh, false, parent); var v: VBoxContainer = pn[1]
 	v.add_child(Kit.tag("serving", Kit.GR)); v.add_child(Kit.label(c.model.name, 15))
 	v.add_child(Kit.label("%d/%d mo · SLA misses %d" % [int(a.monthsServed), int(c.durationMonths), int(a.slaMisses)], 13))
 	var names := []; for id in a.clusterIds:
@@ -137,3 +146,14 @@ func _serving(parent: Control, a: Dictionary) -> void:
 			if cl.id == id: nm = cl.name
 		names.append(nm)
 	v.add_child(Kit.label("on " + " + ".join(names), 12, Kit.DIM, true))
+	var racks := 0; for cl in b.g.clusters:
+		if a.clusterIds.has(cl.id): racks += cl.rackIds.size()
+	v.add_child(Kit.label("%d rack%s allocated · coloured crowns on the Datacenter floor" % [racks, "" if racks == 1 else "s"], 11, Kit.DIM, true))
+	var sel0: Array = pick.get(c.id, a.clusterIds.duplicate())
+	var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 8); v.add_child(fl)
+	for cl in b.g.clusters:
+		var acc: float = cl.stats.accelerators if cl.get("stats") != null else 0.0
+		fl.add_child(Kit.check("%s (%s)" % [cl.name, Kit.num(acc)], sel0.has(cl.id), func(on): pick[c.id] = (sel0 + [cl.id]) if on else sel0.filter(func(x): return x != cl.id); refresh()))
+	var br := HFlowContainer.new(); br.add_theme_constant_override("h_separation", 6); v.add_child(br)
+	var up := Kit.btn("UPDATE CLUSTERS", func(): msg = _say(b.act("assignContract", [c.id, sel0])); pick.erase(c.id); app.sfx("buy"); refresh(), "go", 12); up.disabled = sel0.is_empty() or sel0 == a.clusterIds; br.add_child(up)
+	br.add_child(Kit.btn("Release cluster (back to pending)", func(): msg = _say(b.act("unassignContract", [c.id])); pick.erase(c.id); refresh(), "danger", 12))

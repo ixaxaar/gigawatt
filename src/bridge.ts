@@ -99,7 +99,7 @@ const Q: Record<string, (...a: any[]) => any> = {
   missions: () => MISSIONS.map(m => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go, done: m.done(G()) })),
 };
 
-const ACTIONS = ['newGame','setMode','buy','buyTemplate','adoptTemplate','saveTray','saveRack','buildHall','installPower','installCooling','placeRack','createCluster','acceptContract','assignContract','takeLoan','nextMonth','save','load','signPower','buyUplink','dropUplink','setSpot','setSpotReserve','setSpotRack','assignRacks','startEasy','stepEasy'];
+const ACTIONS = ['newGame','setMode','buy','buyTemplate','adoptTemplate','saveTray','saveRack','buildHall','installPower','installCooling','placeRack','createCluster','acceptContract','assignContract','unassignContract','disbandCluster','takeLoan','nextMonth','save','load','signPower','buyUplink','dropUplink','setSpot','setSpotReserve','setSpotRack','assignRacks','startEasy','stepEasy'];
 
 function snapshot() { const g: any = JSON.parse(JSON.stringify(G())); g.log = g.log.slice(-150); return g; }
 function init() {

@@ -72,9 +72,22 @@ func refresh() -> void:
 	var p3 := Kit.panel("Existing machines", false, c1)
 	if g.clusters.is_empty(): p3[1].add_child(Kit.label("None yet", 13, Kit.DIM))
 	for c in g.clusters:
-		var serving: bool = g.activeContracts.any(func(a): return a.clusterIds.has(c.id))
-		p3[1].add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%s[/color]%s" % [c.name, c.fabric.scaleOutTech, "  [color=#%s]serving[/color]" % Kit.GR.to_html(false) if serving else ""], 13))
+		var custs := []
+		for a in g.activeContracts:
+			if a.clusterIds.has(c.id): custs.append(str(a.contract.customer))
+		var cc0 := Kit.cluster_color(g, c.id)
+		p3[1].add_child(Kit.rich("[color=#%s]■[/color] [b]%s[/b]  [color=#8fb0c8]%s · %d rack%s[/color]" % [cc0.to_html(false), c.name, c.fabric.scaleOutTech, c.rackIds.size(), "" if c.rackIds.size() == 1 else "s"], 13))
+		p3[1].add_child(Kit.label(("serving: " + ", ".join(custs)) if custs.size() > 0 else "not serving any customer", 11, Kit.GR if custs.size() > 0 else Kit.DIM, true))
 		if c.get("stats") != null: p3[1].add_child(Kit.label("%s accels · domain %s · %s PF fp8 · %.0f GB/s/GPU" % [Kit.num(c.stats.accelerators), c.stats.scaleUpDomain, Kit.num(c.stats.peakPFLOPSFp8), c.stats.effScaleOutGBs], 11, Kit.DIM, true))
+		var br := HFlowContainer.new(); br.add_theme_constant_override("h_separation", 6); p3[1].add_child(br)
+		br.add_child(Kit.btn("Uncluster", func(): msg = b.act("disbandCluster", [c.id]).message; app.sfx("click"); refresh(), "danger", 12))
+		br.add_child(Kit.btn("Re-cluster (edit racks)", func():
+			var ids: Array = c.rackIds.duplicate(); var nm: String = c.name; var fab: Dictionary = c.fabric.duplicate(true)
+			var r: Dictionary = b.act("disbandCluster", [c.id])
+			if r.ok: sel = ids; cname = nm; f = fab; init_sel = true; msg = "Cluster dissolved — adjust the rack selection and rebuild it."
+			else: msg = r.message
+			refresh(), "", 12))
+		p3[1].add_child(Kit.hsep())
 	# center: topology + stat strip
 	var cc := VBoxContainer.new(); cc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; cc.add_theme_constant_override("separation", 10); cols.add_child(cc)
 	var tp := Kit.panel("Topology", true, cc); tp[0].size_flags_vertical = Control.SIZE_EXPAND_FILL

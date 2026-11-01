@@ -136,5 +136,6 @@ export function assignFromRacks(st: GameStore, contractId: string, rackIds: stri
   const r = st.createCluster(`Auto · ${c.customer}`, rackIds, af.fabric); if (!r.ok) return r;
   const cl = G().clusters[G().clusters.length - 1];
   const a = st.assignContract(contractId, [cl.id]);
-  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (the racks were grouped into '${cl.name}' — add more racks or fix and assign from Customers.)` };
+  if (!a.ok) st.disbandCluster(cl.id);
+  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
 }
