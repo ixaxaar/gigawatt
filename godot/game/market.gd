@@ -181,7 +181,7 @@ static func generate_contracts(state: Dictionary, month: int, rng: Rng) -> Array
 			var price_per_accel_hour := round2(
 				gpu_hour_anchor(year)
 				* (1.15 if params_b >= 300.0 else (0.95 if is_moe else 1.0))
-				* t["priceMult"]
+				* float(t["priceMult"])
 				* rng.range_(0.92, 1.15)
 			)
 			contract = {
@@ -202,7 +202,7 @@ static func generate_contracts(state: Dictionary, month: int, rng: Rng) -> Array
 				"rampMonths": mini(20, 6 + int(round(log2_(min_accelerators / 32.0) * 1.6)) + (1 if year >= 2024.0 else 0)),
 			}
 		else:
-			var tps := maxi(100, int(round(lerp_curve(ERA_TOKENS_PER_SEC, year) * t["tokenMult"] * rng.range_(0.6, 1.8))))
+			var tps := maxi(100, int(round(lerp_curve(ERA_TOKENS_PER_SEC, year) * float(t["tokenMult"]) * rng.range_(0.6, 1.8))))
 			var tpot := int(round(rng.range_(20.0, 60.0) + (rng.range_(10.0, 40.0) if model["activeParamsB"] > 80.0 else 0.0)))
 			var ctx_opts: Array = [262144]
 			for opt in CONTEXT_OPTIONS:
@@ -215,7 +215,7 @@ static func generate_contracts(state: Dictionary, month: int, rng: Rng) -> Array
 			var price_per_mtok := maxf(0.01, round3(
 				mtok_price(model["activeParamsB"], year)
 				* (1.25 if tpot < 30 else 1.0)
-				* t["priceMult"]
+				* float(t["priceMult"])
 				* rng.range_(0.9, 1.2)
 			))
 			var ramp_months := rng.int_(5, 8)

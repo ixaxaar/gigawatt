@@ -41,13 +41,13 @@ func _title_scene() -> void:
 	hall.sim = sim; hall.hall_i = 0; hall.dist = 20.0; hall.rebuild(); hud.sim = sim; hud.hall_i = 0
 	hud.set_chrome(false)
 	hud.show_title()
-	hall.dist = 15.0; hall.pitch = 0.5; hall._update_cam(); hall.cam.h_offset = -4.5
+	hall.dist = 13.0; hall.pitch = 0.32; hall._update_cam(); hall.cam.h_offset = -4.5
 
 func _start(mode: String) -> void:
 	hall.cam.h_offset = 0.0
 	sim = Sim.new(); sim.new_game(int(Time.get_unix_time_from_system()) % 100000, mode)
 	sim.logged.connect(hud.push_feed)
-	hall.sim = sim; hall.hall_i = 0; hall.thermal = false; hall.place_mode = ""; hall.auto_orbit = true; hall.dist = 22.0; hall.pitch = 0.62; hall.rebuild()
+	hall.sim = sim; hall.hall_i = 0; hall.thermal = false; hall.place_mode = ""; hall.auto_orbit = true; hall.dist = 17.0; hall.pitch = 0.42; hall.rebuild()
 	hud.set_chrome(true); hud.sim = sim; hud.hall_i = 0; hud.set_speed(1); hud.refresh(); started = true; clock = 0.0
 	for e in sim.s.log: hud.push_feed(e.level, e.text)
 
@@ -115,3 +115,6 @@ func _demo_setup() -> void:
 	if OS.get_environment("GW_PANEL") != "": hud.toggle_panel(OS.get_environment("GW_PANEL"))
 	if OS.get_environment("GW_PLACE") != "" and not sim.s.crates.is_empty(): _begin_place(sim.s.crates.keys()[0])
 	hud.set_speed(0)
+	if OS.get_environment("GW_CAM") != "":
+		var c := OS.get_environment("GW_CAM").split(","); hall.auto_orbit = false; hall.yaw = float(c[0]); hall.pitch = float(c[1]); hall.dist = float(c[2]); if c.size() > 3: hall.target = Vector3(float(c[3]), 1.0, float(c[4]))
+		hall._update_cam()
