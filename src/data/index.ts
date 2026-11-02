@@ -9,11 +9,12 @@ import { ERA_CPUS, ERA_NVME, ERA_ACCELERATORS, ERA_NICS, ERA_SWITCHES, ERA_MEMOR
 
 import { CAT_POWER, CAT_POWER_VENDORS } from './cat-power';
 import { CAT_STORAGE_SYSTEMS, CAT_MEMORY, CAT_NVME, CAT_RACKS, CAT_STORAGE_VENDORS } from './cat-storage';
+import { OEM_VENDORS } from './oem-vendors';
 import { CAT_COOLING, CAT_COOLING_VENDORS } from './cat-cooling';
 import { EXP2_POWER, EXP2_COOLING, EXP2_UPLINKS, EXP2_VENDORS } from './expansion2';
 import { EXP_ACCELERATORS, EXP_CPUS, EXP_NICS, EXP_SWITCHES, EXP_POWER, EXP_COOLING, EXP_STORAGE, EXP_MEMORY, EXP_NVME } from './expansion';
 
-const _v = [...BASE_VENDORS, ...EXP2_VENDORS, ...CAT_POWER_VENDORS, ...CAT_STORAGE_VENDORS, ...CAT_COOLING_VENDORS];
+const _v = [...BASE_VENDORS, ...EXP2_VENDORS, ...CAT_POWER_VENDORS, ...CAT_STORAGE_VENDORS, ...OEM_VENDORS, ...CAT_COOLING_VENDORS];
 export const VENDORS = _v.filter((x, i) => _v.findIndex(y => y.id === x.id) === i);
 export const ALL_ITEMS: CatalogItem[] = [
   ...NVIDIA_ACCELERATORS, ...NVIDIA_CPUS, ...OTHER_ACCELERATORS, ...OTHER_CPUS,
