@@ -11,18 +11,32 @@ import { CAT_POWER, CAT_POWER_VENDORS } from './cat-power';
 import { CAT_STORAGE_SYSTEMS, CAT_MEMORY, CAT_NVME, CAT_RACKS, CAT_STORAGE_VENDORS } from './cat-storage';
 import { OEM_VENDORS } from './oem-vendors';
 import { CAT_NICS, CAT_CABLES, CAT_NIC_VENDORS } from './cat-nics';
+import { CAT_SWITCHES_A } from './cat-switches-a';
+import { CAT_SWITCHES_B, CAT_SWITCH_VENDORS } from './cat-switches-b';
 import { CAT_COOLING, CAT_COOLING_VENDORS } from './cat-cooling';
 import { EXP2_POWER, EXP2_COOLING, EXP2_UPLINKS, EXP2_VENDORS } from './expansion2';
 import { EXP_ACCELERATORS, EXP_CPUS, EXP_NICS, EXP_SWITCHES, EXP_POWER, EXP_COOLING, EXP_STORAGE, EXP_MEMORY, EXP_NVME } from './expansion';
 
-const _v = [...BASE_VENDORS, ...EXP2_VENDORS, ...CAT_POWER_VENDORS, ...CAT_STORAGE_VENDORS, ...CAT_NIC_VENDORS, ...OEM_VENDORS, ...CAT_COOLING_VENDORS];
+const _v = [...BASE_VENDORS, ...EXP2_VENDORS, ...CAT_POWER_VENDORS, ...CAT_STORAGE_VENDORS, ...CAT_SWITCH_VENDORS, ...CAT_NIC_VENDORS, ...OEM_VENDORS, ...CAT_COOLING_VENDORS];
+// Review corrections for model-recalled switch data: port configs that don't exist, and capacity = ports x rate (house convention, simplex).
+const SW_FIX: Record<string, Partial<import('../types').Switch>> = {
+  'nv-sn4600c': { portCount: 64, portGbps: 100, tech: 'eth-100' },
+  'cs-n93180fx3': { portCount: 48, portGbps: 25 },
+  'cs-n93600gx': { portCount: 28, portGbps: 100 },
+};
+const fixSwitch = (x: import('../types').Switch): import('../types').Switch => {
+  const y = { ...x, ...(SW_FIX[x.id] ?? {}) }; const calc = y.portCount * y.portGbps / 1000;
+  return Math.abs(calc - y.capacityTbps) / Math.max(calc, 0.01) > 0.12 && calc >= 1 ? { ...y, capacityTbps: Math.round(calc * 100) / 100 } : y;
+};
+const CAT_SWITCHES = [...CAT_SWITCHES_A, ...CAT_SWITCHES_B].map(fixSwitch);
+
 export const VENDORS = _v.filter((x, i) => _v.findIndex(y => y.id === x.id) === i);
 export const ALL_ITEMS: CatalogItem[] = [
   ...NVIDIA_ACCELERATORS, ...NVIDIA_CPUS, ...OTHER_ACCELERATORS, ...OTHER_CPUS,
   ...NICS, ...CABLES, ...SWITCHES, ...CHASSIS, ...RACKS, ...STORAGE_SYSTEMS,
   ...MEMORY, ...NVME, ...ERA_CPUS, ...ERA_NVME, ...ERA_ACCELERATORS, ...ERA_NICS, ...ERA_SWITCHES, ...ERA_MEMORY, ...ERA_STORAGE, ...ERA_CPUS_EXTRA, ...ERA_BLACKWELL, ...ERA_RACKS, ...POWER, ...COOLING,
   ...EXP_ACCELERATORS, ...EXP_CPUS, ...EXP_NICS, ...EXP_SWITCHES, ...EXP_POWER, ...EXP_COOLING, ...EXP_STORAGE, ...EXP_MEMORY, ...EXP_NVME, ...EXP2_POWER, ...EXP2_COOLING, ...EXP2_UPLINKS,
-  ...CAT_POWER, ...CAT_COOLING, ...CAT_STORAGE_SYSTEMS, ...CAT_MEMORY, ...CAT_NVME, ...CAT_RACKS, ...CAT_NICS, ...CAT_CABLES,
+  ...CAT_POWER, ...CAT_COOLING, ...CAT_STORAGE_SYSTEMS, ...CAT_MEMORY, ...CAT_NVME, ...CAT_RACKS, ...CAT_NICS, ...CAT_CABLES, ...CAT_SWITCHES,
 ];
 const BY_ID = new Map<string, CatalogItem>(ALL_ITEMS.map(i => [i.id, i]));
 export const getItem = (id: string) => BY_ID.get(id);

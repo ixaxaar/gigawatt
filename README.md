@@ -10,7 +10,7 @@ The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-mode
 
 | | |
 |---|---|
-| **Procure** | A guided build planner (platform → how many → who builds it → order) plus a full parts bin: ~150 real parts with vendor, specs, lead times and volume discounts. |
+| **Procure** | A guided build planner (platform → how many → who builds it → order) plus a full parts bin: **690+ real parts from 100+ vendors** (power, cooling, network, storage, memory, racks, accelerators) with specs, lead times and volume discounts, plus 71 ready-to-order system templates from 12 integrators. |
 | **Design Lab** | A motherboard-level tray bench (CPU sockets, DIMM banks, GPU/NVSwitch, NICs, NVMe, PSUs) and a 42U rack elevation, with live validation and a 5-year cost / sizing advisor. |
 | **Build** | Power & cooling gauges, transformers/UPS/CRAH/CDU/chillers, outage-protection tiers, internet circuits, and new halls. |
 | **Warehouse** | Rack assembly, "order all missing", deploy, spares, in-transit orders and the ledger. |
@@ -83,6 +83,10 @@ pnpm install
 ```
 
 The original web version still lives in `src/ui` (`vite` dev server); see [`docs/WEB_README.md`](docs/WEB_README.md) and [`SCOPE.md`](SCOPE.md). Parity status of the Godot screens: [`godot/PARITY.md`](godot/PARITY.md).
+
+## Data quality
+
+The catalogue spans NVIDIA/AMD/Intel accelerators, 20+ switch and NIC vendors, the major power and cooling OEMs (Eaton, Schneider, Vertiv, Cat, Cummins, MTU, Trane, Carrier, Daikin, ...), storage (DDN, VAST, WEKA, Pure, NetApp, ...) and server integrators (Dell, Supermicro, HPE, Lenovo, Quanta, Wiwynn, ASUS, Cisco, ...). It is broad, not guaranteed SKU-complete: about 96 entries are tagged `unverified` (recalled from memory, not checked against a datasheet), and prices are typical street figures. Accelerator and CPU specs drive the performance model and were hand-checked earlier; the expansion rounds were machine-assisted and then audited for units, ranges and physical plausibility. Corrections welcome.
 
 ## Status
 

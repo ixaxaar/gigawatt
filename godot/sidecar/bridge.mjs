@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+const NAMES = { hpe: "HPE", asus: "ASUS", quanta: "Quanta (QCT)", wiwynn: "Wiwynn", cisco: "Cisco UCS", inspur: "Inspur", lenovo: "Lenovo", supermicro: "Supermicro", gigabyte: "Gigabyte", foxconn: "Foxconn", dell: "Dell", nvidia: "NVIDIA" };
 const DIY = (by = "generic") => ({
   tier: "diy",
   by,
@@ -12,7 +13,7 @@ const DIY = (by = "generic") => ({
 const OEM = (by, premium = 0.07) => ({
   tier: "oem",
   by,
-  label: `${by[0].toUpperCase() + by.slice(1)} integrated rack`,
+  label: `${NAMES[by] ?? by[0].toUpperCase() + by.slice(1)} integrated rack`,
   premium,
   lead: 0.85,
   audience: "Most neoclouds: a validated rack from an OEM with a support contract.",
@@ -38,7 +39,7 @@ const hdr = (accel, cpu2, dimm, dn, nic2, nn, nvme, psu, extra = []) => [
   { slot: "psu", itemId: "vt-geist-5kw", count: psu },
   ...extra
 ];
-const sw$1 = (switchId, count = 1) => ({ type: "switch", switchId, count });
+const sw$2 = (switchId, count = 1) => ({ type: "switch", switchId, count });
 const PLATFORMS = [
   {
     key: "hgx-a100",
@@ -50,9 +51,9 @@ const PLATFORMS = [
     trays: 3,
     cooling: "air",
     parts: hdr("nv-a100-80-sxm", "amd-epyc-7742", "sam-ddr4-3200-64", 16, "nv-connectx6-hdr", 4, "sam-pm1733-3t84", 4),
-    extras: [sw$1("nv-qm8700")],
+    extras: [sw$2("nv-qm8700")],
     story: "The Ampere generation: 8 A100s in one NVLink3 box, scaled out over 200G InfiniBand. DGX A100 is NVIDIA's own build of this.",
-    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.08), TURNKEY("nvidia", "NVIDIA DGX A100 (rack)")]
+    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.08), TURNKEY("nvidia", "NVIDIA DGX A100 (rack)"), OEM("lenovo", 0.09), OEM("inspur", 0.05), OEM("quanta", 0.04)]
   },
   {
     key: "hgx-h100",
@@ -64,9 +65,9 @@ const PLATFORMS = [
     trays: 2,
     cooling: "air",
     parts: hdr("nv-h100-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$1("nv-qm9700")],
+    extras: [sw$2("nv-qm9700")],
     story: "Hopper: FP8 Transformer Engine and NVLink4. 10 kW per server is the edge of air cooling, so only two fit per air rack.",
-    variants: [DIY(), OEM("supermicro"), OEM("hpe", 0.09), TURNKEY("nvidia", "NVIDIA DGX H100 (rack)")]
+    variants: [DIY(), OEM("supermicro"), OEM("hpe", 0.09), TURNKEY("nvidia", "NVIDIA DGX H100 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08)]
   },
   {
     key: "hgx-h200",
@@ -78,9 +79,9 @@ const PLATFORMS = [
     trays: 2,
     cooling: "air",
     parts: hdr("nv-h200-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$1("nv-qm9700")],
+    extras: [sw$2("nv-qm9700")],
     story: "Same Hopper compute, 141 GB of faster HBM3e: a drop-in for inference, where memory bandwidth and capacity set tokens/s.",
-    variants: [DIY(), OEM("supermicro"), TURNKEY("nvidia", "NVIDIA DGX H200 (rack)")]
+    variants: [DIY(), OEM("supermicro"), TURNKEY("nvidia", "NVIDIA DGX H200 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08), OEM("hpe", 0.09)]
   },
   {
     key: "hgx-b200",
@@ -91,9 +92,37 @@ const PLATFORMS = [
     trays: 4,
     cooling: "dlc",
     parts: [...hdr("nv-b200-sxm", "amd-epyc-turin", "skh-ddr5-6400-96", 16, "nv-connectx8", 4, "mic-9550-15t36", 6), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
-    extras: [sw$1("nv-qmx8000")],
+    extras: [sw$2("nv-qmx8000")],
     story: "Blackwell in the HGX form factor: 15 kW per server needs direct liquid cooling, so you need a CDU and liquid-ready racks.",
-    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA DGX B200 (rack)")]
+    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA DGX B200 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("hpe", 0.09)]
+  },
+  {
+    key: "hgx-h200-rdhx",
+    label: "HGX H200 8-GPU (rear-door cooled)",
+    from: 2024.5,
+    eol: 2026,
+    chassisId: "nv-hgx-h100-8gy",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 4,
+    cooling: "rdhx",
+    parts: hdr("nv-h200-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw$2("nv-qm9700")],
+    story: "The same air-cooled Hopper servers, but a chilled-water rear-door heat exchanger on the rack lets you double the density to four servers (~40 kW) without touching the servers.",
+    variants: [OEM("supermicro"), OEM("dell", 0.08), OEM("lenovo", 0.09), OEM("hpe", 0.09)]
+  },
+  {
+    key: "mi300x-rdhx",
+    label: "AMD Instinct MI300X 8-GPU (rear-door cooled)",
+    from: 2023.9,
+    eol: 2026,
+    chassisId: "sm-ubb-oam8-mi300x",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 4,
+    cooling: "rdhx",
+    parts: hdr("amd-mi300x", "amd-epyc-genoa", "sam-ddr5-5600-64", 12, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw$2("cs-n9364e")],
+    story: "MI300X servers in rear-door-cooled racks: a pragmatic retrofit path for existing air halls that need more kW per rack.",
+    variants: [OEM("supermicro"), DIY("gigabyte")]
   },
   {
     key: "gb200",
@@ -105,9 +134,9 @@ const PLATFORMS = [
     trays: 18,
     cooling: "dlc",
     parts: [{ slot: "accelerator", itemId: "nv-gb200", count: 2 }, { slot: "nic", itemId: "nv-connectx8", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
-    extras: [sw$1("nv-nvlink-switch-tray5", 9)],
+    extras: [sw$2("nv-nvlink-switch-tray5", 9)],
     story: "72 Blackwell GPUs in ONE NVLink domain: one 120+ kW liquid-cooled rack acts as a single giant GPU. You cannot DIY this; it ships integrated.",
-    variants: [OEM("foxconn", 0.06), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA GB200 NVL72 reference rack", 0.14)]
+    variants: [OEM("foxconn", 0.06), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA GB200 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
   },
   {
     key: "gb300",
@@ -118,9 +147,9 @@ const PLATFORMS = [
     trays: 18,
     cooling: "dlc",
     parts: [{ slot: "accelerator", itemId: "nv-gb300", count: 2 }, { slot: "nic", itemId: "nv-connectx8", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
-    extras: [sw$1("nv-nvlink-switch-tray5", 9)],
+    extras: [sw$2("nv-nvlink-switch-tray5", 9)],
     story: "Blackwell Ultra NVL72: 288 GB HBM3e per GPU for long-context reasoning inference at rack scale.",
-    variants: [OEM("foxconn", 0.06), TURNKEY("nvidia", "NVIDIA GB300 NVL72 reference rack", 0.14)]
+    variants: [OEM("foxconn", 0.06), TURNKEY("nvidia", "NVIDIA GB300 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("dell", 0.09), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
   },
   {
     key: "mi300x",
@@ -132,9 +161,9 @@ const PLATFORMS = [
     trays: 2,
     cooling: "air",
     parts: hdr("amd-mi300x", "amd-epyc-genoa", "sam-ddr5-5600-64", 12, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$1("cs-n9364e")],
+    extras: [sw$2("cs-n9364e")],
     story: "AMD's answer to H100: 192 GB HBM3 per GPU (more than H100/H200) on an 8-GPU OAM board. Ethernet-first scale-out and the ROCm software stack.",
-    variants: [DIY("gigabyte"), OEM("supermicro"), OEM("dell", 0.08)]
+    variants: [DIY("gigabyte"), OEM("supermicro"), OEM("dell", 0.08), OEM("lenovo", 0.09), OEM("asus", 0.06), OEM("hpe", 0.09)]
   },
   {
     key: "mi355x",
@@ -145,9 +174,9 @@ const PLATFORMS = [
     trays: 4,
     cooling: "dlc",
     parts: [...hdr("amd-mi355x", "amd-epyc-turin", "skh-ddr5-6400-96", 12, "nv-connectx7", 4, "mic-9550-15t36", 4), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
-    extras: [sw$1("nv-sn5600")],
+    extras: [sw$2("nv-sn5600")],
     story: "CDNA4 with 288 GB HBM3E and FP4/FP6 support, liquid cooled at 1.4 kW per GPU.",
-    variants: [DIY("gigabyte"), OEM("supermicro", 0.08)]
+    variants: [DIY("gigabyte"), OEM("supermicro", 0.08), OEM("dell", 0.09), OEM("hpe", 0.09), OEM("asus", 0.06), OEM("lenovo", 0.09)]
   },
   {
     key: "gaudi3",
@@ -158,9 +187,9 @@ const PLATFORMS = [
     trays: 2,
     cooling: "air",
     parts: [{ slot: "accelerator", itemId: "int-gaudi-3", count: 8 }, { slot: "cpu", itemId: "amd-epyc-genoa", count: 2 }, { slot: "dimm", itemId: "sam-ddr5-5600-64", count: 12 }, { slot: "nvme", itemId: "sam-pm9a3-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-5kw", count: 4 }],
-    extras: [sw$1("cs-n9364e")],
+    extras: [sw$2("cs-n9364e")],
     story: "Ethernet-native: each Gaudi 3 has 24x200G RoCE ports on the chip itself, so no separate NICs are needed.",
-    variants: [OEM("supermicro", 0.06), DIY()]
+    variants: [OEM("supermicro", 0.06), DIY(), OEM("dell", 0.08), OEM("hpe", 0.09)]
   },
   {
     key: "galaxy",
@@ -171,7 +200,7 @@ const PLATFORMS = [
     trays: 3,
     cooling: "air",
     parts: [{ slot: "accelerator", itemId: "tt-galaxy", count: 1 }, { slot: "cpu", itemId: "amd-epyc-genoa", count: 1 }, { slot: "dimm", itemId: "sam-ddr5-5600-64", count: 4 }, { slot: "nic", itemId: "nv-connectx7", count: 1 }, { slot: "psu", itemId: "vt-geist-5kw", count: 4 }],
-    extras: [sw$1("cs-n9364e")],
+    extras: [sw$2("cs-n9364e")],
     story: "Open RISC-V architecture: 32 Wormhole chips meshed by Ethernet inside the box and between boxes, no NVLink and no InfiniBand.",
     variants: [DIY("generic")]
   },
@@ -189,7 +218,7 @@ const PLATFORMS = [
     variants: [TURNKEY("cerebras", "Cerebras CS-3 system", 0.1)]
   }
 ];
-const nameOf = (v2) => v2[0].toUpperCase() + v2.slice(1);
+const nameOf = (v2) => NAMES[v2] ?? v2[0].toUpperCase() + v2.slice(1);
 const TEMPLATES = PLATFORMS.flatMap((p) => p.variants.map((v2) => {
   const codex = { summary: `${p.label} - ${v2.label}. ${v2.pitch}`, explain: p.story, tradeoffs: [v2.tradeoff, p.cooling === "air" ? "Air-cooled: simple facility, limited rack density." : "Liquid-cooled: needs a DLC hall with CDUs."], tags: [p.key, v2.tier, p.cooling] };
   return {
@@ -5002,7 +5031,7 @@ const CAT_POWER = [
   batt("saft-intensium-1000", "Saft Intensium Max BESS Container (1 MW / 2 MWh)", "saft", 2021, 72e4, 6, 1e3, 0.93, ["Containerized 2 MWh lithium battery system from Saft.", "Goes beyond ride-through into peak shaving and grid services for campuses with demand charges.", ["Multi-hour storage envelope", "Container fire systems and spacing rules"]], 1.5),
   batt("zf-bc2-150", "ZincFive BC2 Ni-Zn Battery Cabinet (150 kW)", "zincfive", 2021, 18e4, 4, 150, 0.9, ["Nickel-zinc UPS battery cabinet.", "Chemistry that neither burns like lithium nor leadds like VRLA: no thermal runaway, wide temperature tolerance.", ["Non-flammable chemistry", "Fewer cells per kWh than lithium"]])
 ];
-const v$2 = (id, name, sells, summary) => ({
+const v$5 = (id, name, sells, summary) => ({
   id,
   name,
   sells,
@@ -5012,31 +5041,1723 @@ const v$2 = (id, name, sells, summary) => ({
   codex: { summary, explain: `${name} supplies datacenter infrastructure. Compare lead time, service coverage and spares logistics, not just price.`, tradeoffs: ["Strong service network", "Price varies by quarter"], tags: ["cat-power"] }
 });
 const CAT_POWER_VENDORS = [
-  v$2("eaton", "Eaton", ["power"], "Power management giant: transformers, switchgear, 93PM/93PR UPS and xStorage BESS."),
-  v$2("schneider", "Schneider Electric", ["power"], "Galaxy UPS families, Okken/Blokset switchboards, Canalis busway and rack PDUs."),
-  v$2("vertiv", "Vertiv", ["power"], "Liebert UPS platforms, busway and Geist rack PDUs for mission-critical halls."),
-  v$2("delta", "Delta Electronics", ["power"], "Modular UPS and ORv3 power infrastructure from the ODM powering hyperscale racks."),
-  v$2("hitachi-energy", "Hitachi Energy", ["power"], "Grid-grade power and dry transformers plus MV switchgear."),
-  v$2("ge-vernova", "GE Vernova", ["power"], "Large transformers and aeroderivative/mobile gas turbines for bridge and islanded power."),
-  v$2("hammond", "Hammond Power Solutions", ["power"], "Specialist dry-type and K-rated transformers for IT loads."),
-  v$2("cooper", "Eaton Cooper Power Systems", ["power"], "Pad-mount and substation distribution transformers."),
-  v$2("generac", "Generac", ["power"], "Value-tier industrial diesel and gaseous gensets."),
-  v$2("wartsila", "Wärtsilä", ["power"], "Medium-speed gas engines for continuous prime-power microgrids."),
-  v$2("solar-turbines", "Solar Turbines (Cat)", ["power"], "Industrial gas turbine packages from 1-22 MW for campus power islands."),
-  v$2("siemens-energy", "Siemens Energy", ["power"], "Industrial and heavy-frame gas turbines for captive and islanded generation."),
-  v$2("legrand", "Legrand (Starline)", ["power"], "Track busway and rack power distribution systems."),
-  v$2("raritan", "Raritan (Legrand)", ["power"], "PX-series intelligent rack PDUs."),
-  v$2("servertech", "ServerTech (Legrand)", ["power"], "Switched and metered rack CDUs."),
-  v$2("rittal", "Rittal", ["power"], "Busbar power distribution and enclosure-integrated power systems."),
-  v$2("flex", "Flex", ["power"], "ORv3 power shelves and OCP-standard power building blocks."),
-  v$2("samsung-sdi", "Samsung SDI", ["power"], "Lithium UPS battery cabinets and ESS cells."),
-  v$2("lg-energy", "LG Energy Solution", ["power"], "LFP ESS cabinets for UPS ride-through and peak shaving."),
-  v$2("saft", "Saft", ["power"], "Industrial lithium battery systems for ride-through and BESS duty."),
-  v$2("zincfive", "ZincFive", ["power"], "Nickel-zinc battery cabinets: non-flammable UPS energy storage.")
+  v$5("eaton", "Eaton", ["power"], "Power management giant: transformers, switchgear, 93PM/93PR UPS and xStorage BESS."),
+  v$5("schneider", "Schneider Electric", ["power"], "Galaxy UPS families, Okken/Blokset switchboards, Canalis busway and rack PDUs."),
+  v$5("vertiv", "Vertiv", ["power"], "Liebert UPS platforms, busway and Geist rack PDUs for mission-critical halls."),
+  v$5("delta", "Delta Electronics", ["power"], "Modular UPS and ORv3 power infrastructure from the ODM powering hyperscale racks."),
+  v$5("hitachi-energy", "Hitachi Energy", ["power"], "Grid-grade power and dry transformers plus MV switchgear."),
+  v$5("ge-vernova", "GE Vernova", ["power"], "Large transformers and aeroderivative/mobile gas turbines for bridge and islanded power."),
+  v$5("hammond", "Hammond Power Solutions", ["power"], "Specialist dry-type and K-rated transformers for IT loads."),
+  v$5("cooper", "Eaton Cooper Power Systems", ["power"], "Pad-mount and substation distribution transformers."),
+  v$5("generac", "Generac", ["power"], "Value-tier industrial diesel and gaseous gensets."),
+  v$5("wartsila", "Wärtsilä", ["power"], "Medium-speed gas engines for continuous prime-power microgrids."),
+  v$5("solar-turbines", "Solar Turbines (Cat)", ["power"], "Industrial gas turbine packages from 1-22 MW for campus power islands."),
+  v$5("siemens-energy", "Siemens Energy", ["power"], "Industrial and heavy-frame gas turbines for captive and islanded generation."),
+  v$5("legrand", "Legrand (Starline)", ["power"], "Track busway and rack power distribution systems."),
+  v$5("raritan", "Raritan (Legrand)", ["power"], "PX-series intelligent rack PDUs."),
+  v$5("servertech", "ServerTech (Legrand)", ["power"], "Switched and metered rack CDUs."),
+  v$5("rittal", "Rittal", ["power"], "Busbar power distribution and enclosure-integrated power systems."),
+  v$5("flex", "Flex", ["power"], "ORv3 power shelves and OCP-standard power building blocks."),
+  v$5("samsung-sdi", "Samsung SDI", ["power"], "Lithium UPS battery cabinets and ESS cells."),
+  v$5("lg-energy", "LG Energy Solution", ["power"], "LFP ESS cabinets for UPS ride-through and peak shaving."),
+  v$5("saft", "Saft", ["power"], "Industrial lithium battery systems for ride-through and BESS duty."),
+  v$5("zincfive", "ZincFive", ["power"], "Nickel-zinc battery cabinets: non-flammable UPS energy storage.")
+];
+const cdx$4 = ([summary, explain, tradeoffs, tags]) => ({ summary, explain, tradeoffs, tags });
+const base$4 = (id, name, v2, from, price, lead, c) => ({ id, name, vendor: v2, availableFrom: from, priceUSD: price, leadTimeMonths: lead, codex: cdx$4(c) });
+const st$3 = (tier, ru, lead = 3) => (id, name, v2, price, pb, r, w, watts, c, from = 2020, l = lead) => ({ kind: "storage", ...base$4(id, name, v2, from, price, l, c), tier, capacityPB: pb, readGBs: r, writeGBs: w, rackUnits: ru, watts });
+const hot = st$3("hot-nvme", 2);
+const warm = st$3("warm", 4);
+const obj = st$3("object", 4);
+const RAW_STORAGE = [
+  // ---- DDN EXAScaler / SFA (Lustre + storage fabric) ----
+  hot("ddn-ai200x2", "DDN EXAScaler AI200X2 (2U NVMe Lustre)", "ddn", 175e3, 0.3, 65, 25, 1500, ["2U EXAScaler Lustre appliance, the compact A3I-class step.", "AI200X2 pairs Lustre parallel filesystem with NVMe in 2U for teams starting AI clusters; add units to scale bandwidth linearly.", ["Entry A3I economics", "Bandwidth scales only per unit"]], 2022.5),
+  hot("ddn-ai400x3", "DDN EXAScaler AI400X3 (2U NVMe Lustre)", "ddn", 295e3, 0.37, 130, 90, 1600, ["Third-gen AI400: Gen5 NVMe and faster controllers in the same 2U.", "The AI400X3 raises per-appliance bandwidth so fewer units cover a given checkpoint burst, cutting rack space versus scaling AI400X2s.", ["More GB/s per U than AI400X2", "Premium per PB"]], 2024.3),
+  hot("ddn-ai7990x", "DDN AI7990X (3U 24-bay NVMe)", "ddn", 42e4, 0.72, 110, 70, 2e3, ["3U high-density NVMe appliance for the SFA7990X storage fabric line.", "The 7990X doubles bay count per rack unit versus 2U appliances; used as bandwidth tier of large EXAScaler/SFA installations.", ["Density: 24 NVMe in 3U", "Needs fabric/software layer around it"]], 2023.5),
+  hot("ddn-sfa100nvx2", "DDN SFA100NVX2 (1U NVMe fabric)", "ddn", 235e3, 0.31, 70, 45, 1100, ["1U single-controller NVMe appliance from DDN's SFA fabric family.", "SFA100NVX2 is the smallest fabric appliance: slot one per rack row as a dedicated checkpoint target without sacrificing a 2U footprint.", ["Smallest DDN appliance", "Single-controller failure domain"]], 2022),
+  hot("ddn-sfa400nvx2", "DDN SFA400NVX2 (2U NVMe fabric)", "ddn", 265e3, 0.37, 95, 60, 1400, ["2U dual-controller SFA fabric appliance with HA controllers.", "Dual controllers give path redundancy at appliance level; Lustre/GPFS orchestration is layered by DDN or the customer.", ["HA controllers in 2U", "Still needs filesystem software"]], 2021.5),
+  warm("ddn-sfa18kx0", "DDN SFA18KX0 (4U HDD fabric, ~1.2 PB)", "ddn", 98e3, 1.2, 26, 16, 900, ["4U 90-bay HDD storage fabric appliance for bulk EXAScaler tiers.", "Pair NVMe bandwidth tiers with KX0 HDD capacity tiers; DDN positions it as the cheap PB behind the flash front-end.", ["Cheap PB under one fabric stack", "HDD rebuilds and latency"]], 2021),
+  // ---- VAST Data ----
+  hot("vast-ceres-2u", "VAST Data Ceres Single-Server (2U)", "vast", 13e4, 0.5, 70, 40, 1200, ["VAST's single-server DataServer (Ceres) for small clusters and edge AI.", "Ceres packs the full VAST software stack into one 2U node: QLC-heavy flash, direct-to-QLC layout and S3/NFS/database services without a two-node minimum.", ["Full VAST stack at entry price", "Scale-out wins still need more nodes"]], 2025),
+  obj("vast-maverick-5u", "VAST Data Mavericks AI Appliance (5U)", "vast", 48e4, 1.5, 45, 30, 1600, ["Turnkey AI storage appliance combining performance and capacity tiers in one enclosure.", "Mavericks bundles VAST servers and dense capacity media pre-integrated, targeting AI teams that want one SKU to cover training data and checkpoint archives.", ["One-box AI storage", "Less tuning freedom than building CNode+DBox tiers"]], 2024.7, 4),
+  // ---- WEKA on reference hardware ----
+  hot("weka-sm-ref-2u", "WEKA on Supermicro 2U NVMe reference node", "weka", 145e3, 0.65, 60, 35, 1300, ["2U 24-bay NVMe server sold as WEKA's Supermicro-based reference node.", "WEKA is software-defined: the appliance is validated hardware running the WekaFS parallel filesystem with GPU-direct storage offload.", ["GPU-direct into NCCL loaders", "You pay integration markup per node"]], 2023),
+  hot("weka-dell-ref-2u", "WEKA on Dell PowerEdge R660 reference node", "weka", 155e3, 0.65, 60, 35, 1300, ["Dell PowerEdge R660 2U24 NVMe node in WEKA's validated Dell design.", "Same WekaFS software over Dell hardware for shops standardised on Dell; bandwidth per node is near-identical to the Supermicro reference.", ["Dell service channel", "Slightly higher hardware price"]], 2023.5),
+  // ---- Pure Storage ----
+  hot("pure-fb-s100", "Pure Storage FlashBlade//S S100", "pure", 19e4, 0.7, 40, 18, 1300, ["Entry step of the FlashBlade//S scale-out file/object array (2U chassis + XFM).", "S-series moved to a blade architecture where a Director Module and Flash Modules scale independently; S100 covers small AI file tiers with one namespace across nodes.", ["Unified file+object namespace", "Blades add cost over JBOD-style tiers"]], 2023.8),
+  hot("pure-fb-s200", "Pure Storage FlashBlade//S S200", "pure", 33e4, 1.4, 70, 35, 1600, ["Mid FlashBlade//S system: ~1.4 PB effective with doubled bandwidth.", "S200 is the volume sweet spot for training data lakes that need tens of GB/s to hundreds of concurrent GPU loaders.", ["Linear blade scaling", "QLC write limits in sustained phases"]], 2023.8),
+  hot("pure-fb-s500", "Pure Storage FlashBlade//S S500", "pure", 52e4, 2.6, 90, 45, 1900, ["Top FlashBlade//S: ~2.6 PB effective, ~90 GB/s reads per system.", "S500 targets multi-hundred-GPU clusters: checkpoint floods and S3 corpora in one system, scale to dozens of blades for a shared namespace.", ["Class-leading file+object throughput", "Highest $/PB of the //S range"]], 2023.8),
+  obj("pure-fb-e", "Pure Storage FlashBlade//E (QLC capacity tier)", "pure", 38e4, 2.5, 20, 15, 1200, ["FlashBlade//E: dense QLC economics under the same Evergreen//One subscription model.", "The E-series swaps performance density for $/PB, letting AI teams hold epochs and raw corpora on flash without HDD rebuild windows.", ["Flash object tier near-HDD pricing", "Not a performance tier: front it with //S"]], 2022.5),
+  hot("pure-fa-xl", "Pure Storage FlashArray//XL R4", "pure", 18e4, 0.35, 14, 7, 1100, ["Block-only NVMe array (2U controller + shelf) for databases and head nodes.", "FlashArray//XL targets low-latency block workloads: VM stores, databases and NFS heads in front of larger file tiers, not AI bandwidth.", ["Sub-ms block latency", "Wrong tool for GB/s checkpoint floods"]], 2022),
+  // ---- NetApp ----
+  hot("netapp-aff-a250", "NetApp AFF A250 (2U HA pair)", "netapp", 14e4, 0.3, 19, 8, 1200, ["Entry all-flash AFF A-series HA pair for enterprise AI and file workloads.", "A250 brings ONTAP (NFS/S3/SMB in one OS) at department scale; per-node bandwidth is modest but ONTAP's data management is the draw.", ["ONTAP snapshot/clone workflows", "Modest GB/s per system"]], 2022),
+  hot("netapp-aff-a400", "NetApp AFF A400 (2U HA pair)", "netapp", 22e4, 0.55, 30, 12, 1400, ["Mid AFF A-series HA pair: ~0.55 PB effective, ~30 GB/s reads.", "A400 is the common enterprise checkpoint tier; ONTAP FlexClone lets you snapshot a dataset and spin training jobs against frozen copies in seconds.", ["Instant dataset clones", "Below DDN/VAST on raw GB/s per $"]], 2023.2),
+  hot("netapp-aff-c800", "NetApp AFF C-Series C800 (QLC)", "netapp", 26e4, 1, 35, 15, 1500, ["QLC-heavy AFF C800 for capacity-tilted all-flash namespaces.", "C-series accepts lower-endurance QLC to cut $/TB while keeping ONTAP services; targeted at AI data lakes and analytics rather than checkpoint write bursts.", ["Better $/TB than A-series", "Lower sustained write ceiling"]], 2023.5),
+  hot("netapp-ef600", "NetApp EF600 (4U60 NVMe block)", "netapp", 19e4, 1.4, 50, 20, 1500, ["60-bay NVMe block array (4U60) from the EF-series HPC line.", "EF600 trades ONTAP richness for raw NVMe block throughput; HPC shops front it with open-source filesystems instead.", ["Highest GB/s per NetApp $", "Block-only, no built-in file server"]], 2021.5),
+  hot("netapp-ef300", "NetApp EF300 (4U60 value NVMe block)", "netapp", 145e3, 1.2, 30, 12, 1400, ["Value-tier EF-series 4U60 block array.", "EF300 is the cost-reduced EF600: same bays, fewer front-end ports, aimed at scratch volumes in HPC/AI clusters.", ["Cheap flash scratch tier", "Reduced connectivity vs EF600"]], 2022),
+  obj("netapp-sg6060", "NetApp StorageGRID SG6060 (4U60 object)", "netapp", 15e4, 1.4, 20, 14, 1300, ["StorageGRID object-storage appliance (4U60) for S3 data lakes.", "SG appliances run the StorageGRID S3 platform with erasure coding; AI teams drop corpora in and mount via S3 or NFS gateways.", ["True S3 appliance with EC", "Object latency, not file-speed"]], 2021.5),
+  obj("netapp-sg5712", "NetApp StorageGRID SG5712 (2U12 object)", "netapp", 45e3, 0.28, 8, 5, 600, ["2U12 StorageGRID appliance step for small grids.", "Starts a StorageGRID grid at 2U per node; scale by stacking nodes into erasure-coded sites.", ["Low-entry S3 node", "2U12 density limits per-node bandwidth"]], 2022),
+  // ---- Dell PowerScale / ObjectScale / PowerStore ----
+  hot("dell-powerscale-f210", "Dell PowerScale F210 (1U all-flash)", "dell", 9e4, 0.15, 25, 12, 900, ["Smallest current PowerScale all-flash node (1U) for edge Isilon clusters.", "F210 packs NVMe into 1U so branch/edge sites get OneFS namespaces; bandwidth per node is modest - scale wide for AI.", ["1U PowerScale entry", "Per-node bandwidth is limited"]], 2023.1),
+  hot("dell-powerscale-f710", "Dell PowerScale F710 (2U hybrid NVMe)", "dell", 13e4, 0.4, 40, 20, 1100, ["2U PowerScale node mixing NVMe with high-capacity tiers.", "F710 balances capacity and performance for media/AI pipelines: NVMe holds the working set while dense bays keep cost per PB sane.", ["Balanced $/PB and GB/s", "Not line-rate NVMe throughout"]], 2023.1),
+  hot("dell-powerscale-f910", "Dell PowerScale F910 (2U all-NVMe)", "dell", 21e4, 0.55, 65, 35, 1300, ["Top PowerScale all-flash node (2U, Gen5 NVMe) for AI performance tiers.", "F910 is the node NVIDIA references for SuperPOD-style PowerScale deployments: OneFS namespace at tens of GB/s per node.", ["Best PowerScale GB/s per U", "All-flash pricing per PB"]], 2023.6),
+  obj("dell-xf960", "Dell ObjectScale XF960 (1U 24 E1.S object)", "dell", 55e3, 0.35, 15, 10, 700, ["1U dense object node running ObjectScale (ECS software) on 24 E1.S drives.", "XF960 packs rack-dense S3 into 1U slices; ObjectScale brings ECS erasure-coded object services onto Dell hardware.", ["1U S3 node density", "ECS licensing on top"]], 2024.2),
+  hot("dell-powerstore-9200t", "Dell PowerStore 9200T (2U block)", "dell", 12e4, 0.25, 25, 10, 1e3, ["Upper-mid PowerStore appliance (2U, NVMe block) for enterprise storage.", "PowerStore serves VM/database block with scale-up + scale-out clustering; it is the general-purpose tier, not an AI bandwidth tier.", ["Strong block services", "Overkill as pure scratch storage"]], 2024),
+  // ---- HPE Alletra MP / ClusterStor ----
+  hot("hpe-alletra-mp-x10000", "HPE Alletra Storage MP X10000 (2U scale-out)", "hpe", 125e3, 0.15, 20, 10, 900, ["HPE's scale-out DDM file/object node (Alletra MP X10000), 2U slices.", "X10000 runs HPE's data-services mesh (NFS/S3) with per-node scaling; positioned as the OneFS-competitor for AI pipelines in HPE shops.", ["Unified file+object scale-out", "Early ecosystem vs PowerScale/VAST"]], 2024.4),
+  hot("hpe-clusterstor-e1000", "HPE Cray ClusterStor E1000 (Lustre)", "hpe", 24e4, 0.4, 70, 40, 1400, ["ClusterStor E1000: integrated Lustre storage bundles for Cray-class HPC/AI.", "E1000 pairs 1U Lustre server nodes with 2U24 NVMe enclosures in validated ratios; the whole EXAScaler-style stack is supported by HPE Cray service.", ["Turnkey Lustre at supercomputer scale", "Locked into HPE ratios/support"]], 2021.5, 4),
+  hot("hpe-clusterstor-e2000", "HPE Cray ClusterStor E2000 (Lustre, Gen5)", "hpe", 3e5, 0.5, 85, 50, 1500, ["Second-gen ClusterStor with Gen5 NVMe enclosures and faster OSS nodes.", "E2000 lifts per-enclosure bandwidth for zettascale-era Cray systems; same integrated Lustre operational model with fewer units per PB.", ["More GB/s per enclosure", "HPE-only service ecosystem"]], 2022.8, 4),
+  // ---- IBM Storage Scale ----
+  hot("ibm-sss-6000", "IBM Storage Scale System 6000 (2U24)", "ibm", 23e4, 0.45, 65, 30, 1300, ["IBM's 2U24 NVMe appliance running Storage Scale (GPFS) file services.", "SSS 6000 delivers ~65 GB/s per appliance and can speak NVMe-oF so clients mount it as block too; GPFS clustering remains the HPC staple at national labs.", ["NVMe-oF file+block hybrid", "GPFS licensing complexity"]], 2023.4),
+  hot("ibm-ess-3500", "IBM ESS 3500 (2U flash)", "ibm", 95e3, 0.03, 14, 7, 700, ["Entry Elastic Storage Server flash drawer for small GPFS clusters.", "ESS 3500 scales GPFS out from a tiny footprint - bandwidth per drawer is limited, so buy many or step up to ESS 5000/6000.", ["GPFS entry point", "Small per-drawer capacity"]], 2021),
+  hot("ibm-ess-5000", "IBM ESS 5000 (2U24 NVMe)", "ibm", 22e4, 0.45, 60, 28, 1300, ["ESS 5000: 24-bay NVMe drawer behind GPFS protocol nodes.", "The 5000 was IBM's flash-drawer workhorse before the SSS 6000 rebrand; still sold into existing GPFS estates.", ["Proven GPFS flash drawer", "Superseded by SSS 6000"]], 2021, 4),
+  // ---- HPC filesystem references ----
+  hot("hammerspace-anvil-2u", "Hammerspace Anvil (2U global namespace node)", "hammerspace", 95e3, 0.2, 30, 15, 900, ["Anvil: Hammerspace's 2U node providing the Global Data Environment metadata tier.", "Hammerspace abstracts data from hardware - Anvils track where every file lives and orchestrate placement across NFS/S3 backends, enabling cross-site GPU-direct reads.", ["Namespace over mixed vendors", "Needs real storage behind it"]], 2022.5),
+  hot("thinkparq-beegfs-2u", "BeeGFS reference node (2U24 NVMe, ThinkParQ)", "thinkparq", 85e3, 0.35, 55, 30, 1100, ["Validated 2U NVMe server for BeeGFS parallel filesystem clusters.", "BeeGFS (by ThinkParQ) scales metadata and storage services on any commodity hardware; these reference nodes are the vendor-validated recipe.", ["Commodity-hardware Lustre rival", "You assemble/staff the cluster yourself"]], 2022),
+  // ---- Huawei / Qumulo / MinIO / Ceph ----
+  hot("huawei-pacific-9950", "Huawei OceanStor Pacific 9950 (2U NVMe)", "huawei", 12e4, 0.37, 60, 30, 1200, ["Scale-out all-flash Pacific-series node running Huawei's distributed file/object software.", "Pacific 9950 nodes use Huawei's encoding layout to cut redundancy overhead below classic 3-replica systems; common in APAC AI builds.", ["Lower redundancy overhead", "Non-Western service footprint"]], 2021.5),
+  warm("huawei-pacific-9546", "Huawei OceanStor Pacific 9546 (5U dense HDD)", "huawei", 85e3, 1.8, 40, 25, 1e3, ["5U 120-bay dense capacity node of the Pacific series.", "Huawei decouples metadata from capacity boxes: 9546 holds ~120 HDDs per 5U feeding the same namespace as the flash nodes.", ["Very high PB per U", "Dense-vibration HDD risk"]], 2021.5),
+  hot("qumulo-k218t4", "Qumulo K-218T4 (2U NVMe cluster node)", "qumulo", 12e4, 0.3, 45, 25, 1100, ["Qumulo 2U flash node for scale-out file clusters (unified analytics + NFS).", "Qumulo sells file clusters with real-time capacity/analytics; nodes scale in fixed validated SKUs, flash nodes front HDD nodes for cost balance.", ["Real-time cluster analytics", "Fixed SKU scaling ladder"], ["unverified"]], 2021.5),
+  warm("qumulo-hdd-5u", "Qumulo dense HDD node (5U)", "qumulo", 95e3, 1.5, 30, 18, 1e3, ["5U high-density Qumulo capacity node behind flash fronts.", "Capacity nodes take the bulk of a Qumulo namespace at HDD economics while flash nodes absorb metadata and hot reads.", ["Cheap PB under one namespace", "Flash fronts still required"], ["unverified"]], 2021.5),
+  hot("minio-ref-2u24", "MinIO reference server (2U24 NVMe, S3)", "minio", 48e3, 0.35, 55, 30, 1100, ["Commodity 2U24 NVMe node validated for MinIO S3 clusters.", "MinIO is erasure-coded S3 software famous for benchmark headline GB/s; reference nodes are plain x86 boxes you license the software on.", ["Highest S3 throughput per $", "You run the ops (K8s, monitoring)"]], 2022),
+  hot("ceph-ref-2u24", "Ceph OSD reference node (2U24 NVMe)", "ceph", 38e3, 0.35, 50, 28, 1100, ["Open-source Ceph cluster node: 24 NVMe OSDs, RADOS + CephFS/RGW services.", "Ceph unifies block (RBD), file (CephFS) and object (RGW) on one cluster - the open-source alternative to vendor appliances with no license fees.", ["No license cost, full API suite", "Operational complexity is yours"]], 2022),
+  // ---- Seagate xPod ----
+  hot("seagate-xpod-7201", "Seagate Nytro xPod XP7201 (2U NVMe pod)", "seagate", 11e5, 1.6, 70, 40, 3200, ["2U pod holding 100+ NVMe SSDs with integrated switch fabric for datacenter flash density.", "xPod converts Seagate's HDD density playbook to flash: >1 PB per 2U with internal fabric, exposed as NVMe targets to head nodes.", ["Flash density per U champion", "Pod-level failure domain"], ["unverified"]], 2024.5, 5)
+];
+const nv$1 = (gen2) => (id, name, v2, price, tb, r, w, watts, c, from = 2020, lead = 1) => ({ kind: "nvme", ...base$4(id, name, v2, from, price, lead, c), capacityTB: tb, readGBs: r, writeGBs: w, pcieGen: gen2, watts });
+const CAT_NVME = [
+  // ---- Samsung ----
+  nv$1(4)("sam-pm9a3-7t68", "Samsung PM9A3 7.68TB U.2 (Gen4)", "samsung", 800, 7.68, 6.8, 4, 13, ["7.68TB step of the PM9A3 Gen4 workhorse.", "Doubling capacity per bay halves drive count per PB; same 1-DWPD endurance class and PCIe 4.0 x4 interface as the 3.84TB.", ["Capacity per bay doubles", "Thermal throttle risk in dense shelves"]], 2021),
+  nv$1(4)("sam-pm9a3-15t36", "Samsung PM9A3 15.36TB U.2 (Gen4)", "samsung", 1500, 15.36, 6.8, 4, 14, ["Largest PM9A3: 15.36TB in a U.2 Gen4 envelope.", "Endurance scales down per TB as spare area shrinks - fine for read-mostly datasets, thin for checkpoint journals.", ["Best PM9A3 capacity per bay", "0.5-DWPD-class endurance"]], 2021.5),
+  nv$1(5)("sam-pm1743-3t84", "Samsung PM1743 3.84TB U.2 (Gen5)", "samsung", 750, 3.84, 14, 6, 12, ["Small-capacity PM1743 for latency-sensitive Gen5 boot/scratch.", "Same 14 GB/s-class link saturation as bigger PM1743s at lower cost; capacity per PCIe lane is the trade.", ["Gen5 speed at entry price", "Low capacity per bay"]], 2023.2),
+  nv$1(5)("sam-pm1753-15t36", "Samsung PM1753 15.36TB U.2/E1.S (Gen5)", "samsung", 1800, 15.36, 14, 9, 24, ["Second-gen Gen5 flagship with stronger writes than PM1743.", "PM1753 widens the write path (~9 GB/s) and ships in E1.S ruler form for shelf density; aimed at AI pipelines that checkpoint as hard as they read.", ["Better write bandwidth", "Newer part: supply ramps through 2025"]], 2024.8, 2),
+  nv$1(5)("sam-pm9d3a-30t72", "Samsung PM9D3a 30.72TB (Gen5)", "samsung", 3400, 30.72, 12, 5, 22, ["High-capacity Gen5 datacenter SSD read-tuned for AI datasets.", "PM9D3a pairs Gen5 links with QLC-leaning endurance for warm read tiers where 30 TB per bay cuts shelf count in half.", ["30TB per bay density", "Read-tilted: thin write endurance"], ["unverified"]], 2025.2, 2),
+  nv$1(4)("sam-990pro-2tb", "Samsung 990 PRO 2TB M.2 (client Gen4)", "samsung", 180, 2, 7, 6.9, 8, ["Consumer flagship M.2 sometimes pressed into lab/edge nodes.", "Client drives lack PLP (power-loss protection) and enterprise endurance; acceptable for management nodes, risky for arrays.", ["Cheapest 7 GB/s option", "No PLP or rated write durability"]], 2022.8),
+  // ---- Micron ----
+  nv$1(4)("mic-7450-3t84", "Micron 7450 PRO 3.84TB U.3 (Gen4)", "micron", 480, 3.84, 7, 4.5, 14, ["First volume Gen4 U.3 TLC SSD with flexible NVMe feature set.", "The 7450 made PCIe 4.0 U.3 mainstream in OEM trays; NVMe namespace management lets one physical drive fake multiple per-host devices.", ["U.3 flexibility (x2/x4 configs)", "Writes lag reads at sustained loads"]], 2022),
+  nv$1(5)("mic-7500-7t68", "Micron 7500 PRO 7.68TB U.3 (Gen5)", "micron", 1100, 7.68, 14, 7, 25, ["Micron's Gen5 workhorse: 7.68TB near line-rate reads.", "7500 PRO moves checkpoint and scratch tiers onto Gen5 links; power climbs with the faster interface, so dense shelves need airflow headroom.", ["Gen5 bandwidth at mid price", "~25 W per drive heats dense JBODs"]], 2023.5),
+  nv$1(5)("mic-6500ion-61t44", "Micron 6500 ION 61.44TB U.3 (Gen5 QLC)", "micron", 6500, 61.44, 7.5, 3.5, 22, ["61.44TB QLC monster: the biggest per-drive capacity point of its era.", "6500 ION puts >2 PB in a 2U24 shelf with flash reliability instead of HDD latency; QLC write endurance confines it to warm/read tiers.", ["Unmatched TB per bay and watt", "Never use for checkpoint journals"]], 2024.3, 2),
+  // ---- Solidigm ----
+  nv$1(4)("sol-d5-p5336-30t72", "Solidigm D5-P5336 30.72TB U.2 (QLC)", "solidigm", 2600, 30.72, 3.2, 2.4, 16, ["Dense QLC capacity drive (ex-Intel DC P5336 lineage).", "Solidigm inherited Intel's 3D QLC stack: 30-60 TB per drive at HDD-adjacent $/TB, displacing spinning rust in warm AI object tiers.", ["HDD-killer $/TB on flash", "Slow sustained writes"]], 2022),
+  nv$1(4)("sol-d5-p5336-61t44", "Solidigm D5-P5336 61.44TB U.2 (QLC)", "solidigm", 5400, 61.44, 3.3, 2.4, 18, ["61.44TB flagship of the P5336 QLC family.", "The capacity king of its generation: ~5 PB per 2U24 shelf for read-mostly corpora and object stores.", ["Record TB per bay", "QLC endurance + modest interface speed"]], 2023),
+  nv$1(4)("sol-d7-p5520-3t84", "Solidigm D7-P5520 3.84TB U.3 (Gen4 TLC)", "solidigm", 550, 3.84, 6.8, 5.2, 13, ["Mainstream Gen4 TLC write-competent SSD (ex-Intel P5520).", "P5520 balances read and write for mixed arrays - the default pick where checkpoints land on the same drive as datasets.", ["Strong mixed-workload profile", "Gen4 ceiling vs newer Gen5 parts"]], 2022),
+  nv$1(4)("sol-d5-p5430-15t36", "Solidigm D5-P5430 15.36TB U.2 (Gen4 QLC)", "solidigm", 1700, 15.36, 5, 2.5, 15, ["Mid-capacity QLC read-intensive drive.", "P5430 splits the difference between P5336 capacity and P5520 bandwidth for warm data-loader tiers.", ["Good warm-tier economics", "Thin sustained write rate"]], 2022.5),
+  nv$1(5)("sol-d7-ps1010-15t36", "Solidigm D7-PS1010 15.36TB (Gen5 TLC)", "solidigm", 1700, 15.36, 14, 10, 25, ["Solidigm's Gen5 TLC flagship with unusually strong writes.", "PS1010 keeps ~10 GB/s writes alongside Gen5 reads, letting one drive class serve both data loading and checkpoint storms.", ["Best-in-class Gen5 writes", "Power and price above read-tilted parts"]], 2024.5, 2),
+  nv$1(5)("sol-d7-ps1030-15t36", "Solidigm D7-PS1030 (Gen5 write-optimized)", "solidigm", 2200, 15.36, 14, 14, 26, ["SLOG-oriented Gen5 variant tuned for sustained write bursts.", "PS1030 targets journal/write-ahead-log roles (WAL, telemetry ingest) where symmetric GB/s matters more than capacity per bay.", ["Symmetric read/write GB/s", "Niche role; overkill for general tiers"], ["unverified"]], 2025),
+  // ---- KIOXIA ----
+  nv$1(4)("kio-cm6-6t4", "KIOXIA CM6 6.4TB U.3 (Gen4)", "kioxia", 800, 6.4, 6.2, 5.7, 13, ["KIOXIA's Gen4 enterprise TLC workhorse (former Toshiba Memory).", "CM6 brought full-power Gen4 with kaminario-derived KIOXIA FLAIR+ firmware; a common choice in Japanese OEM storage stacks.", ["Balanced TLC profile", "Thinner Western service channel"]], 2020.5),
+  nv$1(5)("kio-cm7-6t4", "KIOXIA CM7-R 6.4TB U.3 (Gen5)", "kioxia", 1e3, 6.4, 14, 7, 20, ["Gen5 flagship from the world's second-largest NAND maker.", "CM7 saturates Gen5 x4 (~14 GB/s reads) with TLC endurance intact; KIOXIA supplies much of the industry's flash indirectly, so its own SKUs are price-competitive.", ["Line-rate Gen5 reads", "Dual-port variants cost more"]], 2023.8),
+  nv$1(5)("kio-cd8-30t72", "KIOXIA CD8-R 30.72TB U.3 (Gen5 QLC)", "kioxia", 2600, 30.72, 6.6, 4.2, 15, ["Gen5 QLC capacity drive in the CD8 family.", "CD8 pairs Gen5 interfaces with QLC economics for warm AI tiers; per-drive capacity halves shelf count versus 15TB TLC.", ["Gen5 speed + QLC density", "Read-tilted endurance"]], 2023.9),
+  nv$1(4)("kio-xd6-800g", "KIOXIA XD6 800GB (Gen4 SLOG)", "kioxia", 320, 0.8, 5.8, 5.5, 9, ["Small write-optimized SLOG drive for ZFS log devices.", "XD-class drives sacrifice capacity for symmetric sustained writes - the standard sync-write accelerator in ZFS/Ceph journal roles.", ["Sustained write specialist", "Tiny capacity per dollar"], ["unverified"]], 2021.5),
+  // ---- SK hynix ----
+  nv$1(4)("skh-pe8010-7t68", "SK hynix PE8010 7.68TB U.3 (Gen4)", "skhynix", 750, 7.68, 6.5, 5, 13, ["SK hynix Gen4 enterprise TLC SSD common in hyperscaler fleets.", "PE8010 rides the NAND giant's in-house controllers; big-cloud validation but thinner channel availability than Samsung/Micron.", ["Hyperscaler-proven Gen4", "Limited channel availability"], ["unverified"]], 2021.8),
+  nv$1(5)("skh-ps1010-15t36", "SK hynix PS1010 15.36TB (Gen5)", "skhynix", 1600, 15.36, 13, 10, 24, ["SK hynix Gen5 TLC flagship balancing reads and writes.", "PS1010 brings the NAND-maker advantage: cutting-edge flash yields tuned firmware for AI checkpoint-plus-dataset duty.", ["Balanced Gen5 profile", "Supply skews to hyperscale contracts"], ["unverified"]], 2024.5, 2),
+  nv$1(5)("skh-peb110-61t44", "SK hynix PEB110 61.44TB E1.S (Gen5)", "skhynix", 5500, 61.44, 6, 3, 20, ["Ruler-form 61TB Gen5 SSD for flash-dense warm tiers.", "PEB110 in E1.S packs 24 x 61 TB into a 1U shelf - ~1.5 PB/U of read-optimized flash for object and dataset tiers.", ["Extreme density per U", "Warm-tier endurance only"], ["unverified"]], 2024.9, 3),
+  // ---- Western Digital / Seagate ----
+  nv$1(4)("wd-sn640-15t36", "Western Digital SN640 15.36TB U.3 (Gen4)", "wd", 1500, 15.36, 3.5, 3.3, 15, ["WD's Gen4 capacity SSD (ex-SanDisk enterprise line).", "SN640 focused on $/TB over headline GB/s - common in hyperscale read tiers where capacity per bay beats bandwidth.", ["Solid capacity economics", "Low sequential ceiling for Gen4"]], 2020.7),
+  nv$1(4)("wd-sn655-30t72", "Western Digital SN655 30.72TB U.3 (Gen4)", "wd", 2800, 30.72, 6.6, 4.4, 16, ["30.72TB Gen4 step-up with faster reads than SN640.", "SN655 doubled capacity and nearly doubled bandwidth, extending WD's warm-flash playbook before its Gen5 parts arrived.", ["Dense Gen4 capacity", "Still QLC-class write limits"], ["unverified"]], 2022.4),
+  nv$1(5)("wd-sn861-15t36", "Western Digital SN861 15.36TB U.3 (Gen5)", "wd", 1600, 15.36, 14, 8, 24, ["WD's Gen5 datacenter flagship for AI-scale reads.", "SN861 answers Samsung PM1743 with ~14 GB/s reads and better power efficiency per GB/s, targeting checkpoint-heavy AI shelves.", ["Efficient Gen5 bandwidth", "Newer ramp, pricier per TB"]], 2024.2, 2),
+  nv$1(4)("seagate-xp2050-3t84", "Seagate Nytro XP2050 3.84TB (dual-port U.3)", "seagate", 600, 3.84, 6.5, 5.5, 13, ["Dual-ported NVMe SSD that stays alive through a controller failure.", "Two PCIe ports let a drive straddle two hosts: arrays and clustered filesystems keep serving through one path's loss - a classic HA storage trick.", ["Path redundancy per drive", "Dual-port tax on price"]], 2022.5)
+];
+const mem$2 = (type) => (id, name, v2, price, gb, mts, watts, c, from = 2020, lead = 1) => ({ kind: "memory", ...base$4(id, name, v2, from, price, lead, c), type, capacityGB: gb, speedMTs: mts, watts });
+const CAT_MEMORY = [
+  // ---- Samsung ----
+  mem$2("ddr4")("sam-ddr4-3200-128", "Samsung DDR4-3200 LRDIMM 128GB", "samsung", 620, 128, 3200, 10, ["128GB load-reduced DDR4 module for maxing out older Gen4 hosts.", "LRDIMMs buffer the ranks so two DIMMs per channel still train; they filled 4TB+ EPYC Rome/Milan hosts before 3DS DDR5 existed.", ["Biggest DDR4 capacity per slot", "Extra buffering latency"]], 2020),
+  mem$2("ddr5")("sam-ddr5-4800-64", "Samsung DDR5-4800 RDIMM 64GB", "samsung", 400, 64, 4800, 10, ["First-wave DDR5 64GB RDIMM for Sapphire Rapids/Genoa hosts.", "JEDEC 4800 was the launch spec; these filled early 2022-23 GPU hosts where every 32-DIMM socket wanted 2TB.", ["Launch DDR5 capacity point", "Slowest DDR5 gear ratio"]], 2022),
+  mem$2("ddr5")("sam-ddr5-5600-96", "Samsung DDR5-5600 RDIMM 96GB", "samsung", 620, 96, 5600, 14, ["96GB 3DS RDIMM: mid-capacity step for 12-channel Turin hosts.", "3DS stacking yields 96GB at RDIMM-ish pricing, letting one EPYC socket reach 1.15TB without LRDIMM premiums.", ["1.15TB per socket without LRDIMM", "3DS latency slightly above monolithic"]], 2024.2),
+  mem$2("ddr5")("sam-ddr5-6400-128", "Samsung DDR5-6400 RDIMM 128GB 3DS", "samsung", 1100, 128, 6400, 16, ["128GB DDR5-6400: the fast end of server RDIMM in 2024-25.", "6400 MT/s is the top JEDEC bin Granite Rapids/Turin memory controllers run broadly; 128GB 3DS stacks combine capacity with that bandwidth.", ["Top standard DDR5 bin", "Cost per GB climbs with speed"]], 2024.7),
+  mem$2("lpddr5x")("sam-socamm-96", "Samsung SOCAMM 96GB LPDDR5X (Grace-class)", "samsung", 450, 96, 6400, 6, ["Small Outline Compression Attached Memory Module for GB200-class Grace CPUs.", "SOCAMM packs LPDDR5X into removable small modules: NVIDIA's Grace superchips populate them 8-at-a-time for ~480GB and ~8 TB/s of shared CPU-GPU memory.", ["Removable LPDDR5X: serviceable unlike soldered", "Speed bins lag soldered LPDDR5X"], ["unverified"]], 2024.7),
+  // ---- Micron ----
+  mem$2("ddr4")("mic-ddr4-3200-64", "Micron DDR4-3200 RDIMM 64GB", "micron", 340, 64, 3200, 6, ["Micron's 64GB DDR4 RDIMM for the Gen4 GPU-host era.", "Same spec class as the Samsung part; mixing vendors per channel is disallowed - pick one brand per host for validated training.", ["Second source for DDR4 fleets", "DDR4 bandwidth caps modern hosts"]], 2020),
+  mem$2("ddr5")("mic-ddr5-4800-64", "Micron DDR5-4800 RDIMM 64GB", "micron", 400, 64, 4800, 10, ["Micron's first-wave DDR5 64GB RDIMM.", "The 2022 DDR5 supply crunch made these briefly pricier than the DDR4 they replaced; prices normalized once Korean fabs caught up.", ["Launch DDR5 second source", "Was scarcity-priced through 2022"]], 2022),
+  mem$2("ddr5")("mic-ddr5-5600-96", "Micron DDR5-5600 RDIMM 96GB", "micron", 600, 96, 5600, 14, ["96GB 3DS RDIMM second-source for EPYC Turin hosts.", "Micron's 3DS 96GB matches the Samsung part: 12 channels x 96GB x 2 sockets = 2.3TB per HGX node.", ["Cheap mid-capacity uplift", "Verify BIOS QVL before mixing brands"]], 2024.2),
+  mem$2("ddr5")("mic-ddr5-6400-128", "Micron DDR5-6400 RDIMM 128GB 3DS", "micron", 1150, 128, 6400, 16, ["128GB DDR5-6400 3DS RDIMM for bandwidth-hungry hosts.", "Populating 32 DIMMs of these in an HGX tray gives 4TB at 6400 - the high-water mark of standard RDIMM before MRDIMM.", ["4TB per tray at top RDIMM speed", "Price per GB nearly doubles vs 5600"]], 2024.8),
+  mem$2("lpddr5x")("mic-socamm-96", "Micron SOCAMM 96GB LPDDR5X", "micron", 450, 96, 6400, 6, ["Micron's SOCAMM LPDDR5X module for GB200/GB300 Grace hosts.", "Micron is a primary SOCAMM supplier for NVIDIA rack programs; modules hot-plug via connector instead of board rework.", ["Grace-standard memory on connectors", "Only used in ARM superchip trays"], ["unverified"]], 2024.7),
+  // ---- SK hynix ----
+  mem$2("ddr4")("skh-ddr4-3200-64", "SK hynix DDR4-3200 RDIMM 64GB", "skhynix", 340, 64, 3200, 6, ["SK hynix 64GB DDR4 RDIMM - the third DDR4 source.", "Having three RDIMM vendors smooths allocation crunches; spec-identical parts mean channel-level brand mixing is a policy choice, not a technical one.", ["Third DDR4 source", "Legacy speed for new builds"]], 2020),
+  mem$2("ddr5")("skh-ddr5-4800-64", "SK hynix DDR5-4800 RDIMM 64GB", "skhynix", 400, 64, 4800, 10, ["SK hynix first-wave DDR5 64GB RDIMM.", "Launch-bin DDR5; SK hynix volume skewed to hyperscalers, so channel stock lagged Samsung/Micron in 2022.", ["Launch DDR5 third source", "Channel availability lagged in 2022"]], 2022),
+  mem$2("ddr5")("skh-ddr5-5600-128", "SK hynix DDR5-5600 RDIMM 128GB 3DS", "skhynix", 1200, 128, 5600, 15, ["128GB 3DS RDIMM at 5600 for capacity-first hosts.", "A 2-socket host of 24 slots reaches 3TB of CPU memory for KV-cache-heavy inference servers without MRDIMM pricing.", ["3TB+ hosts without LRDIMM pricing", "Runs a gear slower than 6400 parts"]], 2024.3),
+  mem$2("ddr5")("skh-ddr5-6400-128", "SK hynix DDR5-6400 RDIMM 128GB 3DS", "skhynix", 1150, 128, 6400, 16, ["Top-bin 128GB RDIMM matching Granite/Turin controllers.", "SK hynix 1b-nm DRAM made 6400 MT/s at 128GB practical; bandwidth per socket approaches 640 GB/s in 12-channel EPYC.", ["Top-bin DDR5 bandwidth", "Premium pricing per GB"]], 2024.8),
+  mem$2("lpddr5x")("skh-socamm-128", "SK hynix SOCAMM 128GB LPDDR5X", "skhynix", 560, 128, 6400, 7, ["128GB LPDDR5X SOCAMM for GB300-class Grace hosts.", "GB300 doubled per-superchip LPDDR5X (to 384GB+); SOCAMM 128GB steps are how the density scales while staying field-replaceable.", ["Grace capacity step-up", "Superchip-tray-only fit"], ["unverified"]], 2025.5)
+];
+const rk = (std) => (id, name, v2, price, units, kw, wkg, cooling, wMM, dMM, hMM, busbar, c, from = 2020, lead = 2) => ({ kind: "rack", ...base$4(id, name, v2, from, price, lead, c), standard: std, units, maxKW: kw, maxWeightKg: wkg, cooling, widthMM: wMM, depthMM: dMM, heightMM: hMM, hasBusbar: busbar });
+const r19 = rk("19in");
+const RAW_RACKS = [
+  // ---- Rittal ----
+  r19("rittal-ts-it-42u", "Rittal TS IT 42U Server Rack (600x1200)", "rittal", 1500, 42, 15, 1200, ["air"], 600, 1200, 2e3, false, ["Rittal's volume 19-inch enclosure: 42U, 600 wide, 1200 deep.", "TS IT is the German-industrial standard cabinet: heavy-gauge steel, cable entry top/bottom, baying kits for rows - the workhorse under Rittal LCP cooling add-ons.", ["Industrial build, row-ready", "Cord-and-PDU power unless retrofitted"]]),
+  r19("rittal-ts-it-48u", "Rittal TS IT 48U Server Rack (600x1200)", "rittal", 1900, 48, 15, 1500, ["air"], 600, 1200, 2200, false, ["Taller 48U step of the TS IT line.", "Six extra U helps GPU trays (2U each) plus switches and PDUs breathe; same power reality: cords and rack PDUs.", ["48U of the same enclosure line", "Still air-power-limited"]]),
+  r19("rittal-vx-it-42u", "Rittal VX IT 42U Rack (600x1200)", "rittal", 1700, 42, 15, 1300, ["air"], 600, 1200, 2e3, false, ["VX IT: TS IT with 25% more inner installation depth for cabling and PDUs.", "The extra inner volume keeps 1200mm-deep servers, vertical PDU and cable management from fighting each other - useful for GPU trays with fat looms.", ["More usable inner depth", "Slightly wider exterior footprint"], ["unverified"]]),
+  // ---- APC / Schneider ----
+  r19("apc-netshelter-sx-42u", "APC NetShelter SX 42U (600x1200)", "schneider", 1600, 42, 10, 1300, ["air"], 600, 1200, 1991, false, ["The most-cited datacenter rack in enterprise IT: 42U, perforated doors, full-height side panels.", "NetShelter SX defined the modern rack accessory ecosystem (roof PDU strips, cable containment, AR-series accessories); standard 600x1200 fits legacy rows everywhere.", ["Universal accessory ecosystem", "Air-cooled cord-power ceiling ~10kW"]]),
+  r19("apc-netshelter-sx-48u", "APC NetShelter SX 48U (600x1200)", "schneider", 2100, 48, 10, 1400, ["air"], 600, 1200, 2293, false, ["48U tall SX for maximum density in the same footprint.", "Tall cabinets fit AI trays plus switching without new floor tiles; check hall ceiling clearance for ducts and cable tray above.", ["48U in a standard footprint", "Head-height clearance needed"]]),
+  r19("apc-netshelter-sv-48u", "APC NetShelter SV 48U (600x1060)", "schneider", 1300, 48, 8, 1100, ["air"], 600, 1060, 2288, false, ["Value version of NetShelter with shallower 1060mm depth.", "SV trades depth (and some accessory breadth) for price; fine for storage switches and 1U builds, tight for deep GPU servers.", ["Budget 48U", "Shallow depth limits deep servers"]]),
+  // ---- Vertiv ----
+  r19("vertiv-vr3100-42u", "Vertiv VR3100 42U Rack (600x1070)", "vertiv", 1500, 42, 10, 1100, ["air"], 600, 1070, 1995, false, ["Vertiv's standard 42U rack from the VR series.", "Pairs with Vertiv white-space gear (Geist PDUs, Liebert cooling) for single-vendor rows; medium-duty load ratings fit enterprise halls.", ["Single-vendor Vertiv row", "Medium-duty density class"], ["unverified"]]),
+  r19("vertiv-vr3300-48u", "Vertiv VR3300 48U Rack (600x1200)", "vertiv", 2e3, 48, 12, 1400, ["air"], 600, 1200, 2290, false, ["48U heavy-duty step of the Vertiv VR line.", "Deeper and beefier: accepts dense GPU trays plus rear-door retrofits up to ~12kW before liquid becomes mandatory.", ["Heavy-duty 48U", "RDHx retrofit needed past ~12kW"], ["unverified"]]),
+  r19("vertiv-vr-liquid-48u", "Vertiv Liquid-Ready Rack 48U (80 kW, manifolds)", "vertiv", 11500, 48, 80, 1800, ["rdhx", "dlc"], 600, 1200, 2290, false, ["Vertiv cabinet pre-fitted with coolant manifolds and quick-disconnects for direct-chip loops.", "Vertiv bundles cabinet + manifolds + top-of-rack piping so a DLC hall deploys from one SKU list; pairs with Liebert XDU CDUs behind it.", ["Manifold-ready out of the box", "Needs facility water + CDU"], ["unverified"]], 2022.5),
+  // ---- OEM server racks ----
+  r19("dell-smart-rack-4210", "Dell Smart Rack 4210 (42U)", "dell", 1400, 42, 10, 1200, ["air"], 600, 1070, 2e3, false, ["Dell's 42U static rack sold alongside PowerEdge fleets.", "Buying racks from the server vendor keeps the SKU list unified and support contracts single-threaded; specs match generic 42U class.", ["One-vendor stack with Dell gear", "Generic density class"], ["unverified"]]),
+  r19("hpe-rack-10642g2", "HPE 10642 G2 Rack (42U, 600x1200)", "hpe", 1500, 42, 10, 1360, ["air"], 600, 1200, 1998, false, ["HPE's long-running 42U G2 rack (AF001A lineage).", "The 10642 is the default enclosure across HPE enterprise installs; high load ratings and toolless accessory mounting.", ["Proven workhorse rack", "Air-power-limited like all cord racks"]]),
+  r19("hpe-rack-10847", "HPE 10847 Rack (47U, 800x1200)", "hpe", 2100, 47, 12, 1500, ["air"], 800, 1200, 2214, false, ["Wider 800mm 47U HPE rack for dense cabling and side-access builds.", "The 800mm width simplifies side channel routing for in-row PDUs and liquid piping; extra U helps AI trays breathe.", ["Wider service aisle per cabinet", "Floor space grows per row"], ["unverified"]], 2021),
+  r19("supermicro-42u-rack", "Supermicro 42U Rack (600x1200)", "supermicro", 1300, 42, 10, 1200, ["air"], 600, 1200, 2e3, false, ["Supermicro's enclosure line matching its server trays.", "Buying rack+servers+CDU from one ODM simplifies logistics for fast AI builds; rack specs track the generic 42U standard.", ["Bundle-friendly with SM servers", "Commodity enclosure"], ["unverified"]], 2021),
+  r19("lenovo-42u-rack", "Lenovo Enterprise 42U Rack (600x1200)", "lenovo", 1500, 42, 10, 1300, ["air"], 600, 1200, 2e3, false, ["Lenovo's 42U rack sold with ThinkSystem/ThinkSystem SD-class fleets.", "Pairs with Lenovo Neptune DLC offerings; rack itself is a standard cord-powered enclosure until liquid manifolds are ordered.", ["Pairs with Neptune liquid line", "Generic density without add-ons"], ["unverified"]]),
+  // ---- Open Compute ----
+  rk("orv3-21in")("ocp-orv3-hpr-48u", 'OCP Open Rack v3 High-Power Rack (48U, 21")', "ocp", 8500, 48, 100, 1900, ["air", "rdhx", "dlc"], 600, 1200, 2134, true, ["ORv3 variant pushing toward 100kW per rack with extra power shelves.", "High-power ORv3 stacks more 48V power shelves and heavier busbar so 21-inch trays approach liquid-cooling densities without changing the rack spec.", ["Near-100kW on the ORv3 standard", "Trays must respect ORv3 thermal limits"], ["unverified"]], 2024),
+  // ---- NVIDIA rack ----
+  rk("nvl-mgx")("nv-gb300-nvl72-rack", "NVIDIA GB300 NVL72 Rack (MGX, liquid)", "nvidia", 42e3, 48, 150, 1900, ["dlc"], 600, 1200, 2200, true, ["The GB300-generation MGX rack: 18 compute trays, 9 NVLink switch trays, busbar and liquid manifolds.", "Each NVL rack generation raises density: GB300 pushes ~140-150kW per floor tile, which rewrites power and cooling budgets hall-wide.", ["150kW density: 10 legacy racks in one", "Liquid-only, huge facility prerequisites"]], 2025.6, 5),
+  // ---- Schneider liquid-ready / Legrand / Eaton / CPI ----
+  r19("schneider-netshelter-52u-lq", "Schneider NetShelter Liquid-Ready 52U (800x1200)", "schneider", 9800, 52, 60, 1700, ["rdhx", "dlc"], 800, 1200, 2484, false, ["Tall, deep NetShelter variant with liquid manifolds and RDHx option from Schneider.", "Schneider rides its NetShelter ubiquity into liquid: same accessory rails, now with manifold columns and CDU-adjacent plumbing kits.", ["Familiar rack becomes liquid-ready", "Liquid accessories price up fast"], ["unverified"]], 2023),
+  r19("legrand-zonix-42u", "Legrand Zonix 42U Server Rack (600x1200)", "legrand", 1400, 42, 10, 1200, ["air"], 600, 1200, 2e3, false, ["Legrand's datacenter cabinet line (Zonix family).", "Legrand bundles racks with its Raritan/ServerTech PDUs and BusWay for EMEA-centric builds; enclosure specs track the 42U standard.", ["Matches Legrand power lineup", "Regional service focus"], ["unverified"]]),
+  r19("eaton-42u-rack", "Eaton 42U Server Rack (600x1200)", "eaton", 1300, 42, 10, 1200, ["air"], 600, 1200, 2e3, false, ["Eaton's entry enclosure alongside its rack-PDU and eSTS lines.", "Eaton sells the cabinet so its power chain (PDU -> eSTS -> rack) is one vendor quote; enclosure itself is commodity class.", ["Single-quote Eaton power chain", "Commodity rack class"], ["unverified"]]),
+  r19("chatsworth-z4-45u", "Chatsworth Z4-Series SeismicFrame 45U", "chatsworth", 2200, 45, 12, 1800, ["air"], 600, 1219, 2263, false, ["CPI's seismic-rated heavy-duty cabinet (Z4-Series).", "SeismicFrame racks carry 1500+ kg with anchoring hardware certified for earthquake zones - mandatory in some US West Coast and APAC sites.", ["Seismic zone certified", "Heavy and priced for it"]], 2021)
+];
+const v$4 = (id, name, sells, summary) => ({
+  id,
+  name,
+  sells,
+  reliability: 0.92,
+  support: 0.88,
+  volumeDiscountPerDoublingPct: 4,
+  codex: { summary, explain: `${name} supplies the storage/memory/rack layer of the catalogue. Compare lead time, service coverage and spares logistics, not just price.`, tradeoffs: ["Category specialist depth", "Service network varies by region"] }
+});
+const CAT_STORAGE_VENDORS = [
+  v$4("pure", "Pure Storage", ["storage", "nvme"], "All-flash specialist: FlashBlade//S and //E scale-out file/object arrays plus FlashArray//XL block."),
+  v$4("netapp", "NetApp", ["storage"], "ONTAP-centric storage: AFF A/C all-flash, EF block arrays and StorageGRID S3 appliances."),
+  v$4("hpe", "HPE", ["storage", "rack"], "Alletra MP scale-out storage and Cray ClusterStor Lustre bundles, plus racks."),
+  v$4("ibm", "IBM", ["storage"], "Storage Scale (GPFS) appliances: Storage Scale System 6000 and ESS drawers."),
+  v$4("huawei", "Huawei", ["storage"], "OceanStor Pacific scale-out file/object storage, dominant in APAC AI builds."),
+  v$4("qumulo", "Qumulo", ["storage"], "Scale-out file clusters with real-time analytics over flash and HDD node tiers."),
+  v$4("minio", "MinIO", ["storage"], "High-performance open-source S3 object store sold on validated commodity NVMe nodes."),
+  v$4("ceph", "Ceph", ["storage"], "Open-source unified block/file/object storage; reference nodes, no license fees."),
+  v$4("hammerspace", "Hammerspace", ["storage"], "Global data environment software (Anvil nodes) orchestrating data across vendor backends."),
+  v$4("thinkparq", "ThinkParQ (BeeGFS)", ["storage"], "Company behind BeeGFS parallel filesystem; sells validated reference nodes and support."),
+  v$4("solidigm", "Solidigm", ["nvme"], "SK-group NAND house (ex-Intel SSD unit): QLC capacity kings and Gen5 TLC."),
+  v$4("kioxia", "KIOXIA", ["nvme"], "Toshiba-memory successor and top NAND maker: CM TLC, CD QLC, XD SLOG enterprise SSDs."),
+  v$4("wd", "Western Digital", ["nvme"], "SanDisk-lineage datacenter SSDs: SN640/655 capacity and SN861 Gen5."),
+  v$4("seagate", "Seagate", ["nvme", "storage"], "Nytro enterprise SSDs and xPod dense NVMe platforms."),
+  v$4("lenovo", "Lenovo", ["rack"], "ThinkSystem-adjacent racks and Neptune liquid infrastructure."),
+  v$4("chatsworth", "Chatsworth Products (CPI)", ["rack"], "Heavy-duty and seismic-rated enclosures (Z4-Series SeismicFrame)."),
+  v$4("apc", "APC (Schneider Electric)", ["rack"], "NetShelter SX/SV rack line and aisle containment - the enterprise rack default.")
+];
+const CAP_FIX = { "netapp-ef600": 0.37, "netapp-ef300": 0.37, "ibm-ess-3500": 0.37 };
+const CAT_STORAGE_SYSTEMS = RAW_STORAGE.map((x) => {
+  const y = { ...x, capacityPB: CAP_FIX[x.id] ?? x.capacityPB };
+  if (y.tier === "hot-nvme" && y.rackUnits <= 2 && y.capacityPB > 0.75) {
+    const k2 = Math.ceil(y.capacityPB / 0.75);
+    return { ...y, rackUnits: 2 * k2, watts: Math.round(y.watts * k2 * 0.85) };
+  }
+  return y;
+});
+const CAT_RACKS = RAW_RACKS.map((r) => r.maxKW > 30 && r.cooling.includes("air") ? { ...r, cooling: r.cooling.filter((c) => c !== "air") } : r);
+const o = (id, name, reliability, support, summary) => ({
+  id,
+  name,
+  sells: ["chassis", "rack"],
+  reliability,
+  support,
+  volumeDiscountPerDoublingPct: 3,
+  codex: { summary, explain: `${name} integrates accelerators, CPUs, NICs and cooling into validated servers and racks. Compare premium, lead time, firmware support and the quality of the service contract, not just list price.`, tradeoffs: ["Validated build and one support number", "Premium over DIY; availability tied to NVIDIA/AMD allocation"] }
+});
+const OEM_VENDORS = [
+  o("lenovo", "Lenovo", 0.94, 0.92, "ThinkSystem SR670/SR675/SR680a/SR685a AI servers with Neptune liquid cooling."),
+  o("quanta", "Quanta Cloud Technology (QCT)", 0.93, 0.85, "Hyperscale ODM that builds HGX servers and GB200/GB300 NVL72 racks for cloud buyers and neoclouds."),
+  o("wiwynn", "Wiwynn", 0.93, 0.84, "Taiwanese ODM building rack-scale GB200/GB300 NVL72 and OCP-style systems at hyperscale."),
+  o("asus", "ASUS (ESC servers)", 0.92, 0.82, "ESC8000/ESC N8/N-series AI servers, strong in HGX and MI300X platforms and fast to market."),
+  o("inspur", "Inspur", 0.92, 0.8, "Large Chinese server maker (NF5488/NF5688); sells HGX A100 generation systems internationally."),
+  o("cisco", "Cisco UCS", 0.95, 0.94, "UCS C885A / X-Series AI servers with Intersight management and Nexus/Silicon One networking.")
+];
+const cdx$3 = ([summary, explain, tradeoffs]) => ({ summary, explain, tradeoffs, tags: [] });
+const base$3 = (id, name, vendor, from, price, lead, c, tags = [], eol) => ({ id, name, vendor, availableFrom: from, ...eol ? { eolAfter: eol } : {}, priceUSD: price, leadTimeMonths: lead, codex: { ...cdx$3(c), tags } });
+const nic$1 = (o2) => ({ kind: "nic", ...o2 });
+const cb = (o2) => ({ kind: "cable", ...o2 });
+const CAT_NICS_A = [
+  nic$1({ ...base$3("nv-cx5-100", "NVIDIA ConnectX-5 100G (2x100)", "nvidia", 2017.5, 1100, 2, ["Dual-port 100G Mellanox adapter that dominated pre-A100 GPU clusters.", "ConnectX-5 moved RDMA, OVS and VXLAN offload into the mainstream and stayed in production through the A100 era; fleets still use it for storage and front-end rails.", ["Early revisions are PCIe Gen3 only", "No 200G ports or SHARP collectives"]], ["ethernet", "roce", "100g", "a100-era"], 2024.5), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 13, features: ["roce", "rdma", "ovs-offload", "ipsec"] }),
+  nic$1({ ...base$3("nv-cx5-25", "NVIDIA ConnectX-5 25G (2x25)", "nvidia", 2017.5, 450, 2, ["Dual-port 25G ConnectX-5 for front-end and storage networks.", "The 25G CX-5 was the cheap workhorse of cloud front-ends; RDMA offload came standard even at this price point.", ["25G is front-end only: useless for GPU rails", "Lowest-cost CX-5 entry"]], ["ethernet", "25g", "frontend"], 2024.5), nicClass: "nic", tech: "eth-100", gbps: 50, ports: 2, pcieGen: 4, pcieLanes: 8, watts: 9, features: ["roce", "rdma", "ovs-offload"] }),
+  nic$1({ ...base$3("nv-cx5-50", "NVIDIA ConnectX-5 50G (2x50)", "nvidia", 2018, 600, 2, ["Dual-port 50G ConnectX-5 on SFP56.", "50G per lane arrived on CX-5 before QSFP56 was common; useful for storage fabrics and mid-tier compute nodes.", ["Odd speed class: limited switch ecosystem", "Superseded by CX-6 Lx at lower power"]], ["ethernet", "50g", "storage"], 2024.5), nicClass: "nic", tech: "eth-100", gbps: 100, ports: 2, pcieGen: 4, pcieLanes: 8, watts: 11, features: ["roce", "rdma", "ovs-offload"] }),
+  nic$1({ ...base$3("nv-cx5ex-100", "NVIDIA ConnectX-5 Ex 100G (Gen4)", "nvidia", 2019, 1500, 3, ["ConnectX-5 Ex: PCIe Gen4 100G adapter with inline TLS/IPsec crypto.", "The Ex added Gen4 host bandwidth and inline encryption, making it the security-conscious upgrade for A100-era back-ends.", ["Inline crypto costs throughput vs plain CX-5", "Still 100G-per-port class"]], ["ethernet", "100g", "pcie-gen4", "crypto"], 2025), nicClass: "smartnic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 14, features: ["rdma", "roce", "tls", "ipsec"] }),
+  nic$1({ ...base$3("nv-cx6-100", "NVIDIA ConnectX-6 100G (2x100)", "nvidia", 2020, 1150, 2, ["Base ConnectX-6: Gen4 100G adapter below the feature-rich Dx.", "The plain CX-6 kept RDMA and GPUDirect but trimmed offload features, giving a cheap 100G option for storage and front-end rails.", ["Fewer offloads than CX-6 Dx", "200G reserved for Dx and above"]], ["ethernet", "100g", "storage"], 2025.5), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 15, features: ["roce", "rdma", "gpudirect", "ovs-offload"] }),
+  nic$1({ ...base$3("nv-cx6lx-25", "NVIDIA ConnectX-6 Lx 25G (2x25)", "nvidia", 2020.25, 300, 1, ["Low-power dual-25G adapter, the successor to 25G CX-5 front-ends.", "ConnectX-6 Lx targets OCP front-end slots and management-adjacent traffic: all the RDMA offload of CX-6 in an 8 W part.", ["Front-end class only", "Cheapest modern ConnectX"]], ["ethernet", "25g", "frontend", "low-power"], 2026), nicClass: "nic", tech: "eth-100", gbps: 50, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 8, features: ["roce", "rdma", "ovs-offload"] }),
+  nic$1({ ...base$3("nv-cx6lx-50", "NVIDIA ConnectX-6 Lx 50G (2x50)", "nvidia", 2021, 400, 1, ["Dual-port 50G variant of the ConnectX-6 Lx.", "Adds 50G-per-lane SFP56 for storage clusters that outgrew 25G while keeping the same low power budget.", ["Still not a GPU-rail NIC", "50G switch ports less common than 100G"]], ["ethernet", "50g", "frontend", "low-power"], 2026), nicClass: "nic", tech: "eth-100", gbps: 100, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 9, features: ["roce", "rdma", "ovs-offload"] }),
+  nic$1({ ...base$3("nv-cx6dx-100", "NVIDIA ConnectX-6 Dx 100G (2x100)", "nvidia", 2020.5, 1e3, 2, ["Dual-port 100G variant of the CX-6 Dx, the storage/RDMA volume SKU.", "Same silicon as the 200G Dx: full RDMA, NVMe-oF, MACsec, just 100G ports, which made it the default card for file and object tiers feeding GPU clusters.", ["100G ports cannot feed H100-class GPUs", "Mostly used host-side or on storage nodes"]], ["ethernet", "100g", "roce", "storage"], 2025.5), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 15, features: ["roce", "rdma", "gpudirect", "ipsec", "macsec", "nvme-of"] }),
+  nic$1({ ...base$3("nv-cx6dx-ocp3", "NVIDIA ConnectX-6 Dx 100G OCP 3.0", "nvidia", 2021, 950, 2, ["CX-6 Dx 100G in the OCP NIC 3.0 form factor for hyperscale motherboards.", "OCP 3.0 cards slot directly into hyperscale server boards, cutting the PCIe riser and cabling cost per node at fleet scale.", ["Only fits OCP 3.0 boards", "Same silicon, lower serviceable cost"]], ["ethernet", "100g", "ocp3"], 2025.5), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 15, features: ["roce", "rdma", "gpudirect", "ipsec", "nvme-of"] }),
+  nic$1({ ...base$3("nv-cx7-400-1p", "NVIDIA ConnectX-7 400G (1x400 QSFP112)", "nvidia", 2023.25, 1700, 3, ["Single-port 400G ConnectX-7 for cost-reduced AI nodes.", "One 400G port per node instead of two halves the switch-port bill where a single rail suffices; common in inference and storage-head builds.", ["Half the aggregate bandwidth of the dual-port card", "One rail means no rail-failure isolation"]], ["ethernet", "400g", "h100-era"], 2029), nicClass: "nic", tech: "eth-400", gbps: 400, ports: 1, pcieGen: 5, pcieLanes: 16, watts: 22, features: ["rdma", "roce", "gpudirect", "sharp", "nvme-of"] }),
+  nic$1({ ...base$3("nv-cx7-200-2p", "NVIDIA ConnectX-7 200G (2x100)", "nvidia", 2023.25, 1300, 3, ["Dual-port 100G-per-port ConnectX-7 variant.", "The 200G CX-7 SKU serves clusters that kept 100G fabrics but want Gen5 host bandwidth and the CX-7 offload feature set.", ["200G aggregate lags 400G-per-GPU guidance", "Gen5 x16 host link it cannot fill"]], ["ethernet", "200g", "h100-era"], 2029), nicClass: "nic", tech: "eth-200", gbps: 200, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 18, features: ["rdma", "roce", "gpudirect", "sharp"] })
+];
+const CAT_NICS_B = [
+  nic$1({ ...base$3("nv-cx7-ocp3", "NVIDIA ConnectX-7 400G OCP 3.0", "nvidia", 2023.75, 2700, 3, ["Dual-port 400G ConnectX-7 in the OCP NIC 3.0 form factor.", "The OCP 3.0 CX-7 is what hyperscale builders slot into GB-class and ODM boards: identical silicon, cheaper integration, tool-less service.", ["OCP 3.0 boards only", "Volume pricing depends on fleet size"]], ["ethernet", "400g", "ocp3", "spectrum-x"], 2029), nicClass: "nic", tech: "eth-400", gbps: 800, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 25, features: ["rdma", "roce", "gpudirect", "sharp", "spectrum-x"] }),
+  nic$1({ ...base$3("nv-cx8-ocp3", "NVIDIA ConnectX-8 800G OCP 3.0 SuperNIC", "nvidia", 2025.5, 5500, 4, ["ConnectX-8 800G in OCP NIC 3.0 form for GB200-class ODM trays.", "Same 800G-per-port silicon as the PCIe CX-8 but packaged for OCP motherboards, letting ODMs build NVL-compatible compute trays without NVIDIA chassis.", ["800G per port still outruns PCIe Gen5 x16", "Unverified: OCP variant specs are early"]], ["ethernet", "800g", "ocp3", "unverified"]), nicClass: "nic", tech: "eth-800", gbps: 1600, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 40, features: ["rdma", "roce", "gpudirect", "spectrum-x", "nvme-of"] }),
+  nic$1({ ...base$3("nv-bf2-200", "NVIDIA BlueField-2 DPU 200G (2x100)", "nvidia", 2021, 2800, 3, ["First-generation BlueField DPU: 2x100G NIC fused with 8 Arm A72 cores.", "BlueField-2 proved the DPU concept in production clouds: OVS, IPsec, TLS and NVMe-oF run on the card so host CPUs serve tenants. DOCA software ships on it.", ["Gen4 host link and 200G cap: dated for AI back-ends", "~2800 USD for what a plain NIC does at a third of the price"]], ["dpu", "arm", "offload", "security"], 2026), nicClass: "dpu", tech: "eth-200", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 18, features: ["arm-cores:8", "rdma", "ovs-offload", "ipsec", "nvme-of", "tls"] }),
+  nic$1({ ...base$3("nv-bf2-100", "NVIDIA BlueField-2 DPU 100G (1x100)", "nvidia", 2021.5, 2400, 3, ["Single-port 100G BlueField-2 for storage and security appliances.", "The 100G BF-2 is the volume SKU in storage heads and security gateways where the Arm cores matter more than line rate.", ["100G single port: no rail redundancy on-card", "DPU tax on non-offloaded workloads"]], ["dpu", "100g", "storage"], 2026), nicClass: "dpu", tech: "eth-100", gbps: 100, ports: 1, pcieGen: 4, pcieLanes: 16, watts: 15, features: ["arm-cores:8", "rdma", "ovs-offload", "ipsec", "nvme-of"] }),
+  nic$1({ ...base$3("nv-bf3-200", "NVIDIA BlueField-3 DPU 200G (2x100)", "nvidia", 2023.5, 3300, 4, ["Lower-rate BlueField-3 SKU with 16 Arm cores at 200G aggregate.", "Brings the BlueField-3 Arm complex and DOCA 3.x to 100G-fabric clouds that do not need 400G ports.", ["200G aggregate in a 400G-class card", "Unverified SKU: exact port config varies by OEM"]], ["dpu", "200g", "unverified"]), nicClass: "dpu", tech: "eth-200", gbps: 200, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 20, features: ["arm-cores:16", "rdma", "ovs-offload", "ipsec", "nvme-of", "tls"] }),
+  nic$1({ ...base$3("nv-bf3-supernic", "NVIDIA BlueField-3 SuperNIC 400G", "nvidia", 2024.75, 4800, 5, ["BlueField-3 variant tuned for AI clouds: 400G ports, 16 Arm cores, in-network collectives.", "The SuperNIC branding marks BlueField-3s validated for AI back-end duty: rail-optimized RDMA, SHARP-style in-network computing and tight Spectrum-X integration for multi-tenant GPU clouds.", ["Costs 60% more than a plain CX-7 for the same line rate", "DOCA software stack is a real operational commitment"]], ["dpu", "400g", "ai-cloud", "spectrum-x"]), nicClass: "dpu", tech: "eth-400", gbps: 800, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 30, features: ["arm-cores:16", "rdma", "gpudirect", "sharp", "nvme-of", "ipsec"] })
+];
+const CAT_NICS_C = [
+  nic$1({ ...base$3("cb-p225p", "Broadcom NetXtreme-E P225p 2x25G", "broadcom", 2020, 350, 2, ["Dual-port 25G NetXtreme-E for hyperscale front-ends.", "The P225p is the OCP-ecosystem default 25G card: cheap, cool-running and backed by Broadcom silicon found in most white-box fleets.", ["Front-end class only", "Driver stack less polished than Mellanox for RDMA"]], ["ethernet", "25g", "frontend", "ocp"]), nicClass: "nic", tech: "eth-100", gbps: 50, ports: 2, pcieGen: 4, pcieLanes: 8, watts: 8, features: ["rdma", "rocev2"] }),
+  nic$1({ ...base$3("cb-p425p", "Broadcom NetXtreme-E P425p 4x25G", "broadcom", 2020, 600, 2, ["Quad-port 25G NetXtreme-E for bond-heavy front-ends.", "Four SFP28 ports on one card let hyperscale hosts bond front-end, storage and inter-pod networks without extra slots.", ["Four cables per node: patch-panel density pain", "25G ceiling"]], ["ethernet", "25g", "frontend"]), nicClass: "nic", tech: "eth-100", gbps: 100, ports: 4, pcieGen: 4, pcieLanes: 8, watts: 11, features: ["rdma", "rocev2"] }),
+  nic$1({ ...base$3("cb-p2100g", "Broadcom NetXtreme-E P2100G 2x100G", "broadcom", 2020.5, 1100, 2, ["Dual-port 100G NetXtreme-E on the Gen4 Thor-family silicon.", "The P2100G gave hyperscalers a merchant alternative to ConnectX for 100G storage and front-end fabrics, with full RoCEv2 offload.", ["100G class: below AI-rail needs", "Weaker GPUDirect story than NVIDIA"]], ["ethernet", "100g", "roce"]), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 15, features: ["rdma", "rocev2", "nvme-of"] }),
+  nic$1({ ...base$3("cb-p1400gd", "Broadcom NetXtreme-E P1400GD 400G", "broadcom", 2023, 1500, 3, ["400G-class NetXtreme-E in QSFP-DD, the P-series step to PAM4 lanes.", "The P1400GD extends the NetXtreme-E line to 400G for storage and front-end fabrics riding Tomahawk-based networks.", ["Specs not fully public", "Unverified: exact port split varies by OEM build"]], ["ethernet", "400g", "unverified"]), nicClass: "nic", tech: "eth-400", gbps: 400, ports: 1, pcieGen: 4, pcieLanes: 16, watts: 18, features: ["rdma", "rocev2", "nvme-of"] }),
+  nic$1({ ...base$3("cb-p1800gd", "Broadcom NetXtreme-E P1800GD 800G", "broadcom", 2024.5, 2600, 4, ["Dual-port 400G-per-port NetXtreme-E aiming at 800G aggregate.", "Top of the P-series: 800G aggregate on Gen4+ Thor silicon for AI-adjacent fabrics that stay merchant-silicon.", ["Specs early and partly unverified", "Software ecosystem younger than MOFED"]], ["ethernet", "800g", "unverified"]), nicClass: "nic", tech: "eth-800", gbps: 800, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 30, features: ["rdma", "rocev2"] }),
+  nic$1({ ...base$3("cb-n2100g", "Broadcom Thor2 N2100G 2x100G", "broadcom", 2021, 900, 3, ["Thor2-based dual-100G smart NIC with inline crypto and telemetry.", "Thor2 silicon adds programmable flow steering and crypto to the classic NetXtreme profile, popular in hyperscale storage fleets.", ["Unverified: N-series naming varies by OEM", "Not an AI-rail part"]], ["ethernet", "100g", "smartnic", "unverified"]), nicClass: "smartnic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 14, features: ["rdma", "rocev2", "tls", "ipsec"] }),
+  nic$1({ ...base$3("cb-n425p", "Broadcom Thor2 N425p 4x25G", "broadcom", 2021, 550, 2, ["Thor2 quad-25G smart NIC for OCP front-ends.", "Same Thor2 crypto and telemetry features as the N2100G at 25G ports, aimed at hyperscale front-end refresh cycles.", ["Unverified SKU naming", "25G class"]], ["ethernet", "25g", "smartnic", "unverified"]), nicClass: "smartnic", tech: "eth-100", gbps: 100, ports: 4, pcieGen: 4, pcieLanes: 8, watts: 10, features: ["rdma", "rocev2", "tls"] }),
+  nic$1({ ...base$3("cb-n1400gd", "Broadcom Thor2 N1400GD 400G", "broadcom", 2023, 1500, 3, ["Thor2 400G smart NIC, the N-series answer to 400G storage fabrics.", "Pairs Tomahawk-class networking with Thor2 programmability for clouds that standardize on Broadcom end to end.", ["Unverified: exact SKU string uncertain", "RDMA tuning leans RoCEv2 rather than UEC"]], ["ethernet", "400g", "unverified"]), nicClass: "smartnic", tech: "eth-400", gbps: 400, ports: 1, pcieGen: 4, pcieLanes: 16, watts: 18, features: ["rdma", "rocev2", "tls", "nvme-of"] }),
+  nic$1({ ...base$3("cb-stingray-p58800", "Broadcom Stingray BCM58800 SmartNIC 200G", "broadcom", 2020, 1600, 3, ["Stingray P-series smart NIC: 200G of PCIe-attached Arm cores and crypto offload.", "Stingray put bare-metal provisioning, VXLAN and IPsec on the card for cloud providers; Broadcom later folded the lessons into Thor2.", ["Program largely wound down after Thor2 arrived", "Spares and software support are the real risk"]], ["smartnic", "100g", "arm", "crypto"], 2024.5), nicClass: "smartnic", tech: "eth-200", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 25, features: ["arm-cores:8", "rdma", "tls", "ipsec", "ovs-offload"] })
+];
+const CAT_NICS_D = [
+  nic$1({ ...base$3("intel-e810-xxvda2", "Intel Ethernet Adapter E810-XXVDA2 (2x25G)", "intel", 2021, 700, 2, ["Dual-port 10/25G Intel 800-series adapter for front-end networks.", "E810 silicon brings DDP (dynamic device personalization), ADQ queue steering and both iWARP and RoCEv2 to cheap 25G ports; the default Intel-server front-end card.", ["Front-end class", "Two RDMA dialects in one driver stack"]], ["ethernet", "25g", "frontend", "intel"]), nicClass: "nic", tech: "eth-100", gbps: 50, ports: 2, pcieGen: 4, pcieLanes: 8, watts: 9, features: ["rdma", "rocev2", "iwarp", "adq"] }),
+  nic$1({ ...base$3("intel-e810-xxvda4", "Intel Ethernet Adapter E810-XXVDA4 (4x25G)", "intel", 2021, 900, 2, ["Quad-port 25G E810 for consolidated front-end and storage fabrics.", "Four SFP28 ports with full E810 offloads let x86 hosts carry storage, management and tenant networks on one card.", ["Cable count per node", "25G ceiling"]], ["ethernet", "25g", "frontend"]), nicClass: "nic", tech: "eth-100", gbps: 100, ports: 4, pcieGen: 4, pcieLanes: 8, watts: 12, features: ["rdma", "rocev2", "iwarp", "adq"] }),
+  nic$1({ ...base$3("intel-e810-cqda2", "Intel Ethernet Adapter E810-CQDA2 (2x100G)", "intel", 2021, 950, 2, ["Dual-port 40/100G E810 on QSFP28.", "The 100G E810 volume SKU: storage heads, NVMe-oF targets and East-West RDMA on Intel servers at a third of a ConnectX price.", ["100G ports: front-end and storage, not GPU rails", "Gen4 host link"]], ["ethernet", "100g", "storage", "roce"]), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 14, features: ["rdma", "rocev2", "iwarp", "nvme-of"] }),
+  nic$1({ ...base$3("intel-e810-xxvam2", "Intel Ethernet Adapter E810-XXVAM2 (OCP 3.0, 2x25G)", "intel", 2021.5, 600, 2, ["OCP 3.0 form of the dual-25G E810 for hyperscale boards.", "Same E810 offloads in the mezzanine form factor OCP mothersboards expect, cutting per-node integration cost.", ["OCP 3.0 slots only", "Unverified: exact SKU string may vary"]], ["ethernet", "25g", "ocp3", "unverified"]), nicClass: "nic", tech: "eth-100", gbps: 50, ports: 2, pcieGen: 4, pcieLanes: 8, watts: 9, features: ["rdma", "rocev2", "adq"] }),
+  nic$1({ ...base$3("intel-e830-ccin", "Intel Ethernet Adapter E830-CCIN (200G)", "intel", 2023, 1300, 3, ["Intel E830: 200G-per-port step for the Ethernet 800 family.", "E830 raises the lane rate to 100G PAM4 for 200G ports with Gen5 host bandwidth, keeping Intel servers relevant in 200G storage and front-end fabrics.", ["Single 200G port: no dual-port redundancy in this SKU", "Still no GPUDirect-class AI features"]], ["ethernet", "200g", "pcie-gen5"]), nicClass: "nic", tech: "eth-200", gbps: 200, ports: 1, pcieGen: 5, pcieLanes: 16, watts: 16, features: ["rdma", "rocev2", "adq", "ddp"] }),
+  nic$1({ ...base$3("amd-elba", "AMD Pensando Elba DPU 800G", "amd", 2026, 3800, 6, ["Fifth-generation Pensando DPU targeting 800G with a large P4-programmable complex.", "Elba follows Salina with doubled flow capacity and more Arm cores, aimed at AI-network infrastructure offload. Roadmap part: dates have already slipped once.", ["Unverified: roadmap specs can slip", "P4 pipeline skills are scarce"]], ["dpu", "800g", "roadmap", "unverified"]), nicClass: "dpu", tech: "eth-800", gbps: 800, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 35, features: ["arm-cores", "p4-programmable", "rdma", "ipsec", "tls", "ovs-offload"] }),
+  nic$1({ ...base$3("amd-giglio", "AMD Pensando Giglio DPU 800G", "amd", 2026.5, 3600, 6, ["Next Pensando DPU generation after Salina, aimed at hyperscale AI clouds.", "Giglio is the announced follow-on to Salina with higher port counts and UEC-era features; custom variants (cloud co-designs) dominate demand.", ["Unverified: announced product, not shipping silicon", "Allocation may be cloud-locked"]], ["dpu", "800g", "roadmap", "unverified"]), nicClass: "dpu", tech: "eth-800", gbps: 800, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 30, features: ["arm-cores", "p4-programmable", "rdma", "tls", "ovs-offload"] }),
+  nic$1({ ...base$3("amd-pollara800", "AMD Pensando Pollara 800 AI NIC", "amd", 2026.75, 4500, 6, ["Second-generation UEC AI NIC after Pollara 400, aimed at MI400-era clusters.", "Pollara 800 pushes Ultra Ethernet RDMA to 1.6T-class aggregate so AMD-scale clusters keep pace with ConnectX-9 without leaving the open UEC path.", ["Unverified: roadmap part", "UEC software still maturing"]], ["uec", "ai-nic", "roadmap", "unverified"]), nicClass: "nic", tech: "uec-eth", gbps: 1600, ports: 2, pcieGen: 5, pcieLanes: 16, watts: 45, features: ["uec-ready", "rdma", "rocev2", "gpudirect"] }),
+  nic$1({ ...base$3("mv-ql41232", "Marvell FastLinQ 41232 (2x100G)", "marvell", 2019.5, 850, 2, ["Dual-port 100G FastLinQ adapter found in millions of OEM servers.", "The 41000 series is the classic Marvell/QLogic 100G workhorse: solid RoCE, low power, deep OEM integration (HPE/Dell ship it as a standard option).", ["No AI-era offloads", "Driver ecosystem smaller than Mellanox/Intel"]], ["ethernet", "100g", "roce", "oem"], 2026), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 17, features: ["rdma", "rocev2", "ovs-offload"] }),
+  nic$1({ ...base$3("mv-ql41132", "Marvell FastLinQ 41132 (1x100G)", "marvell", 2019.5, 550, 2, ["Single-port 100G FastLinQ for storage and front-end duty.", "The one-port 41132 halves cost and cabling where a single 100G uplink suffices.", ["Single port: no A/B failover", "Unverified: SKU string approximate"]], ["ethernet", "100g", "storage", "unverified"], 2026), nicClass: "nic", tech: "eth-100", gbps: 100, ports: 1, pcieGen: 4, pcieLanes: 8, watts: 12, features: ["rdma", "rocev2"] }),
+  nic$1({ ...base$3("mv-octeon10-98xx", "Marvell OCTEON 10 98XX DPU/SmartNIC", "marvell", 2022, 2200, 4, ["5nm OCTEON 10 smart NIC/DPU with integrated Arm Neoverse cores and crypto.", "OCTEON 10 merges packet processing, Arm compute and inline IPsec/TLS for 5G cores, security appliances and cloud DPUs on a single 5nm chip.", ["Unverified: exact SKU configs vary", "Software stack tuned to Marvell tools, not DOCA/SONiC"]], ["dpu", "smartnic", "arm", "unverified"]), nicClass: "dpu", tech: "eth-400", gbps: 400, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 40, features: ["arm-cores", "p4-programmable", "ipsec", "tls", "compression"] })
+];
+const CAT_NICS_E = [
+  nic$1({ ...base$3("cs-vic-15828", "Cisco UCS VIC 15828 (2x100G mLOM)", "cisco", 2020.5, 1800, 3, ["Fourth-generation Cisco virtual interface card: dual 100G mLOM with PCIe Gen4.", "VIC cards present virtual NICs (VN-Tag) per tenant and policy from UCS Manager, folding networking policy into the server hardware; Gen4 models added RDMA/RoCE support.", ["Only useful inside UCS fabric management", "100G class: not an AI-rail part"]], ["ethernet", "100g", "frontend", "ucs"]), nicClass: "nic", tech: "eth-100", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 15, features: ["rdma", "rocev2", "npar", "uevi"] }),
+  nic$1({ ...base$3("cs-vic-15231", "Cisco UCS VIC 15231 (4x25G mLOM)", "cisco", 2020.5, 1200, 2, ["Quad-port 25G VIC for UCS front-end consolidation.", "Four 25G mLOM ports with vNIC partitioning carry management, storage and tenant traffic under UCS policy on one riser.", ["UCS-only value", "25G class"]], ["ethernet", "25g", "frontend", "ucs"]), nicClass: "nic", tech: "eth-100", gbps: 100, ports: 4, pcieGen: 4, pcieLanes: 8, watts: 11, features: ["npar", "uevi"] }),
+  nic$1({ ...base$3("cs-vic-15230", "Cisco UCS VIC 15230 (2x25G mLOM)", "cisco", 2020.5, 800, 2, ["Dual-port 25G VIC, the entry UCS front-end card.", "Cheapest way to hang a UCS blade on a 25G fabric with full vNIC policy support.", ["Two ports is thin for bond+storage designs", "Unverified: exact SKU string approximate"]], ["ethernet", "25g", "frontend", "ucs", "unverified"]), nicClass: "nic", tech: "eth-100", gbps: 50, ports: 2, pcieGen: 4, pcieLanes: 8, watts: 9, features: ["npar", "uevi"] }),
+  nic$1({ ...base$3("hpe-cassini-200-pcie", "HPE Slingshot Cassini 200G NIC (PCIe)", "hpe", 2021.5, 1600, 4, ["The NIC of HPE Slingshot: 200G PCIe Gen4 card purpose-built for Cray EX HPC/AI systems.", "Cassini implements Slingshot's 128-port roosting, adaptive routing and congestion control, including GPU-direct RDMA for AMD and NVIDIA accelerators in Cray EX compute blades.", ["Only interoperates with Slingshot switches", "Closed-ecosystem: HPE integration required"]], ["hpc", "slingshot", "200g", "rdma"]), nicClass: "nic", tech: "eth-200", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 20, features: ["rdma", "adaptive-routing", "gpudirect", "congestion-control"] }),
+  nic$1({ ...base$3("hpe-cassini-200-ocp", "HPE Slingshot Cassini 200G NIC (OCP 3.0)", "hpe", 2022.5, 1500, 4, ["Cassini 200G in the OCP NIC 3.0 form factor.", "Lets OCP-style compute sleds join a Slingshot fabric, extending HPE's interconnect beyond classic Cray blades.", ["Unverified: OCP variant details scarce", "Slingshot switches still required"]], ["hpc", "slingshot", "200g", "ocp3", "unverified"]), nicClass: "nic", tech: "eth-200", gbps: 200, ports: 2, pcieGen: 4, pcieLanes: 16, watts: 20, features: ["rdma", "adaptive-routing", "gpudirect"] }),
+  nic$1({ ...base$3("hpe-cassini-400", "HPE Slingshot Cassini 400G NIC", "hpe", 2024.5, 2600, 5, ["400G Cassini for Slingshot 11, doubling per-node bandwidth for exascale AI systems.", "Slingshot 11 doubles port rates while keeping the same adaptive-routing control plane, so existing fabrics scale without redesign.", ["Unverified: announced with Slingshot 11", "400G optics make node cabling expensive"]], ["hpc", "slingshot", "400g", "unverified"]), nicClass: "nic", tech: "eth-400", gbps: 400, ports: 1, pcieGen: 5, pcieLanes: 16, watts: 28, features: ["rdma", "adaptive-routing", "gpudirect", "congestion-control"] })
+];
+const RAW_NICS = [...CAT_NICS_A, ...CAT_NICS_B, ...CAT_NICS_C, ...CAT_NICS_D, ...CAT_NICS_E];
+const CAT_CABLES_A = [
+  cb({ ...base$3("fs-dac-25g-2m", "FS SFP28 25G DAC 2m", "fs", 2020, 45, 1, ["Passive 2 m twinax for 25G SFP28 links.", "25G DACs are near-disposable: the SERDES drives copper directly, so front-end cabling costs cents per Gb/s.", ["Cheapest link type sold", "Stiff twinax under 2-3 m only"]], ["dac", "25g", "copper", "frontend"]), cableType: "dac", gbps: 25, maxReachM: 2, wattsPerEnd: 0.3, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("amphenol-dac-25g-3m", "Amphenol SFP28 25G DAC 3m", "amphenol", 2018, 50, 1, ["3 m passive 25G DAC from a first-tier connector maker.", "Amphenol twinax is the safe-bet brand for patch panels where cheap generics fail acceptance testing.", ["3 m ceiling", "Zero power draw"]], ["dac", "25g", "copper"]), cableType: "dac", gbps: 25, maxReachM: 3, wattsPerEnd: 0.4, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("molex-aoc-25g-10m", "Molex SFP28 25G AOC 10m", "molex", 2020, 75, 1, ["10 m active optical cable for 25G spans across a row.", "AOCs stretch optical reach to 10-30 m without pluggable-module management; lasers are buried in the connectors.", ["Fixed length: rerigs replace whole cables", "Adds ~1 W per end"]], ["aoc", "25g", "optical"]), cableType: "aoc", gbps: 25, maxReachM: 10, wattsPerEnd: 1, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("fs-optic-25g-sr", "FS 25G-SR SFP28 optic 100m", "fs", 2019, 55, 1, ["25G-SR duplex multimode transceiver (100 m on OM4).", "The 25G-SR pairs with duplex LC MMF and makes front-end optics nearly as cheap as copper.", ["MMF only: 100 m limit", "Cheap enough to spare liberally"]], ["optic", "25g", "multimode", "frontend"]), cableType: "optic-sr", gbps: 25, maxReachM: 100, wattsPerEnd: 0.8, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("innolight-optic-25g-lr", "Innolight 25G-LR SFP28 optic 10km", "innolight", 2019, 90, 1, ["Single-lambda 25G-LR duplex optic for 10 km campus spans.", "One 25G wavelength on duplex single-mode covers building-to-building front-end links without CWDM optics.", ["10 km reach at datacenter-optic pricing", "Single lambda: no upgrade path to 40G bidi"]], ["optic", "25g", "singlemode", "frontend"]), cableType: "optic-fr", gbps: 25, maxReachM: 1e4, wattsPerEnd: 1.1, compatibleTech: ["eth-100"] }),
+  cb({ ...base$3("fs-dac-50g-2m", "FS SFP56 50G DAC 2m", "fs", 2021, 60, 1, ["Passive 2 m twinax for SFP56 50G links.", "50G-per-lane PAM4 cuts passive reach versus 25G, but 2 m in-rack jumpers still work at copper prices.", ["PAM4 margins: only quality vendors", "2 m max"]], ["dac", "50g", "copper"]), cableType: "dac", gbps: 50, maxReachM: 2, wattsPerEnd: 0.5, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("molex-aoc-50g-15m", "Molex SFP56 50G AOC 15m", "molex", 2021, 110, 1, ["15 m 50G active optical cable.", "Covers row-to-row 50G hops where copper cannot reach and duplex optics would be overkill.", ["Fixed lengths", "~1.2 W per end"]], ["aoc", "50g", "optical"]), cableType: "aoc", gbps: 50, maxReachM: 15, wattsPerEnd: 1.2, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("amphenol-dac-100g-1m", "Amphenol QSFP28 100G DAC 1m", "amphenol", 2019, 70, 1, ["1 m passive 100G jumper for switch-to-server in-rack links.", "Short DACs are the default wiring for ToR leaf-to-node at 100G; 1 m versions fit shallow racks and cable managers.", ["0.4 W per end", "Reach too short for wide racks"]], ["dac", "100g", "copper"]), cableType: "dac", gbps: 100, maxReachM: 1, wattsPerEnd: 0.4, compatibleTech: ["eth-100", "roce", "ib-hdr"] }),
+  cb({ ...base$3("fs-acc-100g-5m", "FS QSFP28 100G ACC 5m", "fs", 2021, 180, 1, ["Active-conditioned copper stretching 100G to 5 m.", "A retimer in each connector restores the PAM4 eye past passive reach, filling the gap to optics for mid-rack spans.", ["~1.5 W per end", "Small per-unit DSP failure population"]], ["acc", "100g", "copper"]), cableType: "acc", gbps: 100, maxReachM: 5, wattsPerEnd: 1.5, compatibleTech: ["eth-100", "roce", "ib-hdr"] }),
+  cb({ ...base$3("fs-aoc-100g-10m", "FS QSFP28 100G AOC 10m", "fs", 2019, 150, 1, ["10 m 100G AOC for leaf-to-spine in-rack hops.", "Buried optics avoid connector dirt and exceed ACC reach at AOC pricing.", ["No field repair", "1 W per end"]], ["aoc", "100g", "optical"]), cableType: "aoc", gbps: 100, maxReachM: 10, wattsPerEnd: 1, compatibleTech: ["eth-100", "roce", "ib-hdr"] }),
+  cb({ ...base$3("fs-optic-100g-sr4", "FS 100G-SR4 QSFP28 optic 100m", "fs", 2019, 160, 1, ["4x25G parallel multimode optic on MPO-12.", "100G-SR4 reuses the OM4 MPO plant of 40G-SR4 eras, keeping short-reach optics cheap but trunk-fiber-hungry.", ["Needs MPO-12 multimode plant", "100 m limit on OM4"]], ["optic", "100g", "multimode", "sr4"]), cableType: "optic-sr", gbps: 100, maxReachM: 100, wattsPerEnd: 2.5, compatibleTech: ["eth-100", "roce", "ib-hdr"] }),
+  cb({ ...base$3("arista-aoc-100g-15m", "Arista 100G AOC 15m", "arista", 2020, 170, 1, ["Arista-branded 15 m active optical cable for EOS fabrics.", "Buying the switch vendor's AOC keeps single-vendor optics support for the fabric warranty.", ["Premium over white-label equivalents", "Fixed length"]], ["aoc", "100g", "optical"]), cableType: "aoc", gbps: 100, maxReachM: 15, wattsPerEnd: 1.2, compatibleTech: ["eth-100", "roce"] })
+];
+const CAT_CABLES_B = [
+  cb({ ...base$3("cisco-optic-100g-fr1", "Cisco 100G-FR QSFP28 optic 2km", "cisco", 2019, 200, 2, ["Single-lambda 100G duplex optic for 2 km.", "100G-FR needs only ordinary duplex single-mode, making it the campus-ring workhorse for Cisco fabrics.", ["Cheap fiber plant: duplex LC everywhere", "2 km overkill inside a hall"]], ["optic", "100g", "singlemode", "fr1"]), cableType: "optic-fr", gbps: 100, maxReachM: 2e3, wattsPerEnd: 1.5, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("coherent-optic-100g-lr4", "Coherent (Finisar) 100G-LR4 optic 10km", "coherent", 2018, 300, 2, ["Classic 4x25G CWDM 100G optic for 10 km.", "LR4 launched the 100G era; Coherent/Finisar parts are the fleet-standard spares on duplex single-mode rings.", ["4 wavelengths: CWDM alignment matters", "Superseded by cheaper FR1 inside datacenters"]], ["optic", "100g", "singlemode", "lr4"]), cableType: "optic-fr", gbps: 100, maxReachM: 1e4, wattsPerEnd: 3.5, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("fs-breakout-100g-4x25-dac", "QSFP28 100G to 4xSFP28 breakout DAC 1m", "fs", 2019, 80, 1, ["Breakout copper: one 100G port fans out to four 25G servers.", "Breakout DACs quadruple front-end port counts on leaf switches without buying more switch ports.", ["Server ports limited to 25G", "Breakout pairs must stay on matching switch groups"]], ["dac", "100g", "breakout", "frontend"]), cableType: "dac", gbps: 100, maxReachM: 1, wattsPerEnd: 0.5, compatibleTech: ["eth-100", "roce"] }),
+  cb({ ...base$3("fs-dac-200g-2m", "FS QSFP56 200G DAC 2m", "fs", 2022, 130, 1, ["Passive 200G twinax jumper.", "At 200G (4x50G PAM4) passive copper still manages 2 m, keeping in-rack links at commodity prices.", ["PAM4 eye margins demand quality cable", "2 m ceiling"]], ["dac", "200g", "copper"]), cableType: "dac", gbps: 200, maxReachM: 2, wattsPerEnd: 0.8, compatibleTech: ["eth-200", "roce"] }),
+  cb({ ...base$3("amphenol-acc-200g-3m", "Amphenol QSFP56 200G ACC 3m", "amphenol", 2022, 220, 1, ["Active-conditioned 200G copper for 3 m spans.", "Retimers stretch 200G copper past passive limits for mid-rack and adjacent-rack hops.", ["~2 W per end", "Adds a DSP to every link"]], ["acc", "200g", "copper"]), cableType: "acc", gbps: 200, maxReachM: 3, wattsPerEnd: 2, compatibleTech: ["eth-200", "roce"] }),
+  cb({ ...base$3("eoptolink-optic-200g-sr2", "Eoptolink 200G-SR2 QSFP56 optic 70m", "eoptolink", 2022.5, 450, 2, ["2x100G PAM4 multimode optic on duplex MMF patch leads.", "200G-SR2 runs two 100G PAM4 lanes over duplex OM4, avoiding MPO trunks for short 200G hops.", ["Duplex fiber: simple patching", "70 m multimode ceiling"]], ["optic", "200g", "multimode", "sr2"]), cableType: "optic-sr", gbps: 200, maxReachM: 70, wattsPerEnd: 3, compatibleTech: ["eth-200", "roce"] }),
+  cb({ ...base$3("innolight-optic-200g-dr4", "Innolight 200G-DR4 QSFP56 optic 500m", "innolight", 2022, 600, 2, ["4x50G PAM4 single-mode optic to 500 m on MPO.", "200G-DR4 covers building-scale 200G hops with the same MPO-12 discipline as 400G DR4.", ["MPO ribbon plant required", "4 W per end"]], ["optic", "200g", "singlemode", "dr4"]), cableType: "optic-dr", gbps: 200, maxReachM: 500, wattsPerEnd: 4, compatibleTech: ["eth-200", "roce", "ib-hdr"] }),
+  cb({ ...base$3("fs-optic-200g-fr4", "FS 200G-FR4 QSFP56 optic 2km", "fs", 2022, 550, 2, ["4x50G CWDM duplex optic for 2 km 200G spans.", "FR4 keeps 200G on ordinary duplex single-mode, ideal for campus fabric rings and DCI-lite links.", ["Duplex plant only", "Rarely needed inside one hall"]], ["optic", "200g", "singlemode", "fr4"]), cableType: "optic-fr", gbps: 200, maxReachM: 2e3, wattsPerEnd: 4.5, compatibleTech: ["eth-200", "roce"] }),
+  cb({ ...base$3("nvidia-linkx-aoc-200g-10m", "NVIDIA LinkX 200G AOC 10m", "nvidia", 2021.5, 350, 2, ["NVIDIA-qualified 200G AOC for ConnectX-6 Dx era clusters.", "LinkX parts carry NVIDIA interoperability validation, which matters for Quantum/RoCE certification support.", ["Brand premium over generic AOCs", "10 m class reach"]], ["aoc", "200g", "linkx"]), cableType: "aoc", gbps: 200, maxReachM: 10, wattsPerEnd: 3, compatibleTech: ["eth-200", "roce", "ib-hdr"] }),
+  cb({ ...base$3("molex-breakout-200g-2x100-dac", "QSFP56 200G to 2xQSFP28 breakout DAC 1m", "molex", 2022, 150, 1, ["Breakout copper: 200G port to two 100G hosts.", "Halves the leaf-port bill for 100G servers while the switch runs 200G silicon.", ["Host capped at 100G", "Breakout lane mapping must match switch config"]], ["dac", "200g", "breakout"]), cableType: "dac", gbps: 200, maxReachM: 1, wattsPerEnd: 0.6, compatibleTech: ["eth-200", "roce"] }),
+  cb({ ...base$3("fs-breakout-400g-4x100-dac", "QSFP-DD 400G to 4xQSFP28 breakout DAC 1.5m", "fs", 2022, 300, 1, ["Breakout copper: 400G port to four 100G servers.", "The classic way to run 100G server farms off 400G Tomahawk/Spectrum leaves at minimum cost per server port.", ["1.5 m: switch must sit mid-rack", "Four-trunk stiffness is a cable-management tax"]], ["dac", "400g", "breakout"]), cableType: "dac", gbps: 400, maxReachM: 1.5, wattsPerEnd: 1, compatibleTech: ["eth-400", "roce"] })
+];
+const CAT_CABLES_C = [
+  cb({ ...base$3("amphenol-acc-400g-3m", "Amphenol QSFP-DD 400G ACC 3m", "amphenol", 2022.5, 450, 1, ["Active-conditioned 400G copper for 3 m spans.", "400G PAM4 needs retimers past 2 m; ACCs keep copper economics for adjacent-rack hops.", ["2.5 W per end", "DSP adds per-link failure modes"]], ["acc", "400g", "copper"]), cableType: "acc", gbps: 400, maxReachM: 3, wattsPerEnd: 2.5, compatibleTech: ["eth-400", "roce", "ib-ndr"] }),
+  cb({ ...base$3("molex-breakout-400g-2x200-dac", "QSFP-DD 400G to 2xQSFP56 breakout DAC 1m", "molex", 2022.5, 280, 1, ["Breakout copper: 400G leaf port to two 200G hosts.", "Bridges 400G switch generations to 200G servers during fabric transitions.", ["Lane-mapping must match switch breakout config", "1 m reach only"]], ["dac", "400g", "breakout"]), cableType: "dac", gbps: 400, maxReachM: 1, wattsPerEnd: 1, compatibleTech: ["eth-400", "roce"] }),
+  cb({ ...base$3("fs-aoc-400g-5m", "FS QSFP-DD 400G AOC 5m", "fs", 2022, 380, 1, ["Short 400G AOC for in-rack and in-row hops.", "Buried optics beat ACC reach and add only ~4 W per end, the volume wiring for 400G rows.", ["Fixed length", "No connector cleaning possible"]], ["aoc", "400g", "optical"]), cableType: "aoc", gbps: 400, maxReachM: 5, wattsPerEnd: 4, compatibleTech: ["eth-400", "roce", "ib-ndr"] }),
+  cb({ ...base$3("nvidia-linkx-sr4-400g", "NVIDIA LinkX 400G-SR4 MMF optic 70m", "nvidia", 2021, 1600, 2, ["NVIDIA-qualified multimode 400G optic (8x50G lanes over MPO).", "SR-class LinkX optics pair with Spectrum/Quantum switches for short-reach AI fabrics on cheap multimode fiber.", ["Multimode plant: 70 m cap", "8 lanes need MPO-16 trunks"]], ["optic", "400g", "multimode", "linkx", "sr4"]), cableType: "optic-sr", gbps: 400, maxReachM: 70, wattsPerEnd: 3.5, compatibleTech: ["eth-400", "ib-ndr", "roce"] }),
+  cb({ ...base$3("nvidia-linkx-dr4-400g-500m", "NVIDIA LinkX 400G-DR4 SMF optic 500m", "nvidia", 2021.5, 1200, 2, ["LinkX 400G-DR4: 4x100G PAM4 over single-mode MPO to 500 m.", "The default NVIDIA-recommended optic for row-to-spine 400G runs; NVIDIA certification feeds Quantum/Spectrum RMA and support paths.", ["Single-vendor premium over generics", "MPO-12/16 single-mode plant required"]], ["optic", "400g", "singlemode", "linkx", "dr4"]), cableType: "optic-dr", gbps: 400, maxReachM: 500, wattsPerEnd: 4.5, compatibleTech: ["eth-400", "ib-ndr", "roce"] }),
+  cb({ ...base$3("nvidia-linkx-fr4-400g-2km", "NVIDIA LinkX 400G-FR4 SMF optic 2km", "nvidia", 2021.5, 1400, 2, ["LinkX 400G-FR4 duplex optic for 2 km runs.", "4x100G CWDM lambdas over ordinary duplex LC: the choice for building-to-building NVIDIA fabric extensions.", ["Reuses duplex fiber plant", "Highest-power 400G LinkX class at ~4 W"]], ["optic", "400g", "singlemode", "linkx", "fr4"]), cableType: "optic-fr", gbps: 400, maxReachM: 2e3, wattsPerEnd: 4, compatibleTech: ["eth-400", "roce", "spectrum-x"] }),
+  cb({ ...base$3("cisco-optic-400g-sr8-70m", "Cisco QSFP-DD 400G-SR8 optic 70m", "cisco", 2021, 1500, 2, ["Cisco multimode 400G optic: 8x50G PAM4 lanes.", "SR8 is the short-reach choice for Nexus-based AI fabrics on OM4 MPO trunks, with Cisco optics-OS integration (DOM, FEC tuning).", ["MPO-16 multimode plant", "70 m ceiling"]], ["optic", "400g", "multimode", "sr8"]), cableType: "optic-sr", gbps: 400, maxReachM: 70, wattsPerEnd: 3.5, compatibleTech: ["eth-400", "roce"] }),
+  cb({ ...base$3("cisco-optic-400g-fr4-2km", "Cisco QSFP-DD 400G-FR4 optic 2km", "cisco", 2021.5, 1600, 2, ["Cisco duplex 400G optic for 2 km campus links.", "FR4 keeps Nexus fabric rings on duplex single-mode with full Cisco telemetry integration.", ["Duplex plant only", "Priced for campus, not in-hall use"]], ["optic", "400g", "singlemode", "fr4"]), cableType: "optic-fr", gbps: 400, maxReachM: 2e3, wattsPerEnd: 4, compatibleTech: ["eth-400", "roce"] }),
+  cb({ ...base$3("arista-optic-400g-dr4-500m", "Arista 400G-DR4 optic 500m", "arista", 2021.5, 1100, 2, ["Arista-branded 400G-DR4 for EOS fabrics.", "Same 4x100G PAM4 single-mode recipe with Arista optics-OS support; buying vendor optics keeps EOS validation clean.", ["Vendor premium over FS/Innolight equivalents", "MPO plant needed"]], ["optic", "400g", "singlemode", "dr4"]), cableType: "optic-dr", gbps: 400, maxReachM: 500, wattsPerEnd: 4.5, compatibleTech: ["eth-400", "roce"] }),
+  cb({ ...base$3("eoptolink-optic-400g-sr8-70m", "Eoptolink 400G-SR8 optic 70m", "eoptolink", 2022.5, 950, 2, ["Volume-market multimode 400G optic from a top-tier Chinese module maker.", "Eoptolink SR8 undercut branded optics sharply after 2022, which is why hyperscaler 400G MMF fabrics got cheap fast.", ["Price erosion story: half of 2021 pricing", "Qualify vendors: batch variation exists"]], ["optic", "400g", "multimode", "sr8"]), cableType: "optic-sr", gbps: 400, maxReachM: 70, wattsPerEnd: 3.5, compatibleTech: ["eth-400", "roce", "ib-ndr"] }),
+  cb({ ...base$3("coherent-optic-400g-fr4-2km", "Coherent 400G-FR4 optic 2km", "coherent", 2022, 1500, 2, ["Coherent (II-VI/Finisar) 400G duplex optic.", "The Finisar lineage makes this the fleet-standard FR4 spare for multi-vendor 400G fabrics.", ["Brand safety for mixed-vendor fleets", "Duplex reach wasted in-hall"]], ["optic", "400g", "singlemode", "fr4"]), cableType: "optic-fr", gbps: 400, maxReachM: 2e3, wattsPerEnd: 4, compatibleTech: ["eth-400", "roce", "spectrum-x"] })
+];
+const CAT_CABLES_D = [
+  cb({ ...base$3("fs-optic-400g-lr4-10km", "FS 400G-LR4 optic 10km", "fs", 2023, 4500, 2, ["4x100G CWDM duplex optic for 10 km 400G spans.", "LR4 is the metro-campus 400G optic: two-fiber plant, 10 km, and 6-8 W per end that dwarfs in-hall optics.", ["Expensive per port", "10 km reach only pays off between buildings"]], ["optic", "400g", "singlemode", "lr4"]), cableType: "optic-fr", gbps: 400, maxReachM: 1e4, wattsPerEnd: 6.5, compatibleTech: ["eth-400", "roce"] }),
+  cb({ ...base$3("innolight-optic-400g-dr4-500m", "Innolight 400G-DR4 optic 500m", "innolight", 2023, 700, 2, ["Volume-market 400G-DR4 from the world's largest transceiver maker.", "Innolight scale drove 400G DR4 pricing toward 700 USD by 2023-24, reshaping hyperscaler fabric BOMs.", ["Sharpest price in the market", "Volume batches need incoming qualification"]], ["optic", "400g", "singlemode", "dr4"]), cableType: "optic-dr", gbps: 400, maxReachM: 500, wattsPerEnd: 4.5, compatibleTech: ["eth-400", "roce", "ib-ndr"] }),
+  cb({ ...base$3("fs-dac-800g-1m", "OSFP 800G DAC 1m", "fs", 2024.5, 550, 1, ["Passive 1 m twinax for 800G ports.", "At 800G passive copper survives barely a meter, which is why NVL-style racks put leaves within arm's reach of nodes.", ["1 m or less: layout pinning", "PAM4 112G lanes: only tier-1 cable plants"]], ["dac", "800g", "copper"]), cableType: "dac", gbps: 800, maxReachM: 1, wattsPerEnd: 1.2, compatibleTech: ["eth-800", "ib-xdr"] }),
+  cb({ ...base$3("te-acc-800g-3m", "TE Connectivity 800G ACC 3m", "te", 2024.5, 800, 2, ["Active copper for 800G in-row links.", "TE's connector and DSP integration stretches 800G copper to 3 m at a quarter of optic cost, the default NVL72-style cabling.", ["~4 W per end", "3 m keeps the whole fabric in one row"]], ["acc", "800g", "copper"]), cableType: "acc", gbps: 800, maxReachM: 3, wattsPerEnd: 4, compatibleTech: ["eth-800", "ib-xdr", "spectrum-x"] }),
+  cb({ ...base$3("fs-aoc-800g-5m", "FS OSFP 800G AOC 5m", "fs", 2024.75, 850, 2, ["Short 800G AOC for in-rack hops.", "AOCs skip the 16 W pluggable-800G tax: buried optics run near 6 W per end for rack-scale hops.", ["Fixed length", "Failure means whole-cable swap"]], ["aoc", "800g", "optical"]), cableType: "aoc", gbps: 800, maxReachM: 5, wattsPerEnd: 6, compatibleTech: ["eth-800", "ib-xdr"] }),
+  cb({ ...base$3("innolight-aoc-800g-15m", "Innolight 800G AOC 15m", "innolight", 2025, 1100, 2, ["Longer-reach 800G AOC for row-to-row hops.", "15 m AOCs cover adjacent-row 800G links without pluggable optics and their connector-loss headaches.", ["~8 W per end", "Cable bulk at 15 m is a routing exercise"]], ["aoc", "800g", "optical"]), cableType: "aoc", gbps: 800, maxReachM: 15, wattsPerEnd: 8, compatibleTech: ["eth-800", "ib-xdr", "spectrum-x"] }),
+  cb({ ...base$3("eoptolink-optic-800g-sr8-70m", "Eoptolink 800G-SR8 OSFP optic 70m", "eoptolink", 2024.75, 2400, 2, ["Multimode 800G optic: 8x100G PAM4 VCSEL lanes.", "SR8 keeps multimode economics alive at 800G; Eoptolink volume pricing came in well under branded equivalents by 2025.", ["~15 W per end: optics power matters", "MPO-16 multimode plant"]], ["optic", "800g", "multimode", "sr8"]), cableType: "optic-sr", gbps: 800, maxReachM: 70, wattsPerEnd: 15, compatibleTech: ["eth-800", "ib-xdr", "spectrum-x"] }),
+  cb({ ...base$3("coherent-optic-800g-dr8-500m", "Coherent 800G-DR8 optic 500m", "coherent", 2024.75, 3400, 3, ["8x100G PAM4 single-mode optic to 500 m.", "Coherent's Finisar-lineage DR8 is the mixed-fleet-safe 800G single-mode part for row-to-spine hops.", ["16 W per end", "MPO-16 single-mode ribbon plant"]], ["optic", "800g", "singlemode", "dr8"]), cableType: "optic-dr", gbps: 800, maxReachM: 500, wattsPerEnd: 16, compatibleTech: ["eth-800", "ib-xdr", "spectrum-x"] }),
+  cb({ ...base$3("arista-optic-800g-2fr4-2km", "Arista 800G-2xFR4 optic 2km", "arista", 2025, 4400, 3, ["Arista duplex 800G optic: two independent 400G FR4 sublinks.", "2xFR4 puts 800G on ordinary duplex fiber, letting EOS campus spines scale without ribbon rework.", ["Two optical submodules: priciest 800G class", "Breaks into 2x400G only with matching config"]], ["optic", "800g", "singlemode", "2fr4"]), cableType: "optic-fr", gbps: 800, maxReachM: 2e3, wattsPerEnd: 18, compatibleTech: ["eth-800", "spectrum-x"] }),
+  cb({ ...base$3("nvidia-linkx-2dr4-800g", "NVIDIA LinkX 800G-2xDR4 optic 500m", "nvidia", 2025, 3600, 3, ["OSFP 800G optic presenting two independent 400G-DR4 links.", "2xDR4 lets one 800G switch port feed two 400G fabric planes or hosts, halving switch-port cost in transitional fabrics.", ["Unverified: exact LinkX SKU string", "Sublinks must be configured as separate ports"]], ["optic", "800g", "singlemode", "2dr4", "linkx", "unverified"]), cableType: "optic-dr", gbps: 800, maxReachM: 500, wattsPerEnd: 16, compatibleTech: ["eth-800", "ib-xdr", "spectrum-x"] }),
+  cb({ ...base$3("nvidia-linkx-acc-800g-2m", "NVIDIA LinkX 800G ACC 2m", "nvidia", 2024.5, 700, 2, ["NVIDIA-qualified active copper for 800G rails.", "The LinkX ACC is the NVIDIA-validated in-rack cabling for Spectrum-X/Quantum-2 rails, with RMA support behind it.", ["2 m reach", "Unverified: exact P/N varies by OSFP vs QSFP-DD"]], ["acc", "800g", "linkx", "unverified"]), cableType: "acc", gbps: 800, maxReachM: 2, wattsPerEnd: 3.5, compatibleTech: ["eth-800", "ib-xdr", "spectrum-x"] }),
+  cb({ ...base$3("fs-breakout-800g-osfp-2x400-dac", "OSFP 800G to 2xQSFP112 breakout DAC 1m", "fs", 2024.5, 650, 1, ["Breakout copper: 800G port to two 400G hosts.", "Runs 400G CX-7 hosts off 800G Spectrum-4/Tomahawk-5 leaves, halving the leaf count during 800G transitions.", ["1 m: leaves must sit beside hosts", "Both sublinks must terminate in matching hosts"]], ["dac", "800g", "breakout"]), cableType: "dac", gbps: 800, maxReachM: 1, wattsPerEnd: 1.2, compatibleTech: ["eth-800", "ib-xdr"] })
+];
+const CAT_CABLES_E = [
+  cb({ ...base$3("molex-breakout-800g-osfp-4x200-dac", "OSFP 800G to 4xQSFP56-DD breakout DAC 1m", "molex", 2025, 700, 2, ["Breakout copper: 800G port to four 200G hosts.", "The widest breakout sold: feeds 200G storage or compute rails off 800G leaves, though cable bulk gets serious.", ["Unverified: narrow-market SKU", "Four-trunk stiffness"]], ["dac", "800g", "breakout", "unverified"]), cableType: "dac", gbps: 800, maxReachM: 1, wattsPerEnd: 1.2, compatibleTech: ["eth-800"] }),
+  cb({ ...base$3("fs-acc-1600g-2m", "OSFP224 1.6T ACC 2m", "fs", 2026.5, 1800, 3, ["Retimed copper for 1.6T in-rack links.", "224G lane signaling kills passive copper past ~1 m; ACC DSPs claw back to 2 m at a fraction of optic cost.", ["Unverified: 224G ACC is early hardware", "~5 W per end"]], ["acc", "1600g", "copper", "unverified"]), cableType: "acc", gbps: 1600, maxReachM: 2, wattsPerEnd: 5, compatibleTech: ["eth-1600", "ib-gdr"] }),
+  cb({ ...base$3("coherent-aoc-1600g-5m", "Coherent 1.6T AOC 5m", "coherent", 2026.5, 2600, 3, ["Integrated-optics 1.6T AOC for rack-scale hops.", "Burying the lasers avoids 25 W-class pluggable optics and connector margins that barely close at 224G lanes.", ["Unverified: first-gen part", "~12 W per end still lands in the power budget"]], ["aoc", "1600g", "optical", "unverified"]), cableType: "aoc", gbps: 1600, maxReachM: 5, wattsPerEnd: 12, compatibleTech: ["eth-1600", "ib-gdr"] }),
+  cb({ ...base$3("innolight-optic-1600g-dr8-500m", "Innolight 1.6T-DR8 optic 500m", "innolight", 2026.5, 5200, 3, ["8x200G PAM4 single-mode optic: the first 1.6T transceiver at volume.", "Innolight ships the bulk of early 1.6T DR8 for ConnectX-9/Quantum-X generation fabrics; 200G lanes run at the edge of signaling capability.", ["~24 W per end", "Tight margins: burn-in matters"]], ["optic", "1600g", "singlemode", "dr8"]), cableType: "optic-dr", gbps: 1600, maxReachM: 500, wattsPerEnd: 24, compatibleTech: ["eth-1600", "ib-gdr"] }),
+  cb({ ...base$3("eoptolink-optic-1600g-2fr4-2km", "Eoptolink 1.6T-2xFR4 optic 2km", "eoptolink", 2026.75, 5800, 3, ["Duplex 1.6T optic: two independent 800G FR4 sublinks.", "Keeps 1.6T on ordinary two-fiber plant for campus spines where ribbon rework is unthinkable.", ["Unverified: very early part", "Highest power draw of any pluggable (~26 W)"]], ["optic", "1600g", "singlemode", "2fr4", "unverified"]), cableType: "optic-fr", gbps: 1600, maxReachM: 2e3, wattsPerEnd: 26, compatibleTech: ["eth-1600", "spectrum-x"] }),
+  cb({ ...base$3("nvidia-linkx-1600g-2dr4", "NVIDIA LinkX 1.6T-2xDR4 optic 500m", "nvidia", 2026.75, 5600, 3, ["NVIDIA 1.6T optic split as two 800G-DR4 links.", "The Quantum-X/Spectrum-X photonics era pattern: one OSFP-XD port feeds two 800G planes, halving switch-port count again.", ["Unverified: roadmap optic", "Each sublink needs its own fabric plane"]], ["optic", "1600g", "singlemode", "2dr4", "linkx", "unverified"]), cableType: "optic-dr", gbps: 1600, maxReachM: 500, wattsPerEnd: 22, compatibleTech: ["eth-1600", "ib-gdr", "spectrum-x"] }),
+  cb({ ...base$3("amphenol-mpo16-om4-15m", "Amphenol MPO-16 OM4 trunk 15m", "amphenol", 2022, 180, 1, ["Passive 16-fiber multimode trunk feeding SR8 optics.", "Pre-terminated MPO trunks replace per-lane patching in SR8 fabrics; polarity (Method B/C) mistakes are the classic install bug.", ["Passive: 0 W", "One bad MPO ferrule kills a whole 400G link"]], ["mpo", "multimode", "trunk", "sr8"]), cableType: "optic-sr", gbps: 800, maxReachM: 15, wattsPerEnd: 0, compatibleTech: ["eth-400", "eth-800", "ib-ndr", "ib-xdr"] }),
+  cb({ ...base$3("amphenol-mpo16-os2-50m", "Amphenol MPO-16 OS2 trunk 50m", "amphenol", 2023, 260, 1, ["Single-mode 16-fiber ribbon trunk for cross-row DR8/SR8 runs.", "Ribbon single-mode trunks are how 800G fabrics cross rows without 16 individual patch cords; testing each fiber (MPO-pro) is mandatory.", ["Passive: 0 W", "Fiber-level fault isolation needs MPO test gear"]], ["mpo", "singlemode", "trunk", "dr8"]), cableType: "optic-dr", gbps: 800, maxReachM: 50, wattsPerEnd: 0, compatibleTech: ["eth-400", "eth-800", "ib-xdr"] }),
+  cb({ ...base$3("fs-mpo16-om4-30m", "FS MPO-16 OM4 trunk 30m", "fs", 2022.5, 200, 1, ["30 m multimode MPO trunk for hall-scale SR8 plants.", "The commodity version of the SR8 trunk plant: cheap enough to over-provision fiber so ports never strand on cable scarcity.", ["Passive: 0 W", "MMF attenuation: 70 m optic ceiling still applies"]], ["mpo", "multimode", "trunk"]), cableType: "optic-sr", gbps: 800, maxReachM: 30, wattsPerEnd: 0, compatibleTech: ["eth-400", "eth-800"] }),
+  cb({ ...base$3("fs-mpo12-om4-15m", "FS MPO-12 OM4 trunk 15m", "fs", 2019, 90, 1, ["12-fiber multimode trunk for 100G-SR4 era plants.", "The 100G-SR4 trunk pattern: 8 fibers live, 4 spare, one MPO instead of four duplex LC pairs.", ["Passive: 0 W", "Legacy geometry: not reusable for SR8/MPO-16"]], ["mpo", "multimode", "trunk", "sr4"]), cableType: "optic-sr", gbps: 100, maxReachM: 15, wattsPerEnd: 0, compatibleTech: ["eth-100", "ib-hdr"] }),
+  cb({ ...base$3("nv-nvlink4-harness", "NVIDIA NVLink4 GPU-NVSwitch copper harness", "nvidia", 2022.5, 1800, 4, ["The internal copper harness cabling each HGX H100 GPU board to its NVSwitch baseboard.", "HGX H100 boards carry 900 GB/s of NVLink4 per GPU across short precision twinax; the harness is why 8 GPUs form one coherent memory domain on one baseboard.", ["Unverified: internal part, sold only via integrators", "A failed harness partitions the GPU domain"]], ["nvlink", "copper", "scale-up", "h100-era"]), cableType: "nvlink-spine", gbps: 7200, maxReachM: 0.7, wattsPerEnd: 1, compatibleTech: ["nvlink4"] }),
+  cb({ ...base$3("nv-nvlink3-bridge", "NVIDIA NVLink3 2-GPU bridge (A100)", "nvidia", 2020.5, 350, 2, ["Passive bridge connecting two A100/HGX boards across all 12 NVLink3 links.", "The A100 scale-up topology: 600 GB/s per GPU realized with chunky passive bridges between adjacent SXM sockets, not cables to a switch.", ["Pairs only: domain size capped at 2 without NVSwitch", "Bridge seating errors cause silent link drops"]], ["nvlink", "copper", "scale-up", "a100-era"]), cableType: "nvlink-spine", gbps: 4800, maxReachM: 0.1, wattsPerEnd: 0, compatibleTech: ["nvlink3"] })
+];
+const CAT_CABLES_F = [
+  cb({ ...base$3("amphenol-power-c19-locking", "Amphenol locking IEC C19/C20 cord 3m", "amphenol", 2018, 45, 1, ["Twist-lock C19 power cord for PDUs feeding high-draw PSUs.", "Locking C19s stop the classic 2 a.m. incident: a server cord vibrated out of a PDU during a maintenance shuffle.", ["Rated 16 A / ~3.7 kW per circuit", "Cord density still breaks above ~20 kW per rack"]], ["power", "pdu", "c19"]), cableType: "power", gbps: 0, maxReachM: 3, wattsPerEnd: 0, compatibleTech: [] }),
+  cb({ ...base$3("gen-liquid-hose-1in", "Liquid cooling hose set 1in QD 10m", "generic", 2022, 150, 1, ["One-inch supply/return quick-disconnect hose set for lower-density DLC rows.", "Half-inch/1-inch loops carry roughly 20-40 kW per rack comfortably; the 2-inch sets are for NVL-class densities.", ["Lower flow: per-rack kW capped", "Still needs leak detection and dripless QDs"]], ["liquid", "dlc", "hose"]), cableType: "liquid-hose", gbps: 0, maxReachM: 10, wattsPerEnd: 0, compatibleTech: [] })
+];
+const RAW_CABLES = [
+  ...CAT_CABLES_A,
+  ...CAT_CABLES_B,
+  ...CAT_CABLES_C,
+  ...CAT_CABLES_D,
+  ...CAT_CABLES_E,
+  ...CAT_CABLES_F
+];
+const v$3 = (id, name, sells, summary) => ({
+  id,
+  name,
+  sells,
+  reliability: 0.92,
+  support: 0.88,
+  volumeDiscountPerDoublingPct: 4,
+  codex: { summary, explain: `${name} supplies interconnect hardware. Optics and cables are commodity-like, but batch quality and RMA speed decide fabric availability, so vendor mix matters even at scale.`, tradeoffs: ["Sharp pricing at volume", "Qualify vendors before fleet-wide rollout"], tags: [] }
+});
+const CAT_NIC_VENDORS = [
+  { ...v$3("fs", "FS.com", ["cable"], "Volume networking-components reseller: DACs, AOCs and transceivers at aggressive prices."), reliability: 0.88, support: 0.82 },
+  v$3("innolight", "Innolight", ["cable"], "World's largest optical transceiver maker; drives 400G/800G module pricing for hyperscalers."),
+  v$3("eoptolink", "Eoptolink", ["cable"], "Top-tier Chinese transceiver maker known for aggressive 400G/800G pricing."),
+  v$3("coherent", "Coherent (II-VI/Finisar)", ["cable"], "Finisar-lineage transceiver maker; the multi-vendor-safe optics brand."),
+  v$3("amphenol", "Amphenol", ["cable"], "First-tier connector and cable-assembly maker: DACs, MPO trunks and power cords."),
+  v$3("te", "TE Connectivity", ["cable"], "Connector giant with high-speed ACC/copper assemblies for AI racks."),
+  v$3("molex", "Molex", ["cable"], "Connector maker with AOC, breakout DAC and high-density cable assemblies."),
+  v$3("marvell", "Marvell", ["nic", "switch"], "Merchant silicon house: OCTEON DPUs and FastLinQ adapters behind OEM-ship NICs.")
+];
+const NIC_FIX = {
+  "nv-cx7-ocp3": { gbps: 400, ports: 2, tech: "eth-400" },
+  // CX-7 tops out at 400G aggregate
+  "nv-cx8-ocp3": { gbps: 800, ports: 2, tech: "eth-800" },
+  // CX-8 SuperNIC is 800G
+  "nv-bf3-supernic": { gbps: 400, ports: 1, tech: "eth-400" },
+  // BlueField-3 SuperNIC B3140H: 1 x 400G
+  "cb-p1800gd": { gbps: 800, ports: 1 },
+  // Thor Ultra: single 800G
+  "amd-elba": { gbps: 200, ports: 2, tech: "eth-200", availableFrom: 2021 },
+  // Pensando DSC-200 (2 x 100/200G class)
+  "amd-giglio": { gbps: 200, ports: 2, tech: "eth-200", availableFrom: 2023 },
+  "amd-pollara800": { gbps: 800, ports: 1, availableFrom: 2026.5 },
+  // Vulcano-class 800G UEC NIC (roadmap)
+  "cs-vic-15231": { gbps: 200, ports: 2 }
+  // 2 x 100G mLOM
+};
+const CAT_NICS = RAW_NICS.map((n) => NIC_FIX[n.id] ? { ...n, ...NIC_FIX[n.id], codex: { ...n.codex, tags: [...n.codex.tags ?? [], ...NIC_FIX[n.id].gbps ? [] : []] } } : n);
+const CAT_CABLES = RAW_CABLES.filter((c) => !/-mpo\d+-/.test(c.id));
+const sw$1 = (id, name, vendor, role, tech, launch, priceUSD, lead, ports, portGbps, capTbps, units, watts, summary, explain, tradeoffs, tags, opts = {}) => ({
+  id,
+  name,
+  vendor,
+  kind: "switch",
+  role,
+  tech,
+  availableFrom: launch,
+  priceUSD,
+  leadTimeMonths: lead,
+  portCount: ports,
+  portGbps,
+  capacityTbps: capTbps,
+  rackUnits: units,
+  watts,
+  cooling: ["air"],
+  features: tags,
+  ...opts,
+  codex: { summary, explain, tradeoffs, tags }
+});
+const CAT_SWITCHES_A = [
+  // ---------- NVIDIA Spectrum / Quantum ----------
+  sw$1(
+    "nv-sn5400",
+    "NVIDIA Spectrum-4 SN5400 (64x400G)",
+    "nvidia",
+    "scale-out",
+    "eth-400",
+    2024.75,
+    85e3,
+    5,
+    64,
+    400,
+    25.6,
+    1,
+    700,
+    "Spectrum-4 SN5400: 64x 400GbE OSFP in 1U (25.6 Tb/s).",
+    "Same Spectrum-4 generation as the SN5600 but pinned at 400G per port, so teams standardised on 400G optics still get the Spectrum-4 telemetry and RoCEv2 stack.",
+    ["400G optics keep the BOM cheaper than 800G", "Half the fabric bandwidth of SN5600"],
+    ["spectrum-4", "400g", "roce", "ethernet"]
+  ),
+  sw$1(
+    "nv-sn4700",
+    "NVIDIA Spectrum-3 SN4700 (32x400G)",
+    "nvidia",
+    "scale-out",
+    "eth-400",
+    2021.5,
+    6e4,
+    4,
+    32,
+    400,
+    12.8,
+    1,
+    450,
+    "Spectrum-3 SN4700: 32x 400GbE OSFP in 1U (12.8 Tb/s).",
+    "Spectrum-3 brought OSFP cages, enhanced RoCEv2 tuning and telemetry; SN4700 powered many pre-Spectrum-4 GPU backends and storage fabrics.",
+    ["Cheaper 400G entry than Spectrum-4", "Half the radix of 64-port Spectrum-4 boxes"],
+    ["spectrum-3", "400g", "roce"]
+  ),
+  sw$1(
+    "nv-sn4600c",
+    "NVIDIA Spectrum-3 SN4600C (64x200G + 400G uplinks)",
+    "nvidia",
+    "scale-out",
+    "eth-200",
+    2020.5,
+    7e4,
+    4,
+    64,
+    200,
+    16,
+    1,
+    500,
+    "Spectrum-3 SN4600C: 64x 200GbE QSFP56 plus 400G-capable cage group in 1U.",
+    "The 200G-dense Spectrum-3 SKU: leaf for 200G-connected nodes or storage clusters, with breakout-capable cages for fat uplinks toward the spine.",
+    ["Dense cheap 200G ports", "Only a few true 400G uplinks"],
+    ["spectrum-3", "200g", "roce", "unverified"]
+  ),
+  sw$1(
+    "nv-sn3700",
+    "NVIDIA Spectrum-2 SN3700 (32x200G)",
+    "nvidia",
+    "scale-out",
+    "eth-200",
+    2019.5,
+    45e3,
+    4,
+    32,
+    200,
+    6.4,
+    1,
+    380,
+    "Spectrum-2 SN3700: 32x 200GbE QSFP56 in 1U (6.4 Tb/s).",
+    "Spectrum-2 moved Mellanox Ethernet to 200G SerDes with scale-out RDMA; SN3700 served GPU-adjacent storage and early RoCE fabrics.",
+    ["Mature and cheap", "Superseded by Spectrum-3/4 for AI fabrics"],
+    ["spectrum-2", "200g", "roce"],
+    { eolAfter: 2025 }
+  ),
+  sw$1(
+    "nv-sn3420",
+    "NVIDIA Spectrum-2 SN3420 (48x100G + 6x200G)",
+    "nvidia",
+    "frontend",
+    "eth-100",
+    2019.5,
+    38e3,
+    4,
+    48,
+    100,
+    6,
+    1,
+    320,
+    "Spectrum-2 SN3420: dense 100G frontend/storage leaf with 200G uplinks.",
+    "The 100G-dense Spectrum-2 SKU for NFS/S3 frontends and tenant networks, with a few 200G links up to the spine.",
+    ["Dense cheap 100G ports", "Not an AI-fabric part"],
+    ["spectrum-2", "100g", "frontend", "unverified"],
+    { eolAfter: 2024.5, features: ["100g-leaf", "6x200g-uplink", "roce", "vxlan"] }
+  ),
+  sw$1(
+    "nv-qm9790",
+    "NVIDIA Quantum-2 QM9790 (144x400G NDR IB)",
+    "nvidia",
+    "scale-out",
+    "ib-ndr",
+    2022.5,
+    78e3,
+    5,
+    144,
+    400,
+    57.6,
+    3,
+    1e3,
+    "Quantum-2 QM9790: 144x 400Gb/s NDR InfiniBand ports (32 OSFP cages) in 3U, 57.6 Tb/s.",
+    "High-radix Quantum-2: same NDR silicon as the QM9700 with 2.25x the ports, letting a fat-tree tier collapse from many 64-port switches into a handful; SHARPv3 collectives in-network.",
+    ["Fewer switches per fat-tree stage than QM9700", "OSFP breakout cabling everywhere"],
+    ["infiniband", "ndr", "sharp", "scale-out"]
+  ),
+  sw$1(
+    "nv-qm8790",
+    "NVIDIA Quantum QM8790 (80x200G HDR IB)",
+    "nvidia",
+    "scale-out",
+    "ib-hdr",
+    2019.5,
+    46e3,
+    4,
+    80,
+    200,
+    16,
+    3,
+    500,
+    "Quantum QM8790: 80x 200Gb/s HDR ports in a managed switch, 16 Tb/s.",
+    "HDR big-radix sibling of the QM8700; the standard spine tier for 200G InfiniBand fat-trees in 2020-2023 AI clusters.",
+    ["High radix per chassis", "HDR generation - NDR is now the standard"],
+    ["infiniband", "hdr", "scale-out", "unverified"]
+  ),
+  sw$1(
+    "nv-q3200",
+    "NVIDIA Quantum-X800 QM3200 (64x800G XDR IB)",
+    "nvidia",
+    "scale-out",
+    "ib-xdr",
+    2024.75,
+    12e4,
+    6,
+    64,
+    800,
+    51.2,
+    1,
+    800,
+    "Quantum-X800 QM3200: 64x 800Gb/s XDR InfiniBand in 1U, 51.2 Tb/s.",
+    "Compact Quantum-X800: XDR doubles per-port rate over NDR so GB300-era backends keep 400G-era port counts while doubling bandwidth.",
+    ["800G optics are expensive", "XDR ecosystem still ramping"],
+    ["infiniband", "xdr", "unverified"]
+  ),
+  sw$1(
+    "nv-sn2201",
+    "NVIDIA SN2201 (48x1G + 8x10G OOB)",
+    "nvidia",
+    "oob",
+    "eth-100",
+    2022.5,
+    2800,
+    2,
+    48,
+    1,
+    0.13,
+    1,
+    60,
+    "NVIDIA SN2201: 48x 1GbE RJ45 plus 10G SFP+ uplinks, an out-of-band management switch.",
+    "Purpose-built OOB ToR for GPU clusters: BMC/IPMI and switch management ride a separate plane so a fabric meltdown never locks you out.",
+    ["Cheap isolation of the management plane", "No use outside management"],
+    ["oob", "management", "unverified"],
+    { features: ["48x1g-rj45", "8x10g-sfp"] }
+  ),
+  // ---------- Arista ----------
+  sw$1(
+    "ar-7050x4",
+    "Arista 7050X4 32x100G leaf (Trident 3)",
+    "arista",
+    "frontend",
+    "eth-100",
+    2019,
+    14e3,
+    3,
+    32,
+    100,
+    4,
+    1,
+    220,
+    "Arista 7050X4: 32x 100GbE Trident 3 leaf for frontend and modest backends.",
+    "The volume merchant-silicon leaf of 2019-2021; single-image EOS and CloudVision telemetry made it the default enterprise DC leaf.",
+    ["Cheap per 100G port", "Outgrown by 200/400G AI fabrics"],
+    ["trident3", "100g", "leaf", "frontend"],
+    { eolAfter: 2024.5 }
+  ),
+  sw$1(
+    "ar-7060x4",
+    "Arista 7060X4 32x400G (Tomahawk 3)",
+    "arista",
+    "scale-out",
+    "eth-400",
+    2020.5,
+    52e3,
+    4,
+    32,
+    400,
+    12.8,
+    1,
+    480,
+    "Arista 7060X4: 32x 400GbE QSFP-DD, 12.8 Tb/s Tomahawk 3 leaf/spine.",
+    "The first 400G merchant-silicon box; early 400G fabrics and storage backends used it before Tomahawk 4 doubled density.",
+    ["Early-400G power and thermals", "Superseded by 7060X5/X6"],
+    ["tomahawk3", "400g", "leaf"],
+    { eolAfter: 2024 }
+  ),
+  sw$1(
+    "ar-7060x5",
+    "Arista 7060X5 64x400G (Tomahawk 4)",
+    "arista",
+    "scale-out",
+    "eth-400",
+    2021.5,
+    85e3,
+    4,
+    64,
+    400,
+    25.6,
+    1,
+    560,
+    "Arista 7060X5: 64x 400GbE in 1U at 25.6 Tb/s.",
+    "Tomahawk 4 density at 400G made this the workhorse AI leaf/spine for 100-400G-era clusters before 51.2T silicon landed.",
+    ["Proven volume platform", "No 800G upgrade path"],
+    ["tomahawk4", "400g", "leaf", "spine"]
+  ),
+  sw$1(
+    "ar-7060dx5",
+    "Arista 7060DX5-64S 64x800G (Tomahawk 5)",
+    "arista",
+    "scale-out",
+    "eth-800",
+    2023.5,
+    115e3,
+    5,
+    64,
+    800,
+    51.2,
+    1,
+    700,
+    "Arista 7060DX5-64S: disaggregated 51.2 Tb/s Tomahawk 5 switch, 64x 800GbE OSFP in 1U.",
+    "Disaggregated design (separate CPU card, passive port-side cooling) targets AI leaf economics: 800G radix without Spectrum-X pricing.",
+    ["800G optics dominate the BOM", "Merchant silicon - no NVIDIA telemetry stack"],
+    ["tomahawk5", "800g", "leaf", "ai"]
+  ),
+  sw$1(
+    "ar-7170",
+    "Arista 7170-32C (Jericho2 router, MACsec)",
+    "arista",
+    "frontend",
+    "eth-100",
+    2019.5,
+    26e3,
+    3,
+    32,
+    100,
+    3.2,
+    1,
+    260,
+    "Arista 7170-32C: 32x 100GbE Jericho2 configurable router with MACsec.",
+    "Configurable-config router family: Jericho2 deep buffers plus a programmable pipeline for WAN/peering and MACsec-secured links.",
+    ["Router features at switch-class power", "100G-era radix only"],
+    ["jericho2", "router", "macsec"],
+    { eolAfter: 2025.5 }
+  ),
+  sw$1(
+    "ar-7260x3",
+    "Arista 7260CX3 32x100G leaf (Trident 3)",
+    "arista",
+    "frontend",
+    "eth-100",
+    2017.5,
+    19e3,
+    3,
+    32,
+    100,
+    3.6,
+    1,
+    240,
+    "Arista 7260X3: the 2017 100G Trident 3 leaf generation.",
+    "Everywhere in older cloud DCs and common on the secondary market; fine for frontend, too shallow for modern backends.",
+    ["Cheap refresh 100G leaf", "End-of-life platform"],
+    ["trident3", "100g", "leaf", "unverified"],
+    { eolAfter: 2023 }
+  ),
+  sw$1(
+    "ar-7280r3",
+    "Arista 7280R3-32C4 (Jericho3 router)",
+    "arista",
+    "scale-out",
+    "eth-400",
+    2021.5,
+    68e3,
+    4,
+    32,
+    400,
+    12.8,
+    1,
+    520,
+    "Arista 7280R3-32C4: 32x 400GbE Jericho3 deep-buffered router.",
+    "R3 fixed routers add Jericho3 deep buffers for lossless convergence, telemetry and MACsec; used at cloud edges and some AI storage tiers.",
+    ["Deep buffers absorb microbursts", "Router pricing per port"],
+    ["jericho3", "400g", "router"]
+  ),
+  sw$1(
+    "ar-7280r4a",
+    "Arista 7280R4A-48 (Jericho3-AI leaf)",
+    "arista",
+    "scale-out",
+    "eth-400",
+    2023.75,
+    95e3,
+    5,
+    48,
+    400,
+    28.8,
+    1,
+    600,
+    "Arista 7280R4A: fixed 400G AI leaf on Jericho3-AI silicon.",
+    "R4A brings Jericho3-AI (28.8 Tb/s, in-network collectives) into a fixed leaf form for EOS-based AI fabrics.",
+    ["Jericho3-AI features in 1U", "Fewer 800G options than 7388X5/7060X6"],
+    ["jericho3-ai", "400g", "ai", "unverified"]
+  ),
+  sw$1(
+    "ar-7388x5",
+    "Arista 7388X5 AI leaf (Tomahawk 5)",
+    "arista",
+    "scale-out",
+    "eth-800",
+    2023.5,
+    88e3,
+    5,
+    64,
+    400,
+    25.6,
+    1,
+    550,
+    "Arista 7388X5: Tomahawk 5 AI-leaf family announced with the EOS AI fabric stack.",
+    "Pairs 51.2T merchant silicon with AI leaf features (adaptive routing, RDMA-aware queuing) as the Spectrum-X alternative.",
+    ["Merchant-silicon economics", "Exact port splits vary by SKU"],
+    ["tomahawk5", "ai", "leaf", "unverified"]
+  ),
+  sw$1(
+    "ar-7800r3",
+    "Arista 7800R3-8 modular spine (Jericho3)",
+    "arista",
+    "scale-out",
+    "eth-400",
+    2021.5,
+    26e4,
+    6,
+    192,
+    400,
+    76.8,
+    13,
+    4e3,
+    "Arista 7800R3: modular Jericho3 router chassis (8-slot shown; a 16-slot also exists) for spine and peering tiers.",
+    "R3 modular replaced the 7500R: deep-buffer Jericho3 line cards and big radix for cloud peering and large fat-tree spines.",
+    ["Chassis capex and floor space", "Overkill below hyperscale"],
+    ["jericho3", "modular", "spine", "router", "unverified"]
+  ),
+  sw$1(
+    "ar-7700r4",
+    "Arista 7700R4-4 Distributed Etherlink Switch",
+    "arista",
+    "scale-out",
+    "eth-800",
+    2024,
+    52e4,
+    6,
+    144,
+    800,
+    115.2,
+    11,
+    4500,
+    "Arista 7700R4-4: Distributed Etherlink Switch with 115.2 Tb/s of 800G switching for AI clusters.",
+    "DES spreads one giant switch across modules linked by private high-speed interconnect, cutting spine cabling versus a two-tier fat tree; aimed at 100k+ GPU fabrics.",
+    ["Radical topology needing Arista end-to-end", "Premium pricing"],
+    ["jericho3-ai", "800g", "des", "ai", "unverified"]
+  ),
+  // ---------- Cisco ----------
+  sw$1(
+    "cs-n93600gx",
+    "Cisco Nexus 93600YC-GX (48x25G + 6x400G)",
+    "cisco",
+    "frontend",
+    "eth-400",
+    2019.5,
+    32e3,
+    3,
+    6,
+    400,
+    3.6,
+    1,
+    330,
+    "Cisco Nexus 93600YC-GX: 48x 1/10/25G host ports plus 6x 400G QSFP-DD uplinks in 1U.",
+    "The 400G-uplink member of the 9300-GX line: host ports stay 25G for legacy tenants while uplinks jump to 400G.",
+    ["Bridges legacy 25G hosts to 400G spines", "Only six 400G ports"],
+    ["nexus", "gx", "400g", "frontend"],
+    { eolAfter: 2024.5, features: ["nexus", "vxlan", "evpn", "48x25g-host", "6x400g-uplink", "telemetry"] }
+  ),
+  sw$1(
+    "cs-n93180fx3",
+    "Cisco Nexus 93180YC-FX3 (48x25G + 6x100G)",
+    "cisco",
+    "frontend",
+    "eth-100",
+    2019.5,
+    18e3,
+    3,
+    6,
+    100,
+    1.8,
+    1,
+    260,
+    "Cisco Nexus 93180YC-FX3: 48x 1/10/25G host ports plus 6x 100G uplinks in 1U.",
+    "The volume 25G ToR of the Nexus 9000 line: VXLAN/EVPN, INT telemetry and dense 25G host connectivity at merchant-silicon prices.",
+    ["Cheap dense 25G", "25/100G ceiling - not for AI backends"],
+    ["nexus", "fx3", "25g", "tor", "frontend"],
+    { eolAfter: 2025.5, features: ["nexus", "vxlan", "evpn", "48x25g-host", "6x100g-uplink"] }
+  ),
+  sw$1(
+    "cs-n9332d",
+    "Cisco Nexus 9332D-GX2B (32x400G)",
+    "cisco",
+    "scale-out",
+    "eth-400",
+    2022,
+    78e3,
+    4,
+    32,
+    400,
+    12.8,
+    1,
+    450,
+    "Cisco Nexus 9332D-GX2B: 32x 400GbE QSFP-DD in 1U (12.8 Tb/s).",
+    "GX2-generation compact 400G switch on the CloudScale ASIC; aimed at leaf stages of 400G AI fabrics and storage backends.",
+    ["Compact 400G radix", "Smaller ecosystem than mainstream Nexus 9300"],
+    ["nexus", "gx2", "400g", "ai"]
+  ),
+  sw$1(
+    "cs-n9364d",
+    "Cisco Nexus 9364D-GX2A (64x400G)",
+    "cisco",
+    "scale-out",
+    "eth-400",
+    2022.5,
+    95e3,
+    4,
+    64,
+    400,
+    25.6,
+    1,
+    560,
+    "Cisco Nexus 9364D-GX2A: 64x 400GbE in 1U, 25.6 Tb/s.",
+    "The dense 400G AI-leaf answer: 64 QSFP-DD ports, NX-OS VXLAN/EVPN plus a low-latency mode; pairs with Nexus 9500/9800 spines.",
+    ["Full 400G radix in 1U", "CloudScale ASIC - feature split vs Silicon One models"],
+    ["nexus", "gx2", "400g", "ai", "leaf"]
+  ),
+  sw$1(
+    "cs-n9508",
+    "Cisco Nexus 9508 modular (8-slot, 36x400G cards)",
+    "cisco",
+    "scale-out",
+    "eth-400",
+    2019,
+    39e4,
+    6,
+    288,
+    400,
+    115.2,
+    13,
+    4500,
+    "Cisco Nexus 9508: 8-slot modular Nexus with X9736C-FX3 400G line cards (288x 400G total).",
+    "The classic modular spine: fabric modules, redundant supervisors and mixed 100G/400G cards make it the default large-tenant core.",
+    ["Chassis economics need filling", "13U and heavy cabling"],
+    ["nexus", "9500", "modular", "spine", "400g"]
+  ),
+  sw$1(
+    "cs-n9808",
+    "Cisco Nexus 9808 modular (8-slot 400G)",
+    "cisco",
+    "scale-out",
+    "eth-400",
+    2021.5,
+    48e4,
+    6,
+    256,
+    400,
+    102.4,
+    8,
+    6e3,
+    "Cisco Nexus 9808: 8-slot 400G modular switch of the 9800 generation.",
+    "The 9800 line (9804/9808) refreshed modular Cisco switching for 400G-now/800G-later fabrics with deeper buffers for AI leaf-spine stages.",
+    ["Future-proof modular core", "Expensive versus fixed-form spines"],
+    ["nexus", "9800", "modular", "400g", "unverified"]
+  ),
+  sw$1(
+    "cs-8201",
+    "Cisco 8201 (Silicon One 400G)",
+    "cisco",
+    "scale-out",
+    "eth-400",
+    2022,
+    45e3,
+    4,
+    24,
+    400,
+    10.4,
+    1,
+    400,
+    "Cisco 8201: Silicon One G100 fixed router/switch (24x 400G + 8x 100G class) for fabric and WAN edges.",
+    "Part of the Cisco 8000 family running IOS-XR on Silicon One: one silicon story across routing and switching with strong streaming telemetry.",
+    ["Single-silicon routing + switching", "Younger ecosystem than NX-OS"],
+    ["silicon-one", "400g", "router", "unverified"],
+    { features: ["silicon-one", "ios-xr", "24x400g", "8x100g"] }
+  ),
+  sw$1(
+    "cs-8501",
+    "Cisco Nexus 8501 (Silicon One dense 800G)",
+    "cisco",
+    "scale-out",
+    "eth-800",
+    2024.5,
+    12e4,
+    5,
+    32,
+    800,
+    25.6,
+    1,
+    700,
+    "Cisco Nexus 8501: Silicon One-based dense 800G-class Nexus for AI backends.",
+    "The newest Nexus generation pushes Silicon One capacity toward 800G AI leaves/spines inside the NX-OS operational model.",
+    ["Very new - thin field history", "Positioning still settling versus Nexus 9800"],
+    ["silicon-one", "800g", "ai", "unverified"]
+  ),
+  sw$1(
+    "cs-8812",
+    "Cisco 8812 (12-slot Silicon One chassis)",
+    "cisco",
+    "scale-out",
+    "eth-800",
+    2023.5,
+    9e5,
+    6,
+    384,
+    800,
+    307.2,
+    12,
+    12e3,
+    "Cisco 8812: 12-slot Silicon One router chassis of the 8000 series.",
+    "8812/8818 chassis scale Silicon One line cards toward hundreds of Tb/s for core routing, DCI and the largest AI spines.",
+    ["Huge capex and power", "Needs carrier-class planning"],
+    ["silicon-one", "modular", "router", "unverified"]
+  ),
+  sw$1(
+    "cs-n93108tcfx3",
+    "Cisco Nexus 93108TC-FX3 (48x10G copper OOB)",
+    "cisco",
+    "oob",
+    "eth-100",
+    2020.5,
+    12e3,
+    2,
+    48,
+    10,
+    0.68,
+    1,
+    220,
+    "Cisco Nexus 93108TC-FX3: 48x 1/10GBASE-T copper plus 8x SFP+ (10/25G), the DC copper ToR/OOB switch.",
+    "RJ45 10G copper keeps management, BMC and legacy hosts on cheap structured cabling; the default OOB and frontend ToR in Cisco shops.",
+    ["Copper is cheap cabling but reach-limited", "Not a fabric switch"],
+    ["nexus", "fx3", "10g", "oob", "tor"],
+    { features: ["48x10gbase-t", "8x10-25g-sfp"] }
+  )
+];
+const s = (id, name, vendor, role, tech, ports, portGbps, tbps, u, watts, priceUSD, from, summary, explain, tradeoffs, tags, extra = {}) => ({
+  id,
+  name,
+  vendor,
+  kind: "switch",
+  role,
+  tech,
+  portCount: ports,
+  portGbps,
+  capacityTbps: tbps,
+  rackUnits: u,
+  watts,
+  priceUSD,
+  leadTimeMonths: 3,
+  availableFrom: from,
+  cooling: ["air"],
+  inNetworkCompute: false,
+  features: [],
+  codex: { summary, explain, tradeoffs, tags },
+  ...extra
+});
+const v$2 = (id, name, reliability, support, discount, summary, explain, tradeoffs, tags, sells = ["switch"]) => ({
+  id,
+  name,
+  sells,
+  reliability,
+  support,
+  volumeDiscountPerDoublingPct: discount,
+  codex: { summary, explain, tradeoffs, tags }
+});
+const CAT_SWITCHES_B = [
+  s(
+    "jnp-qfx5120-48y",
+    "Juniper QFX5120-48Y (48x25G + 8x100G)",
+    "juniper",
+    "frontend",
+    "eth-100",
+    48,
+    25,
+    2,
+    1,
+    360,
+    26e3,
+    2019.3,
+    "25G top-of-rack switch for general datacenter leaf tiers.",
+    "Tomahawk+-class fixed switch with 48 SFP28 server ports plus 8x100G uplinks, run under Junos ELS for EVPN-VXLAN leaf roles.",
+    ["No 100G host ports; uplinks oversubscribe server bandwidth", "Junos feature licenses add cost vs whitebox"],
+    ["25g", "tor", "frontend", "evpn"],
+    { leadTimeMonths: 4 }
+  ),
+  s(
+    "jnp-qfx5120-32c",
+    "Juniper QFX5120-32C (32x100G)",
+    "juniper",
+    "frontend",
+    "eth-100",
+    32,
+    100,
+    3.2,
+    1,
+    450,
+    45e3,
+    2019,
+    "Compact 100G leaf switch for small EVPN fabrics.",
+    "Tomahawk-class pipeline with 32 QSFP28 ports; a common dense leaf or small-spine building block in Juniper DC designs.",
+    ["Shallow buffers for bursty storage traffic", "Fixed form factor: growth means forklift replacement"],
+    ["100g", "leaf", "evpn"],
+    { leadTimeMonths: 4 }
+  ),
+  s(
+    "jnp-qfx5130-48c",
+    "Juniper QFX5130-48C (48x25G + 8x100G)",
+    "juniper",
+    "frontend",
+    "eth-100",
+    48,
+    25,
+    2,
+    1,
+    400,
+    3e4,
+    2020.2,
+    "Newer-generation 25G TOR succeeding the QFX5120-48Y.",
+    "ELS-based fixed switch with 48x1/10/25G plus 8x100G; Broadcom-silicon pipeline refreshed for ZR optics and deeper MAC tables.",
+    ["25G-class in a 100G-era catalogue", "Juniper premium over equivalent ODM"],
+    ["25g", "tor", "frontend", "unverified"],
+    { leadTimeMonths: 4 }
+  ),
+  s(
+    "jnp-qfx5230-64od",
+    "Juniper QFX5230-64OD (64x400G OSFP)",
+    "juniper",
+    "scale-out",
+    "eth-400",
+    64,
+    400,
+    25.6,
+    1,
+    1100,
+    95e3,
+    2022,
+    "400G backend fabric switch for AI leaf/spine tiers.",
+    "Tomahawk 4-class OSFP platform; 64x400G with breakout to 128x200G/256x100G for rail-optimized AI backend fabrics.",
+    ["OSFP optics cost more and are scarcer than QSFP-DD", "Juniper price premium over the same whitebox"],
+    ["400g", "ai-fabric", "scale-out", "unverified"],
+    { leadTimeMonths: 5 }
+  ),
+  s(
+    "jnp-qfx5240-64od",
+    "Juniper QFX5240-64OD (64x800G OSFP)",
+    "juniper",
+    "scale-out",
+    "eth-800",
+    64,
+    800,
+    51.2,
+    2,
+    2e3,
+    145e3,
+    2022.6,
+    "51.2T Tomahawk5 switch for AI spine and mega-fabric tiers.",
+    "64x800G OSFP (or 128x400G breakout) on Tomahawk 5 silicon; Juniper flagship for non-blocking AI backend fabrics.",
+    ["800G optics dominate BOM cost", "Needs liquid-ready high-airflow racks at full draw"],
+    ["800g", "tomahawk5", "ai-fabric"],
+    { leadTimeMonths: 5 }
+  ),
+  s(
+    "jnp-qfx5700",
+    "Juniper QFX5700 multirate modular fabric switch",
+    "juniper",
+    "scale-out",
+    "eth-400",
+    128,
+    400,
+    51.2,
+    2,
+    2600,
+    26e4,
+    2023.5,
+    "Modular multirate switch for mixed 100-800G datacenter fabrics.",
+    "Card-based QFX5700 slots Tomahawk5-class modules into one chassis, letting one fabric mix 100/200/400/800G without forklifts.",
+    ["Chassis cost and lead time exceed fixed 64-port SKUs", "Overkill below roughly 10 racks"],
+    ["modular", "multirate", "scale-out", "unverified"],
+    { leadTimeMonths: 6 }
+  ),
+  s(
+    "jnp-ptx10001-36mr",
+    "Juniper PTX10001-36MR (36x400G)",
+    "juniper",
+    "frontend",
+    "eth-400",
+    36,
+    400,
+    14.4,
+    2,
+    1500,
+    19e4,
+    2019.5,
+    "Compact datacenter-interconnect router with 36x400G magnified ports.",
+    "Junos EVO platform on Juniper Express silicon; magnified (MR) optics collapse parallel lanes so one 2U chassis lands multi-hundred-GbE transit and peering.",
+    ["Router feature set is overkill for pure leaf-spine switching", "Premium price vs equivalent switching capacity"],
+    ["dci", "router", "peering", "400g"],
+    { leadTimeMonths: 6 }
+  ),
+  s(
+    "cel-ds3000",
+    "Celestica DS3000 (48x25G + 8x100G)",
+    "celestica",
+    "oob",
+    "eth-100",
+    48,
+    25,
+    2,
+    1,
+    180,
+    9e3,
+    2018.5,
+    "Compact open 25G TOR frequently repurposed as management/OOB fabric.",
+    "Tomahawk-class ODM box, SONiC/Cumulus friendly; hyperscalers run it both as TOR and as cheap resilient out-of-band switches.",
+    ["ODM support is self-service unless a NOS contract is bought", "25G silicon dated for new builds"],
+    ["oob", "odm", "sonic", "unverified"]
+  ),
+  s(
+    "cel-ds4000",
+    "Celestica DS4000 (32x100G)",
+    "celestica",
+    "frontend",
+    "eth-100",
+    32,
+    100,
+    3.2,
+    1,
+    320,
+    16e3,
+    2017.5,
+    "100G whitebox leaf switch from the hyperscaler SONiC fleet.",
+    "Trident/Tomahawk-generation 1RU with 32 QSFP28; a workhorse of large open-network fleets and lab SONiC testbeds.",
+    ["No vendor software support without a NOS partner", "Older pipeline lacks newer telemetry features"],
+    ["whitebox", "sonic", "100g", "unverified"]
+  ),
+  s(
+    "cel-ds5000",
+    "Celestica DS5000 (64x100G)",
+    "celestica",
+    "scale-out",
+    "eth-100",
+    64,
+    100,
+    6.4,
+    1,
+    500,
+    25e3,
+    2018.8,
+    "Tomahawk3-generation 100G fabric whitebox.",
+    "64x100G (or 128x50G breakout) leaf/spine platform widely qualified in hyperscaler SONiC fleets at a fraction of OEM pricing.",
+    ["You own the NOS and its bugs", "100G-only ports in a 400G era"],
+    ["whitebox", "sonic", "100g", "unverified"]
+  ),
+  s(
+    "cel-ds6000",
+    "Celestica DS6000 (128x100G)",
+    "celestica",
+    "scale-out",
+    "eth-100",
+    128,
+    100,
+    12.8,
+    2,
+    900,
+    45e3,
+    2020,
+    "Dense 128x100G Tomahawk4-generation fabric whitebox.",
+    "Dual-bank 2RU design giving 12.8T of 100G; used as compact spine where QSFP28 optics stock already exists.",
+    ["No native 400G ports", "2RU dense 100G runs hot; watch airflow"],
+    ["whitebox", "sonic", "100g", "unverified"]
+  ),
+  s(
+    "ec-as7726-32x",
+    "Edgecore AS7726-32X (32x100G)",
+    "edgecore",
+    "frontend",
+    "eth-100",
+    32,
+    100,
+    3.2,
+    1,
+    300,
+    14e3,
+    2017.2,
+    "Tomahawk-generation open 100G TOR/spine from Accton.",
+    "OCP-recognized 32 QSFP28 box, a staple of open SONiC/Cumulus deployments and small AI lab fabrics.",
+    ["Software support sold separately", "Superseded silicon, mostly residual stock"],
+    ["ocp", "sonic", "100g"],
+    { eolAfter: 2024 }
+  ),
+  s(
+    "ec-as9726-64xo",
+    "Edgecore AS9726-64XO (64x800G OSFP)",
+    "edgecore",
+    "scale-out",
+    "eth-800",
+    64,
+    800,
+    51.2,
+    1,
+    1900,
+    55e3,
+    2023,
+    "Tomahawk5 open 800G switch for AI backend fabrics.",
+    "64 OSFP800 on Tomahawk 5 with SONiC support service; the open alternative to OEM 51.2T SKUs at roughly half price.",
+    ["You integrate SONiC/optics yourself", "OSFP800 optics are the dominant cost"],
+    ["tomahawk5", "ai-fabric", "sonic", "unverified"],
+    { leadTimeMonths: 4 }
+  ),
+  s(
+    "ec-as9736-64dpo",
+    "Edgecore AS9736-64DPO (64x800G, deep buffer)",
+    "edgecore",
+    "scale-out",
+    "eth-800",
+    64,
+    800,
+    51.2,
+    2,
+    2200,
+    65e3,
+    2023.5,
+    "Deep-buffer Tomahawk5 variant tuned for storage and bursty east-west AI traffic.",
+    "Same 64x800G pipeline as AS9726 but with large packet-buffer SKU (DPO) that absorbs incasts from NVMe-oF and collective offloads.",
+    ["Buffer does not fix long-lived congestion", "2RU and higher power draw"],
+    ["deep-buffer", "tomahawk5", "ai-fabric", "unverified"],
+    { leadTimeMonths: 4 }
+  ),
+  s(
+    "ec-as9817-64o",
+    "Edgecore AS9817-64O (128x800G, Tomahawk6-class)",
+    "edgecore",
+    "scale-out",
+    "eth-800",
+    128,
+    800,
+    102.4,
+    2,
+    3e3,
+    85e3,
+    2024.5,
+    "First-wave 102.4T open switch on Tomahawk 6 silicon.",
+    "128 OSFP800 (breakout to 256x400G) targeting next-gen AI spines; early units ship with SONiC builds co-developed with Broadcom.",
+    ["102.4T optics ecosystem still maturing", "Power/cooling near liquid-cooling threshold"],
+    ["tomahawk6", "ai-fabric", "unverified"],
+    { leadTimeMonths: 6 }
+  ),
+  s(
+    "del-z9332f",
+    "Dell PowerSwitch Z9332F-ON (32x400G OSFP)",
+    "dell",
+    "scale-out",
+    "eth-400",
+    32,
+    400,
+    12.8,
+    1,
+    1100,
+    75e3,
+    2019.3,
+    "Tomahawk3-class 400G backend switch native to Microsoft fleets.",
+    "32 OSFP400 plus 4x100G; sold with Dell OS10 or SONiC support and used as the classic Azure 400G leaf/spine.",
+    ["OSFP optics pricier than QSFP-DD", "OS10 end-of-life pushes buyers onto SONiC"],
+    ["400g", "ai-fabric", "sonic"]
+  ),
+  s(
+    "del-z9432f",
+    "Dell PowerSwitch Z9432F-ON (32x400G + 16x100G)",
+    "dell",
+    "scale-out",
+    "eth-400",
+    32,
+    400,
+    14.4,
+    1,
+    1300,
+    95e3,
+    2021.2,
+    "Tomahawk4 backend switch mixing 400G fabric ports with 100G host ports.",
+    "32 OSFP400 for leaf/spine links plus 16 SFP56 100G host-facing ports, letting one box serve both rails in storage fabrics.",
+    ["Mixed-port designs complicate optics inventory", "Not a clean fit for pure 800G-era spines"],
+    ["400g", "scale-out", "unverified"],
+    { leadTimeMonths: 4 }
+  ),
+  s(
+    "del-z9664f",
+    "Dell PowerSwitch Z9664F-ON (64x400G OSFP)",
+    "dell",
+    "scale-out",
+    "eth-400",
+    64,
+    400,
+    25.6,
+    1,
+    1400,
+    12e4,
+    2022,
+    "Tomahawk4 64x400G fabric switch for denser AI backends.",
+    "Doubling of the Z9332F port count on Tomahawk 4; the higher-radix 400G spine for rail-optimized cluster designs.",
+    ["64 OSFP in 1RU needs high-airflow racks", "Same OSFP optics premium"],
+    ["400g", "spine", "scale-out", "unverified"],
+    { leadTimeMonths: 5 }
+  ),
+  s(
+    "del-z9864f",
+    "Dell PowerSwitch Z9864F-ON (64x800G OSFP)",
+    "dell",
+    "scale-out",
+    "eth-800",
+    64,
+    800,
+    51.2,
+    2,
+    2200,
+    165e3,
+    2023,
+    "Tomahawk5 51.2T switch for AI spine tiers.",
+    "64 OSFP800 (128x400G breakout) on Tomahawk 5 with SONiC or Dell Enterprise SONiC images for AI backends.",
+    ["800G optics dominate cost", "2RU high-power draw strains air-cooled racks"],
+    ["800g", "tomahawk5", "ai-fabric"]
+  ),
+  s(
+    "del-s5232f",
+    "Dell PowerSwitch S5232F-ON (32x100G)",
+    "dell",
+    "frontend",
+    "eth-100",
+    32,
+    100,
+    3.2,
+    1,
+    340,
+    34e3,
+    2018.3,
+    "Tomahawk 100G leaf for storage and frontend fabrics.",
+    "32 QSFP28 plus a handful of breakout ports; the common Dell 100G TOR/leaf SKU in general-purpose datacenters.",
+    ["Shallow buffers for bursty NVMe traffic", "100G-era, superseded by 400G Z-series"],
+    ["100g", "leaf", "frontend"]
+  ),
+  s(
+    "del-s5248f",
+    "Dell PowerSwitch S5248F-ON (48x25G + 8x100G)",
+    "dell",
+    "frontend",
+    "eth-100",
+    48,
+    25,
+    2,
+    1,
+    260,
+    22e3,
+    2020,
+    "25G TOR with 100G uplinks for general compute rows.",
+    "48 SFP28 server ports plus 100G QSFP28 uplinks; Dell workhorse TOR priced under equivalent OEM leaf SKUs.",
+    ["25G host ports limit newer 100G NICs", "Compact 1RU thermals at full PoE-like loads"],
+    ["25g", "tor", "frontend", "unverified"]
+  ),
+  s(
+    "del-s5296f",
+    "Dell PowerSwitch S5296F-ON (96x40G + 8x100G)",
+    "dell",
+    "frontend",
+    "eth-100",
+    96,
+    40,
+    4,
+    1,
+    500,
+    38e3,
+    2017,
+    "High-port-count 40G aggregation switch for legacy rows.",
+    "96 SFP+/SFP28 multirate ports plus 8 QSFP28 uplinks on Tomahawk+-class silicon; end-of-sale as fleets move to 100/400G.",
+    ["40G-era optics ecosystem fading", "Aggregation role replaced by 400G leaf designs"],
+    ["40g", "aggregation", "legacy", "unverified"],
+    { eolAfter: 2024 }
+  ),
+  s(
+    "del-n3248te",
+    "Dell PowerSwitch N3248TE-ON (48x1G + 4x10G)",
+    "dell",
+    "oob",
+    "eth-100",
+    48,
+    1,
+    0.1,
+    1,
+    70,
+    4e3,
+    2019.5,
+    "48-port 1G switch used for out-of-band management networks.",
+    "Copper RJ45 access ports with 4 SFP+ uplinks; the cheap, boring, essential switch that keeps BMCs reachable when the fabric melts.",
+    ["1G copper only - no SFP host ports", "Not for data-plane use"],
+    ["oob", "1g", "management"]
+  ),
+  s(
+    "aru-cx8325-32c",
+    "HPE Aruba CX 8325-32C (32x100G)",
+    "aruba",
+    "frontend",
+    "eth-100",
+    32,
+    100,
+    3.2,
+    1,
+    380,
+    48e3,
+    2018.7,
+    "100G leaf/spine running Aruba AOS-CX.",
+    "Trident3-class fixed switch under AOS-CX with REST/Netconf automation; common in HPE-campus and HPC storage fabrics.",
+    ["AOS-CX licensing on advanced features", "Enterprise pricing over whitebox equivalents"],
+    ["100g", "aoscx", "leaf"]
+  ),
+  s(
+    "aru-cx8325-48y8c",
+    "HPE Aruba CX 8325-48Y8C (48x25G + 8x100G)",
+    "aruba",
+    "frontend",
+    "eth-100",
+    48,
+    25,
+    2,
+    1,
+    320,
+    34e3,
+    2018.7,
+    "25G TOR with 100G uplinks under AOS-CX.",
+    "48 SFP28 plus 8 QSFP28; the default Aruba datacenter TOR, strong on telemetry and zero-touch provisioning.",
+    ["25G host ports cap 100G NIC deployments", "Aruba support contracts add real cost"],
+    ["25g", "tor", "aoscx"]
+  ),
+  s(
+    "aru-cx8360-48y4c",
+    "HPE Aruba CX 8360-48Y4C (48x25G + 4x100G)",
+    "aruba",
+    "frontend",
+    "eth-100",
+    48,
+    25,
+    1.6,
+    1,
+    280,
+    26e3,
+    2019.8,
+    "Compact mid-tier datacenter TOR below the 8325.",
+    "Trident3-class 1RU with 48x25G and 4x100G for branch-DC and edge fabrics that still want AOS-CX tooling.",
+    ["Half the uplink capacity of the 8325-48Y8C", "Not suited to AI backend roles"],
+    ["25g", "edge", "aoscx", "unverified"]
+  ),
+  s(
+    "aru-cx10000-48y4c",
+    "HPE Aruba CX 10000-48Y4C (48x25G + 4x100G)",
+    "aruba",
+    "frontend",
+    "eth-100",
+    48,
+    25,
+    1.6,
+    1,
+    350,
+    55e3,
+    2021.5,
+    "Trident4 switch with an on-switch telemetry processing CPU.",
+    "The CX 10000 pairs a Trident4 pipeline with an on-board telemetry processor that streams per-flow analytics without external taps.",
+    ["Telemetry premium buys little in plain L2 roles", "25G host ports; uplinks only 4x100G"],
+    ["telemetry", "trident4", "aoscx", "unverified"]
+  ),
+  s(
+    "aru-cx6300-48g",
+    "HPE Aruba CX 6300M 48G (48x1G + 4x10G)",
+    "aruba",
+    "oob",
+    "eth-100",
+    48,
+    1,
+    0.1,
+    1,
+    80,
+    3500,
+    2020.3,
+    "1G access switch pressed into OOB-management duty.",
+    "Modular AOS-CX access line; the 48-port copper model with SFP+ uplinks is a standard management-fabric choice in HPE shops.",
+    ["1G copper only", "Access-oriented features you pay for but never use in OOB"],
+    ["oob", "1g", "management"]
+  ),
+  s(
+    "hpe-slingshot-rosetta",
+    "HPE Slingshot Rosetta switch (64x200G)",
+    "hpe",
+    "scale-out",
+    "eth-200",
+    64,
+    200,
+    12.8,
+    1,
+    1400,
+    18e4,
+    2019.7,
+    "Slingshot fabric switch with adaptive routing and in-network collectives.",
+    "Cray-developed Rosetta silicon drives 64x200G ports with per-packet adaptive routing, dynamic congestion control and offloaded collective acceleration for HPC/AI cabinets.",
+    ["Effectively locked to HPE EX cabinets and Slingshot NICs", "Sold via systems, not à la carte"],
+    ["slingshot", "hpc", "adaptive-routing", "in-network-collectives"],
+    { leadTimeMonths: 8, inNetworkCompute: true, allocationPerQuarter: 200, features: ["adaptive-routing", "in-network-collectives", "congestion-control"] }
+  ),
+  s(
+    "hpe-slingshot-rosetta2",
+    "HPE Slingshot Rosetta 2 switch (64x400G)",
+    "hpe",
+    "scale-out",
+    "eth-400",
+    64,
+    400,
+    25.6,
+    1,
+    1800,
+    22e4,
+    2025,
+    "Second-generation Slingshot switch doubling per-port bandwidth.",
+    "Rosetta 2 lifts ports to 400G (25.6T) with the same adaptive-routing and in-network collective model, feeding Shasta/EX generation systems.",
+    ["Slingshot port rates need matching Slingshot NICs", "Proprietary fabric vs open 400G Ethernet"],
+    ["slingshot", "hpc", "adaptive-routing", "unverified"],
+    { leadTimeMonths: 9, inNetworkCompute: true, features: ["adaptive-routing", "in-network-collectives", "congestion-control"] }
+  ),
+  s(
+    "bc-th3-ref",
+    "Broadcom Tomahawk 3 whitebox reference (32x400G)",
+    "broadcom",
+    "scale-out",
+    "eth-400",
+    32,
+    400,
+    12.8,
+    1,
+    1e3,
+    22e3,
+    2018.8,
+    "Reference design behind the first 400G switch wave.",
+    "Tomahawk 3 (BCM56880) delivers 12.8T as 32 OSFP400 or 128x100G breakouts; ODMs clone this reference into most 400G whiteboxes.",
+    ["Broadcom sells silicon - support means NOS partner contracts", "First-gen 400G optics ran hot and pricey"],
+    ["tomahawk3", "reference", "400g"]
+  ),
+  s(
+    "bc-th4-ref",
+    "Broadcom Tomahawk 4 whitebox reference (64x400G)",
+    "broadcom",
+    "scale-out",
+    "eth-400",
+    64,
+    400,
+    25.6,
+    1,
+    1200,
+    38e3,
+    2019.9,
+    "Tomahawk 4 reference: the workhorse of hyperscaler AI backends.",
+    "25.6T of 400G (128x100G breakouts) in 1RU; Azure-class AI leaf/spine switches are mostly this reference with a logo on it.",
+    ["Deep-buffer variants vary by ODM implementation", "No native 800G ports"],
+    ["tomahawk4", "reference", "400g"]
+  ),
+  s(
+    "bc-th5-ref",
+    "Broadcom Tomahawk 5 whitebox reference (64x800G)",
+    "broadcom",
+    "scale-out",
+    "eth-800",
+    64,
+    800,
+    51.2,
+    2,
+    2e3,
+    7e4,
+    2022.8,
+    "Tomahawk 5 reference design: 51.2T of 800G for AI spines.",
+    "64 OSFP800 (128x400G) with HBM-free deep buffers and improved telemetry; basis of most OEM 51.2T switches shipped since 2023.",
+    ["800G optics dominate BOM", "2RU, near the air-cooling ceiling"],
+    ["tomahawk5", "reference", "800g"]
+  ),
+  s(
+    "bc-jericho3ai-ref",
+    "Broadcom Jericho3-AI whitebox reference (AI backend)",
+    "broadcom",
+    "scale-out",
+    "eth-400",
+    32,
+    400,
+    12.8,
+    1,
+    1100,
+    11e4,
+    2023,
+    "Jericho3-AI reference: huge-radix deep-buffer fabric for very large AI clusters.",
+    "Jericho3-AI combines deep buffers with fabric expansion toward tens of thousands of endpoints in two-tier designs, targeting AI/storage backends that choke shallow-buffer switches.",
+    ["Expensive per port vs plain Tomahawk", "Deep buffers mask congestion instead of removing it"],
+    ["jericho", "deep-buffer", "ai-fabric", "unverified"],
+    { leadTimeMonths: 6 }
+  )
+];
+const CAT_SWITCH_VENDORS = [
+  v$2(
+    "juniper",
+    "Juniper Networks",
+    0.9,
+    0.86,
+    3,
+    "Networking vendor spanning datacenter switching, routing and AI fabrics.",
+    "Junos/EVO one-image consistency from QFX TORs to PTX DCI routers; strong routing heritage for peering and DCI tiers.",
+    ["Junos complexity vs open NOS alternatives", "Feature licensing and support add cost"],
+    ["routing", "evpn", "mpls", "dci"]
+  ),
+  v$2(
+    "celestica",
+    "Celestica",
+    0.82,
+    0.62,
+    5,
+    "ODM building hyperscaler-qualified whitebox switches and servers.",
+    "Celestica DS-series Tomahawk/Jericho platforms ship NOS-less; software comes via SONiC/Cumulus contracts you arrange yourself.",
+    ["Self-managed software stack", "Limited enterprise support without third parties"],
+    ["whitebox", "odm", "sonic"]
+  ),
+  v$2(
+    "edgecore",
+    "Edgecore Networks (Accton)",
+    0.82,
+    0.65,
+    5,
+    "Open-network switch brand covering OCP and AI backends.",
+    "Broad Tomahawk/Jericho portfolio with optional SONiC support services; the default choice for open AI fabric builds.",
+    ["Software support is an add-on", "Hardware vendor neutral - you pick the NOS"],
+    ["ocp", "sonic", "whitebox"]
+  ),
+  v$2(
+    "aruba",
+    "HPE Aruba Networking",
+    0.88,
+    0.9,
+    3,
+    "HPE networking arm for datacenter and campus switching.",
+    "AOS-CX on Broadcom silicon with strong automation/telemetry; HPE also sells the proprietary Slingshot HPC fabric via systems.",
+    ["Enterprise pricing premium", "Slingshot fabric locked to HPE systems"],
+    ["aoscx", "evpn", "telemetry"]
+  )
 ];
 const cdx$2 = ([summary, explain, tradeoffs, tags]) => ({ summary, explain, tradeoffs, tags });
 const base$2 = (id, name, v2, from, price, lead, c) => ({ id, name, vendor: v2, availableFrom: from, priceUSD: price, leadTimeMonths: lead, codex: cdx$2(c) });
-const co$2 = (o) => ({ kind: "cooling", ...o });
+const co$2 = (o2) => ({ kind: "cooling", ...o2 });
 const coo = (t, serves, temp, inst) => (id, name, v2, price, kw, wpk, lead, c, from = 2020) => co$2({ ...base$2(id, name, v2, from, price, lead, c), coolingType: t, capacityKW: kw, wattsPerKW: wpk, serves, supplyTempC: temp, installMonths: inst });
 const crac = coo("crah", "air", 22, 1);
 const door = coo("rdhx", "air", 18, 0.25);
@@ -5048,7 +6769,7 @@ const twr = coo("cooling-tower", "air", 25, 3);
 const cc = coo("cooling-tower", "dlc", 32, 3);
 const tank = coo("immersion-tank", "immersion", 45, 2);
 const plate = coo("cold-plate-loop", "dlc", 32, 0.25);
-const CAT_COOLING = [
+const RAW_COOLING = [
   // ---- Vertiv (Liebert) ----
   crac("vt-pdx-30", "Vertiv Liebert PDX 30 kW CRAC", "vertiv", 38e3, 30, 35, 2, ["Packaged 30 kW direct-expansion CRAC with air-cooled condenser.", "DX CRACs are self-contained: refrigerant circuit and condenser in one unit, no chilled-water plant required.", ["No plant to build: power, duct and go", "Compressor power makes PUE poor in heat"]]),
   crac("vt-pdx-60", "Vertiv Liebert PDX 60 kW CRAC", "vertiv", 62e3, 60, 35, 2, ["60 kW step of the Liebert PDX DX CRAC range (air/glycol/water-cooled variants).", "Bigger frames share the same iCOM controls; pick water-cooled variants when a condenser loop already exists.", ["Familiar service footprint worldwide", "Still 1.2-1.4 kW electrical per kW at part load"]]),
@@ -5182,10 +6903,11 @@ const CAT_COOLING_VENDORS = [
   v$1("lu-ve", "LU-VE", ["cooling"], "Italian heat-exchanger maker: dry coolers and condenser coils."),
   v$1("thermokey", "Thermokey", ["cooling"], "Value-tier coils and dry coolers for budget heat-rejection plants.")
 ];
+const CAT_COOLING = RAW_COOLING.map((c) => c.coolingType === "crah" && /\bDX\b|PDX|DSE|CRAC/.test(c.name) && c.wattsPerKW < 120 ? { ...c, wattsPerKW: /free|adiabatic|AFC|DSE/i.test(c.name) ? 180 : 280 } : c);
 const cdx$1 = ([summary, explain, tradeoffs]) => ({ summary, explain, tradeoffs, tags: ["expansion"] });
 const base$1 = (id, name, vendor, from, price, lead, c) => ({ id, name, vendor, availableFrom: from, priceUSD: price, leadTimeMonths: lead, codex: cdx$1(c) });
-const pw$1 = (o) => ({ kind: "power", ...o });
-const co$1 = (o) => ({ kind: "cooling", ...o });
+const pw$1 = (o2) => ({ kind: "power", ...o2 });
+const co$1 = (o2) => ({ kind: "cooling", ...o2 });
 const gen = (id, name, v2, price, kw, lead, c, from = 2020) => pw$1({ ...base$1(id, name, v2, from, price, lead, c), powerType: id.startsWith("bloom") ? "gas-turbine" : "genset", capacityKW: kw, efficiency: 0.96, installMonths: 3 });
 const EXP2_POWER = [
   gen("cat-3516-2500", "Caterpillar 3516 Diesel Genset (2.5 MW)", "caterpillar", 92e4, 2500, 6, ["Cat 3516: the classic 2.5 MW data-centre diesel standby set.", "Caterpillar dominates datacenter standby power: Cat 3500-series sets start in about 10 seconds and take full load in one step. You need fuel storage, emissions permits and monthly load tests.", ["Proven, fast start, strong dealer service", "Diesel permits and fuel logistics"]]),
@@ -5278,7 +7000,7 @@ const cdx = ([summary, explain, t]) => ({ summary, explain, tradeoffs: t ?? ["Ch
 const base = (id, name, vendor, from, price, lead, c) => ({ id, name, vendor, availableFrom: from, priceUSD: price, leadTimeMonths: lead, codex: cdx(c) });
 const L40S = NVIDIA_ACCELERATORS.find((a) => a.id === "nv-l40s");
 const H100 = NVIDIA_ACCELERATORS.find((a) => a.id === "nv-h100-sxm");
-const pcieAccel = (o) => ({ ...L40S, ...o });
+const pcieAccel = (o2) => ({ ...L40S, ...o2 });
 const EXP_ACCELERATORS = [
   pcieAccel({
     ...base("nv-l4", "L4 24GB (72 W low-profile)", "nvidia", 2023.2, 2700, 2, ["Single-slot, 72 W inference card that fits 1U servers.", "Passively cooled and tiny, the L4 is the density king for small-model serving, video and embeddings. It has no NVLink and only 24 GB, so large LLMs do not fit.", ["Best tokens per watt for small models", "24 GB caps model size; no scale-up"]]),
@@ -5350,7 +7072,7 @@ const EXP_ACCELERATORS = [
   }
 ];
 const AMD7742 = { kind: "cpu", arch: "x86" };
-const cpu = (o) => ({ ...AMD7742, ...o });
+const cpu = (o2) => ({ ...AMD7742, ...o2 });
 const EXP_CPUS = [
   cpu({
     ...base("amd-epyc-9124", "AMD EPYC 9124 (16-core Genoa, GPU-host value)", "amd", 2022.9, 1083, 2, ["16-core Genoa with all 128 PCIe5 lanes at 200 W: the budget GPU-host CPU.", "A GPU server needs lanes and memory channels, not cores. This part keeps the full I/O of Genoa at one fifth of the price of a 96-core chip, so it minimises $/GPU for inference trays.", ["Cheapest way to get 128 Gen5 lanes", "Few cores: data loading and tokenisation can bottleneck"]]),
@@ -5394,7 +7116,7 @@ const EXP_CPUS = [
     pcieLanes: 128
   })
 ];
-const nic = (o) => ({ kind: "nic", features: ["rdma"], ...o });
+const nic = (o2) => ({ kind: "nic", features: ["rdma"], ...o2 });
 const EXP_NICS = [
   nic({
     ...base("gen-ocp-nic-50", "OCP NIC 3.0 2x25G (front-end)", "generic", 2020, 320, 1, ["Cheap dual-port 25G OCP NIC for the front-end network.", "Management, datasets and inference traffic rarely need 400G. A cheap NIC saves money but cannot feed GPU-to-GPU collectives.", ["Great for front-end and inference ingress", "Useless as a training back-end"]]),
@@ -5419,7 +7141,7 @@ const EXP_NICS = [
     features: ["rdma", "gpudirect"]
   })
 ];
-const sw = (o) => ({ kind: "switch", cooling: ["air"], inNetworkCompute: false, ...o });
+const sw = (o2) => ({ kind: "switch", cooling: ["air"], inNetworkCompute: false, ...o2 });
 const EXP_SWITCHES = [
   sw({
     ...base("cl-ds5000-sonic", "Celestica DS5000 64x400G (SONiC)", "generic", 2023, 42e3, 3, ["Open-networking 51.2 Tb/s-class white-box switch running SONiC.", "Hyperscalers buy white-box Tomahawk switches for half the price and run SONiC. You save capex but own the software, tuning and bug fixes.", ["About half the price of branded Ethernet", "You are your own support team"]]),
@@ -5466,7 +7188,7 @@ const EXP_SWITCHES = [
     features: []
   })
 ];
-const pw = (o) => ({ kind: "power", ...o });
+const pw = (o2) => ({ kind: "power", ...o2 });
 const EXP_POWER = [
   pw({
     ...base("gen-ats-1600", "Automatic Transfer Switch (1600 A / 1 MW)", "eaton", 2020, 85e3, 3, ["Swaps the hall between utility and generator.", "Without an ATS a utility outage is a hard stop. The ATS detects loss, starts the generator and transfers when voltage is stable.", ["Single point of failure unless duplicated", "Needed for any real backup plan"]]),
@@ -5511,7 +7233,7 @@ const EXP_POWER = [
     installMonths: 4
   })
 ];
-const co = (o) => ({ kind: "cooling", ...o });
+const co = (o2) => ({ kind: "cooling", ...o2 });
 const EXP_COOLING = [
   co({
     ...base("gen-crac-dx-60", "CRAC DX unit (60 kW)", "generic", 2020, 38e3, 2, ["Self-contained DX air conditioner for small rooms.", "No chilled water needed, so it is quick to deploy, but compressor power is high (poor PUE).", ["Easy install", "Inefficient"]]),
@@ -5541,7 +7263,7 @@ const EXP_COOLING = [
     installMonths: 2
   })
 ];
-const ss = (o) => ({ kind: "storage", ...o });
+const ss = (o2) => ({ kind: "storage", ...o2 });
 const EXP_STORAGE = [
   ss({
     ...base("weka-pod-nvme", "WEKA NVMe parallel FS pod (8U)", "weka", 2022, 78e4, 4, ["Software-defined parallel filesystem on NVMe nodes.", "Delivers hundreds of GB/s to GPU clients over RDMA. Software-licensed, so it runs on commodity servers.", ["Fast and flexible", "Licence is a recurring cost"]]),
@@ -5571,16 +7293,27 @@ const EXP_STORAGE = [
     watts: 900
   })
 ];
-const mem$1 = (o) => ({ kind: "memory", ...o });
+const mem$1 = (o2) => ({ kind: "memory", ...o2 });
 const EXP_MEMORY = [
   mem$1({ ...base("sam-ddr5-4800-32", "Samsung DDR5-4800 RDIMM 32GB", "samsung", 2022, 230, 1, ["Entry DDR5 DIMM for cost-sensitive hosts.", "Enough for inference hosts that do not cache datasets.", ["Cheap", "Low capacity"]]), type: "ddr5", capacityGB: 32, speedMTs: 4800, watts: 8 }),
   mem$1({ ...base("sam-ddr5-5600-128", "Samsung DDR5-5600 RDIMM 128GB", "samsung", 2023.5, 1400, 2, ["128GB DDR5 for memory-hungry hosts.", "Useful for CPU offload and KV-cache spill; costs more per GB.", ["High capacity per slot", "Higher $/GB"]]), type: "ddr5", capacityGB: 128, speedMTs: 5600, watts: 12 })
 ];
-const nv = (o) => ({ kind: "nvme", ...o });
+const nv = (o2) => ({ kind: "nvme", ...o2 });
 const EXP_NVME = [
   nv({ ...base("gen-nvme-boot-960", "Boot NVMe 960 GB (M.2)", "generic", 2020, 140, 1, ["Small boot drive for the OS image.", "Keeps the host alive when the big drives are busy with checkpoints.", ["Cheap", "Little capacity"]]), capacityTB: 0.96, readGBs: 3.5, writeGBs: 1.5, pcieGen: 4, watts: 6 })
 ];
-const _v = [...VENDORS$1, ...EXP2_VENDORS, ...CAT_POWER_VENDORS, ...CAT_COOLING_VENDORS];
+const _v = [...VENDORS$1, ...EXP2_VENDORS, ...CAT_POWER_VENDORS, ...CAT_STORAGE_VENDORS, ...CAT_SWITCH_VENDORS, ...CAT_NIC_VENDORS, ...OEM_VENDORS, ...CAT_COOLING_VENDORS];
+const SW_FIX = {
+  "nv-sn4600c": { portCount: 64, portGbps: 100, tech: "eth-100" },
+  "cs-n93180fx3": { portCount: 48, portGbps: 25 },
+  "cs-n93600gx": { portCount: 28, portGbps: 100 }
+};
+const fixSwitch = (x) => {
+  const y = { ...x, ...SW_FIX[x.id] ?? {} };
+  const calc = y.portCount * y.portGbps / 1e3;
+  return Math.abs(calc - y.capacityTbps) / Math.max(calc, 0.01) > 0.12 && calc >= 1 ? { ...y, capacityTbps: Math.round(calc * 100) / 100 } : y;
+};
+const CAT_SWITCHES = [...CAT_SWITCHES_A, ...CAT_SWITCHES_B].map(fixSwitch);
 const VENDORS = _v.filter((x, i) => _v.findIndex((y) => y.id === x.id) === i);
 const ALL_ITEMS = [
   ...NVIDIA_ACCELERATORS,
@@ -5620,7 +7353,14 @@ const ALL_ITEMS = [
   ...EXP2_COOLING,
   ...EXP2_UPLINKS,
   ...CAT_POWER,
-  ...CAT_COOLING
+  ...CAT_COOLING,
+  ...CAT_STORAGE_SYSTEMS,
+  ...CAT_MEMORY,
+  ...CAT_NVME,
+  ...CAT_RACKS,
+  ...CAT_NICS,
+  ...CAT_CABLES,
+  ...CAT_SWITCHES
 ];
 const BY_ID = new Map(ALL_ITEMS.map((i) => [i.id, i]));
 const getItem = (id) => BY_ID.get(id);
@@ -5744,7 +7484,7 @@ function validateTray(design, get) {
   }
   const chassis = chassisItem;
   stats.costUSD = chassis.priceUSD;
-  const slotByKind = new Map(chassis.slots.map((s) => [s.kind, s]));
+  const slotByKind = new Map(chassis.slots.map((s2) => [s2.kind, s2]));
   const filled = /* @__PURE__ */ new Map();
   const seenAccels = /* @__PURE__ */ new Set();
   const issues = [];
@@ -5906,7 +7646,7 @@ function validateRack(design, trays, get) {
             chassis.id
           ));
         }
-        if (!rack.hasBusbar && !chassis.slots.some((s) => s.kind === "psu")) {
+        if (!rack.hasBusbar && !chassis.slots.some((s2) => s2.kind === "psu")) {
           issues.push(err(
             "RACK_TRAY_NEEDS_BUSBAR",
             `${chassis.name} trays carry no PSUs — they expect 48V from the rack busbar, and the ${rack.name} has none. Busbar-fed trays need an ORv3/MGX-style rack with power shelves.`,
@@ -5980,10 +7720,11 @@ function validateRack(design, trays, get) {
       rack.id
     ));
   }
-  if (stats.kW > rack.maxKW) {
+  const maxKW = rack.maxKW + (design.coolingInterface === "rdhx" && rack.cooling.includes("rdhx") ? 20 : 0);
+  if (stats.kW > maxKW) {
     issues.push(err(
       "RACK_POWER",
-      `Rack draws ~${stats.kW.toFixed(1)} kW but the ${rack.name} is rated ${rack.maxKW} kW. Rack power is limited by feed/breakers and how much heat its cooling path removes — either thin the rack or move to a higher-density rack.`,
+      `Rack draws ~${stats.kW.toFixed(1)} kW but the ${rack.name} is rated ${maxKW} kW${maxKW > rack.maxKW ? " with a rear-door heat exchanger" : ""}. Rack power is limited by feed/breakers and how much heat its cooling path removes — either thin the rack or move to a higher-density rack.`,
       rack.id
     ));
   }
@@ -6053,12 +7794,23 @@ function validateHall(hall, racks, get) {
 function computePUE(hall, get) {
   const itKW = hall.itPowerKW;
   if (itKW <= 0) return 1;
-  let coolingElecKW = 0;
-  for (const [id, count] of Object.entries(hall.coolingEquip)) {
-    const c = get(id);
-    if (!c || c.kind !== "cooling") continue;
-    coolingElecKW += count * Math.min(itKW, c.capacityKW) * (c.wattsPerKW / 1e3);
-  }
+  const isPlant = (c) => ["chiller", "dry-cooler", "cooling-tower"].includes(c.coolingType) || c.coolingType === "crah" && c.wattsPerKW >= 120;
+  const stage = (plant2) => {
+    let capT = 0, w = 0;
+    for (const [id, count] of Object.entries(hall.coolingEquip)) {
+      const c = get(id);
+      if (!c || c.kind !== "cooling" || isPlant(c) !== plant2) continue;
+      capT += count * c.capacityKW;
+      w += count * c.capacityKW * c.wattsPerKW;
+    }
+    return { capT, avg: capT > 0 ? w / capT : 0 };
+  };
+  const term = stage(false), plant = stage(true);
+  const liquid = hall.coolingClass === "dlc" || hall.coolingClass === "immersion";
+  const plantAvg = plant.capT > 0 ? plant.avg : term.capT > 0 ? liquid ? 60 : 250 : 0;
+  const termAvg = term.capT > 0 ? term.avg : plant.capT > 0 && plant.avg < 120 ? liquid ? 15 : 40 : 0;
+  const coolingElecKW = itKW * ((termAvg + plantAvg) / 1e3);
+  const overheadKW = term.capT + plant.capT > 0 ? itKW * 0.02 : 0;
   let cap = 0, effSum = 0;
   for (const [id, count] of Object.entries(hall.powerEquip)) {
     const p = get(id);
@@ -6067,7 +7819,7 @@ function computePUE(hall, get) {
     effSum += count * p.capacityKW * p.efficiency;
   }
   const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
-  return 1 + (coolingElecKW + lossKW) / itKW;
+  return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
 }
 const trayIdOf = (t) => `tray-${t.id}`;
 const rackIdOf = (t) => `rack-${t.id}`;
@@ -7685,19 +9437,19 @@ function requireReact_development() {
             if (sample && control && typeof sample.stack === "string") {
               var sampleLines = sample.stack.split("\n");
               var controlLines = control.stack.split("\n");
-              var s = sampleLines.length - 1;
+              var s2 = sampleLines.length - 1;
               var c = controlLines.length - 1;
-              while (s >= 1 && c >= 0 && sampleLines[s] !== controlLines[c]) {
+              while (s2 >= 1 && c >= 0 && sampleLines[s2] !== controlLines[c]) {
                 c--;
               }
-              for (; s >= 1 && c >= 0; s--, c--) {
-                if (sampleLines[s] !== controlLines[c]) {
-                  if (s !== 1 || c !== 1) {
+              for (; s2 >= 1 && c >= 0; s2--, c--) {
+                if (sampleLines[s2] !== controlLines[c]) {
+                  if (s2 !== 1 || c !== 1) {
                     do {
-                      s--;
+                      s2--;
                       c--;
-                      if (c < 0 || sampleLines[s] !== controlLines[c]) {
-                        var _frame = "\n" + sampleLines[s].replace(" at new ", " at ");
+                      if (c < 0 || sampleLines[s2] !== controlLines[c]) {
+                        var _frame = "\n" + sampleLines[s2].replace(" at new ", " at ");
                         if (fn.displayName && _frame.includes("<anonymous>")) {
                           _frame = _frame.replace("<anonymous>", fn.displayName);
                         }
@@ -7708,7 +9460,7 @@ function requireReact_development() {
                         }
                         return _frame;
                       }
-                    } while (s >= 1 && c >= 0);
+                    } while (s2 >= 1 && c >= 0);
                   }
                   break;
                 }
@@ -8757,7 +10509,7 @@ const ARCHETYPE_TABLE = {
 };
 function rollArchetype(rng, reputation) {
   const eligible = Object.keys(ARCHETYPE_TABLE).map((a) => ({ a, t: ARCHETYPE_TABLE[a] })).filter(({ t }) => reputation >= t.minRep);
-  const total = eligible.reduce((s, e) => s + e.t.weight, 0);
+  const total = eligible.reduce((s2, e) => s2 + e.t.weight, 0);
   let r = rng() * total;
   for (const e of eligible) {
     r -= e.t.weight;
@@ -8883,82 +10635,82 @@ const up = (id) => {
   const i = getItem(id);
   return i && i.kind === "uplink" ? i : void 0;
 };
-function uplinkGbps(s) {
-  if (!s.uplinks) return Infinity;
-  return Object.entries(s.uplinks).reduce((n, [id, c]) => n + (up(id)?.gbps ?? 0) * c, 0);
+function uplinkGbps(s2) {
+  if (!s2.uplinks) return Infinity;
+  return Object.entries(s2.uplinks).reduce((n, [id, c]) => n + (up(id)?.gbps ?? 0) * c, 0);
 }
-const uplinkMonthlyUSD = (s) => Object.entries(s.uplinks ?? {}).reduce((n, [id, c]) => n + (up(id)?.mrcUSD ?? 0) * c, 0);
-const carrierCount = (s) => new Set(Object.entries(s.uplinks ?? {}).filter(([, c]) => c > 0).map(([id]) => up(id)?.carrier).filter(Boolean)).size;
+const uplinkMonthlyUSD = (s2) => Object.entries(s2.uplinks ?? {}).reduce((n, [id, c]) => n + (up(id)?.mrcUSD ?? 0) * c, 0);
+const carrierCount = (s2) => new Set(Object.entries(s2.uplinks ?? {}).filter(([, c]) => c > 0).map(([id]) => up(id)?.carrier).filter(Boolean)).size;
 function contractNeedGbps(c) {
   return c.kind === "inference" ? Math.max(0.2, (c.tokensPerSec ?? 0) / 5e4) : Math.max(0.2, (c.minAccelerators ?? 0) * 0.02);
 }
-function totalNeedGbps(s) {
-  return s.activeContracts.filter((a) => a.clusterIds.length > 0).reduce((n, a) => n + contractNeedGbps(a.contract), 0);
+function totalNeedGbps(s2) {
+  return s2.activeContracts.filter((a) => a.clusterIds.length > 0).reduce((n, a) => n + contractNeedGbps(a.contract), 0);
 }
 const BASE_POWER_PRICE = 0.07;
-const onlineRacks = (s) => s.halls.flatMap((h) => h.racks).filter((r) => r.status === "online").length;
-function rollEvents(s, rng, log, graceMonths = 4) {
-  s.utilityUSDPerKWh = Math.round((s.utilityUSDPerKWh + (BASE_POWER_PRICE - s.utilityUSDPerKWh) * 0.05) * 1e4) / 1e4;
-  if (s.month < 11 + graceMonths) return;
+const onlineRacks = (s2) => s2.halls.flatMap((h) => h.racks).filter((r) => r.status === "online").length;
+function rollEvents(s2, rng, log, graceMonths = 4) {
+  s2.utilityUSDPerKWh = Math.round((s2.utilityUSDPerKWh + (BASE_POWER_PRICE - s2.utilityUSDPerKWh) * 0.05) * 1e4) / 1e4;
+  if (s2.month < 11 + graceMonths) return;
   if (rng() > 0.28) return;
-  const racks = onlineRacks(s);
-  const year = 2020 + s.month / 12;
+  const racks = onlineRacks(s2);
+  const year = 2020 + s2.month / 12;
   const pool = [];
   pool.push(() => {
-    s.utilityUSDPerKWh = Math.min(0.2, Math.round(s.utilityUSDPerKWh * 1.3 * 1e4) / 1e4);
-    log("bad", `⚡ Energy crisis: utility rate jumps to $${s.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
+    s2.utilityUSDPerKWh = Math.min(0.2, Math.round(s2.utilityUSDPerKWh * 1.3 * 1e4) / 1e4);
+    log("bad", `⚡ Energy crisis: utility rate jumps to $${s2.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
   });
-  pool.push(() => {
+  if (racks > 0) pool.push(() => {
     const cut = Math.round(1e6 + rng() * 2e6);
-    s.cash += cut;
+    s2.cash += cut;
     log("good", `🏛 Sovereign-AI grant: a regional government pays +$${(cut / 1e6).toFixed(1)}M to bring GPU capacity on-shore. Governments are now a real customer class.`);
   });
   pool.push(() => {
-    const extra = generateContracts(s, s.month, rng).filter((c) => c.kind === "inference").slice(0, 2);
+    const extra = generateContracts(s2, s2.month, rng).filter((c) => c.kind === "inference").slice(0, 2);
     extra.forEach((c) => {
       if (c.kind === "inference") c.pricePerMTok = Math.round(c.pricePerMTok * 1.25 * 100) / 100;
     });
-    s.availableContracts = [...s.availableContracts, ...extra];
+    s2.availableContracts = [...s2.availableContracts, ...extra];
     log("good", `🚀 A viral model launch floods the market with inference demand${extra.length ? `: ${extra.length} premium (+25%) serving offers posted` : ""}. Memory-bandwidth-rich GPUs earn the most per watt on decode.`);
   });
   if (year >= 2021) pool.push(() => {
     const bill = Math.round(25e3 * Math.max(1, racks));
-    s.cash -= bill;
+    s2.cash -= bill;
     log("bad", `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1e3).toFixed(0)}k. Lesson: warm-water DLC tolerates hot days — air-cooled halls suffer first.`);
   });
-  if (racks > 0 && s.uplinks) {
+  if (racks > 0 && s2.uplinks) {
     pool.push(() => {
-      if (carrierCount(s) >= 2) {
+      if (carrierCount(s2) >= 2) {
         log("good", "🧵 A backhoe cuts a fiber route, but your second carrier on a diverse path keeps every customer online.");
         return;
       }
-      s.activeContracts.forEach((a) => {
+      s2.activeContracts.forEach((a) => {
         a.slaMisses += 1;
       });
-      s.reputation = Math.max(0, s.reputation - 2);
+      s2.reputation = Math.max(0, s2.reputation - 2);
       log("bad", "🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit. Lesson: buy a second circuit from a different carrier on a diverse path.");
     });
   }
   if (racks > 0) {
     pool.push(() => {
-      const live = s.halls.filter((h) => h.racks.some((r) => r.status === "online"));
+      const live = s2.halls.filter((h) => h.racks.some((r) => r.status === "online"));
       const weakest = live.map(hallResilience).sort((a, b) => a.score - b.score)[0];
       const score = weakest?.score ?? 0;
       if (rng() < score) {
         log("good", `🔌 Utility outage: your ${weakest?.tier} power chain (UPS → generator → transfer switch) carried the halls through with no customer impact.`);
         return;
       }
-      s.activeContracts.forEach((a) => {
+      s2.activeContracts.forEach((a) => {
         a.slaMisses += 1;
       });
-      s.reputation = Math.max(0, s.reputation - 2);
+      s2.reputation = Math.max(0, s2.reputation - 2);
       const why = weakest?.gaps[0] ?? "no backup power installed";
       log("bad", `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + battery + generator + transfer switch, sized N+1, keep training alive.`);
     });
     pool.push(() => {
       const bonus = Math.round(racks * 4e4);
-      s.cash += bonus;
-      s.reputation = Math.min(100, s.reputation + 1);
+      s2.cash += bonus;
+      s2.reputation = Math.min(100, s2.reputation + 1);
       log("good", `📣 A customer publishes a benchmark crediting your cluster's uptime: +${bonus ? "$" + (bonus / 1e3).toFixed(0) + "k" : ""} in spot demand and +1 reputation.`);
     });
   }
@@ -8979,7 +10731,7 @@ const isAccel = (i) => !!i && i.kind === "accelerator";
 const isNic = (i) => !!i && i.kind === "nic";
 const isSwitch = (i) => !!i && i.kind === "switch";
 function planFabric(nodes, nodeUplinkGbps, leaf, spine, nodeCable, spineCable, oversub, nicPortGbps, topology, issues) {
-  const o = Math.max(1, oversub);
+  const o2 = Math.max(1, oversub);
   const desired = nicPortGbps > 0 ? nicPortGbps : nodeCable?.gbps ?? 200;
   const caps = [desired, leaf.portGbps];
   if (nicPortGbps > 0) caps.push(nicPortGbps);
@@ -9034,10 +10786,10 @@ function planFabric(nodes, nodeUplinkGbps, leaf, spine, nodeCable, spineCable, o
     return leafOnly();
   }
   const spineLinkGbps = Math.max(1, Math.min(spineCable?.gbps ?? linkGbps, leaf.portGbps, spine.portGbps));
-  const maxDown = Math.max(1, Math.floor(leaf.portCount * o / (1 + o)));
+  const maxDown = Math.max(1, Math.floor(leaf.portCount * o2 / (1 + o2)));
   const leafCount = Math.max(1, Math.ceil(hostLinks / maxDown));
   const hostLinksPerLeaf = hostLinks / leafCount;
-  const uplinkPortsPerLeaf = Math.max(1, Math.ceil(hostLinksPerLeaf * linkGbps / o / spineLinkGbps));
+  const uplinkPortsPerLeaf = Math.max(1, Math.ceil(hostLinksPerLeaf * linkGbps / o2 / spineLinkGbps));
   if (leafCount <= spine.portCount) {
     const spineCount2 = uplinkPortsPerLeaf;
     const leafSpineLinks2 = leafCount * spineCount2;
@@ -9053,7 +10805,7 @@ function planFabric(nodes, nodeUplinkGbps, leaf, spine, nodeCable, spineCable, o
       leafSpineLinks: leafSpineLinks2,
       coreLinks: 0,
       bisectionGbps: bisectionGbps2,
-      effPerNodeGbps: Math.min(nodeUplinkGbps, fabricPerNodeGbps / o)
+      effPerNodeGbps: Math.min(nodeUplinkGbps, fabricPerNodeGbps / o2)
     };
   }
   const leavesPerPod = Math.max(1, Math.floor(spine.portCount / 2));
@@ -9093,7 +10845,7 @@ function planFabric(nodes, nodeUplinkGbps, leaf, spine, nodeCable, spineCable, o
     leafSpineLinks,
     coreLinks,
     bisectionGbps,
-    effPerNodeGbps: Math.min(nodeUplinkGbps, fabricPerNodeGbps / o)
+    effPerNodeGbps: Math.min(nodeUplinkGbps, fabricPerNodeGbps / o2)
   };
 }
 function evaluateCluster(cluster, ctx = defaultClusterContext(), opts = {}) {
@@ -9577,14 +11329,14 @@ const SUPPORT_RATE_PER_YEAR = 0.05;
 const DEPRECIATION_YEARS = 5;
 const DEFAULT_APR = 0.07;
 const FALLBACK_PUE = 1.4;
-const clusterPowerKW = (state) => state.clusters.reduce((s, c) => s + (c.stats?.powerKW ?? 0), 0);
+const clusterPowerKW = (state) => state.clusters.reduce((s2, c) => s2 + (c.stats?.powerKW ?? 0), 0);
 const weightedPue = (state) => {
-  const total = state.halls.reduce((s, h) => s + h.itPowerKW, 0);
+  const total = state.halls.reduce((s2, h) => s2 + h.itPowerKW, 0);
   if (total <= 0) {
     const ps = state.halls.map((h) => h.pue);
     return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : FALLBACK_PUE;
   }
-  return state.halls.reduce((s, h) => s + h.pue * h.itPowerKW, 0) / total;
+  return state.halls.reduce((s2, h) => s2 + h.pue * h.itPowerKW, 0) / total;
 };
 function monthlyOpex(state, opts = {}) {
   const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state));
@@ -9609,7 +11361,7 @@ const monthlyDepreciation = (capexUSD, years = DEPRECIATION_YEARS) => years > 0 
 const monthlyInterest = (debtUSD, apr = DEFAULT_APR) => debtUSD * apr / 12;
 function trayBomValue(design) {
   let v2 = getItem(design.chassisId)?.priceUSD ?? 0;
-  return v2 + design.parts.reduce((s, p) => s + (getItem(p.itemId)?.priceUSD ?? 0) * p.count, 0);
+  return v2 + design.parts.reduce((s2, p) => s2 + (getItem(p.itemId)?.priceUSD ?? 0) * p.count, 0);
 }
 function rackBomValue(state, design) {
   let v2 = getItem(design.rackId)?.priceUSD ?? 0;
@@ -9658,18 +11410,18 @@ const SOURCES = {
   nuclear: { names: ["Ridgeline Nuclear", "Harbor Atomic"], priceMWh: [48, 62], term: [120, 240], overdraw: [0, 0.03], overage: 2.5, firmness: [0.985, 0.998], lesson: "Nuclear PPA: the firmest carbon-free power, long take-or-pay terms and almost no overdraw — you must size the commit carefully." }
 };
 const POWER_SOURCES = SOURCES;
-function generatePowerOffers(s, rng, n = 1) {
+function generatePowerOffers(s2, rng, n = 1) {
   const out = [];
-  const hallKW = s.halls.reduce((a, h) => a + h.itPowerKW, 0);
+  const hallKW = s2.halls.reduce((a, h) => a + h.itPowerKW, 0);
   for (let i = 0; i < n; i++) {
     const kinds = Object.keys(SOURCES);
     const kind = kinds[Math.floor(rng() * kinds.length)];
-    if ((kind === "nuclear" || kind === "hydro") && s.reputation < 15 && rng() < 0.7) continue;
+    if ((kind === "nuclear" || kind === "hydro") && s2.reputation < 15 && rng() < 0.7) continue;
     const t = SOURCES[kind];
     const pick2 = (a) => a[0] + (a[1] - a[0]) * rng();
     const baseMW = Math.max(1, Math.round(hallKW / 1e3 * (0.4 + rng() * 1.2) * (kind === "nuclear" ? 3 : 1)));
     out.push({
-      id: `pw-${s.month}-${Math.floor(rng() * 1e5)}`,
+      id: `pw-${s2.month}-${Math.floor(rng() * 1e5)}`,
       supplier: t.names[Math.floor(rng() * t.names.length)],
       source: kind,
       mw: baseMW,
@@ -9678,15 +11430,15 @@ function generatePowerOffers(s, rng, n = 1) {
       overdrawPct: r2(pick2(t.overdraw)),
       overageMult: t.overage,
       firmness: r2(pick2(t.firmness)),
-      offerUntil: s.month + 4
+      offerUntil: s2.month + 4
     });
   }
   return out;
 }
-function settlePower(s, drawMW, rng, log) {
-  const spotMWh = s.utilityUSDPerKWh * 1e3;
-  const cs = s.powerContracts ?? [];
-  const live = cs.filter((c) => s.month >= c.startMonth && s.month <= c.endMonth);
+function settlePower(s2, drawMW, rng, log) {
+  const spotMWh = s2.utilityUSDPerKWh * 1e3;
+  const cs = s2.powerContracts ?? [];
+  const live = cs.filter((c) => s2.month >= c.startMonth && s2.month <= c.endMonth);
   if (!live.length) return { netUSD: drawMW * spotMWh * HOURS_PER_MONTH, contractUSD: 0, overageUSD: 0, spotUSD: drawMW * spotMWh * HOURS_PER_MONTH, resaleUSD: 0, committedMW: 0, capMW: 0, drawMW, avgUSDPerMWh: spotMWh };
   let contractUSD = 0, committed = 0, cap = 0, overageCap = 0, overagePrice = 0;
   const delivered = [];
@@ -9713,37 +11465,37 @@ function settlePower(s, drawMW, rng, log) {
   const net = contractUSD + overageUSD + spotUSD - resaleUSD;
   return { netUSD: net, contractUSD, overageUSD, spotUSD, resaleUSD, committedMW: committed, capMW: cap, drawMW, avgUSDPerMWh: drawMW > 0 ? net / (drawMW * HOURS_PER_MONTH) : 0 };
 }
-function powerMarketTick(s, rng, log) {
-  s.powerOffers = (s.powerOffers ?? []).filter((o) => o.offerUntil >= s.month);
-  const ended = (s.powerContracts ?? []).filter((c) => s.month > c.endMonth);
+function powerMarketTick(s2, rng, log) {
+  s2.powerOffers = (s2.powerOffers ?? []).filter((o2) => o2.offerUntil >= s2.month);
+  const ended = (s2.powerContracts ?? []).filter((c) => s2.month > c.endMonth);
   for (const c of ended) log("info", `Power contract with ${c.supplier} (${c.mw} MW) has ended. Renegotiate on the Energy screen or you are back on the spot utility rate.`);
-  s.powerContracts = (s.powerContracts ?? []).filter((c) => s.month <= c.endMonth);
-  if (rng() < 0.45) s.powerOffers = [...s.powerOffers, ...generatePowerOffers(s, rng, 1)].slice(-6);
+  s2.powerContracts = (s2.powerContracts ?? []).filter((c) => s2.month <= c.endMonth);
+  if (rng() < 0.45) s2.powerOffers = [...s2.powerOffers, ...generatePowerOffers(s2, rng, 1)].slice(-6);
 }
 const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
 function spotUtilization(price, month) {
   return clamp$1(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
 }
-function stepSpotPrice(s, rng) {
-  const anchor = spotAnchor(s.month);
-  const cur = s.spotPrice ?? anchor;
+function stepSpotPrice(s2, rng) {
+  const anchor = spotAnchor(s2.month);
+  const cur = s2.spotPrice ?? anchor;
   const shock = (rng() - 0.5) * 0.22 + (rng() < 0.06 ? rng() < 0.5 ? 0.35 : -0.3 : 0);
   const next = clamp$1(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
-  s.spotPrice = r2(next);
-  s.spotHistory = [...s.spotHistory ?? [], s.spotPrice].slice(-24);
+  s2.spotPrice = r2(next);
+  s2.spotHistory = [...s2.spotHistory ?? [], s2.spotPrice].slice(-24);
 }
-function spotRevenue(s, servedClusterIds, accelsOfDesign = () => 0) {
-  const price = s.spotPrice ?? spotAnchor(s.month);
-  if (price < (s.spotReserve ?? 0)) return { revenue: 0, accels: 0, util: 0 };
-  const util = spotUtilization(price, s.month);
+function spotRevenue(s2, servedClusterIds, accelsOfDesign = () => 0) {
+  const price = s2.spotPrice ?? spotAnchor(s2.month);
+  if (price < (s2.spotReserve ?? 0)) return { revenue: 0, accels: 0, util: 0 };
+  const util = spotUtilization(price, s2.month);
   let accels = 0;
-  for (const id of s.spotClusters ?? []) {
+  for (const id of s2.spotClusters ?? []) {
     if (servedClusterIds.has(id)) continue;
-    accels += s.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0;
+    accels += s2.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0;
   }
-  const inClusterSpot = new Set(s.spotClusters ?? []);
-  for (const id of s.spotRacks ?? []) {
-    const pr = s.halls.flatMap((h) => h.racks).find((r) => r.id === id);
+  const inClusterSpot = new Set(s2.spotClusters ?? []);
+  for (const id of s2.spotRacks ?? []) {
+    const pr = s2.halls.flatMap((h) => h.racks).find((r) => r.id === id);
     if (!pr || pr.status !== "online") continue;
     if (pr.clusterId && (servedClusterIds.has(pr.clusterId) || inClusterSpot.has(pr.clusterId))) continue;
     accels += accelsOfDesign(pr.designId);
@@ -9789,15 +11541,15 @@ const rackAccels = (state, designId) => {
   return n;
 };
 function advanceMonth(state, opts = {}) {
-  const o = { ...DEFAULT_TICK, ...opts };
-  const s = JSON.parse(JSON.stringify(state));
-  const rng = mulberry32((s.seed ^ Math.imul(s.month + 1, 2654435769)) >>> 0);
-  s.month += 1;
+  const o2 = { ...DEFAULT_TICK, ...opts };
+  const s2 = JSON.parse(JSON.stringify(state));
+  const rng = mulberry32((s2.seed ^ Math.imul(s2.month + 1, 2654435769)) >>> 0);
+  s2.month += 1;
   const logs = [];
-  const log = (level, text) => logs.push({ month: s.month, level, text });
+  const log = (level, text) => logs.push({ month: s2.month, level, text });
   const arrived = [];
-  s.orders = s.orders.filter((od) => {
-    if (od.arriveMonth <= s.month) {
+  s2.orders = s2.orders.filter((od) => {
+    if (od.arriveMonth <= s2.month) {
       arrived.push(od);
       return false;
     }
@@ -9805,49 +11557,49 @@ function advanceMonth(state, opts = {}) {
   });
   for (const od of arrived) {
     if (od.spare) {
-      s.spareStock = s.spareStock ?? {};
-      s.spareStock[od.itemId] = (s.spareStock[od.itemId] ?? 0) + od.qty;
-    } else s.inventory[od.itemId] = (s.inventory[od.itemId] ?? 0) + od.qty;
+      s2.spareStock = s2.spareStock ?? {};
+      s2.spareStock[od.itemId] = (s2.spareStock[od.itemId] ?? 0) + od.qty;
+    } else s2.inventory[od.itemId] = (s2.inventory[od.itemId] ?? 0) + od.qty;
   }
   if (arrived.length) {
     const units = arrived.reduce((n, od) => n + od.qty, 0);
     log("good", `Delivered ${units} unit(s) from ${arrived.length} order(s) into inventory.`);
   }
   const placed2 = [];
-  for (const hall of s.halls) placed2.push(...hall.racks);
+  for (const hall of s2.halls) placed2.push(...hall.racks);
   for (const rack of placed2) {
-    if (rack.status === "installing" && s.month >= rack.readyMonth - 1) {
+    if (rack.status === "installing" && s2.month >= rack.readyMonth - 1) {
       rack.status = "commissioning";
-    } else if (rack.status === "commissioning" && s.month >= rack.readyMonth) {
-      if (rng() < o.commissionFailProb) {
+    } else if (rack.status === "commissioning" && s2.month >= rack.readyMonth) {
+      if (rng() < o2.commissionFailProb) {
         rack.status = "failed";
-        rack.readyMonth = s.month + o.repairMonths;
+        rack.readyMonth = s2.month + o2.repairMonths;
         log("bad", `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
       } else {
         rack.status = "online";
         log("good", `Rack ${rack.id} commissioned and online.`);
       }
-    } else if (rack.status === "failed" && s.month >= rack.readyMonth) {
+    } else if (rack.status === "failed" && s2.month >= rack.readyMonth) {
       rack.status = "online";
       rack.failedPart = void 0;
       log("good", `Rack ${rack.id} repaired and back online.`);
     }
   }
   const placedById = new Map(placed2.map((r) => [r.id, r]));
-  const ctx = ctxOf$2(s);
+  const ctx = ctxOf$2(s2);
   const onlineIdsOf = (c) => c.rackIds.filter((id) => placedById.get(id)?.status === "online");
   const refreshStats = () => {
-    for (const c of s.clusters) c.stats = evaluateCluster({ ...c, rackIds: onlineIdsOf(c) }, ctx);
+    for (const c of s2.clusters) c.stats = evaluateCluster({ ...c, rackIds: onlineIdsOf(c) }, ctx);
   };
   refreshStats();
-  const onlineKW = s.clusters.reduce((n, c) => n + (c.stats?.powerKW ?? 0), 0);
-  const coolingKW = s.halls.reduce((n, h) => n + h.coolingKW, 0);
+  const onlineKW = s2.clusters.reduce((n, c) => n + (c.stats?.powerKW ?? 0), 0);
+  const coolingKW = s2.halls.reduce((n, h) => n + h.coolingKW, 0);
   const stressed = coolingKW < onlineKW;
   let failedNow = 0;
   for (const rack of placed2) {
     if (rack.status !== "online") continue;
-    const rates = rackRates(s, rack.designId);
-    const total = rates.reduce((n, r) => n + r.rate, 0) * (o.accelFailureProbPerMonth * 8e3);
+    const rates = rackRates(s2, rack.designId);
+    const total = rates.reduce((n, r) => n + r.rate, 0) * (o2.accelFailureProbPerMonth * 8e3);
     const p = 1 - Math.exp(-total * (stressed ? 3 : 1));
     if (p > 0 && rng() < p) {
       let pick2 = rng() * rates.reduce((n, r) => n + r.rate, 0);
@@ -9855,12 +11607,12 @@ function advanceMonth(state, opts = {}) {
       const label = PART_LABEL[partClass(part) ?? ""] ?? "part";
       rack.status = "failed";
       rack.failedPart = part;
-      if ((s.spareStock?.[part] ?? 0) > 0) {
-        s.spareStock[part] -= 1;
-        rack.readyMonth = s.month + 1;
+      if ((s2.spareStock?.[part] ?? 0) > 0) {
+        s2.spareStock[part] -= 1;
+        rack.readyMonth = s2.month + 1;
         log("info", `${rack.id}: ${label} failed (${getItem(part)?.name}); swapping from your spares — back next month.`);
       } else {
-        rack.readyMonth = s.month + o.repairMonths;
+        rack.readyMonth = s2.month + o2.repairMonths;
         log("bad", `${rack.id}: ${label} failed (${getItem(part)?.name}) and you have NO SPARE. Waiting on RMA until month ${rack.readyMonth}. Keep spares in the warehouse.`);
       }
       failedNow++;
@@ -9873,21 +11625,21 @@ function advanceMonth(state, opts = {}) {
     );
     refreshStats();
   }
-  for (const hall of s.halls) hall.pue = computePUE(hall, getItem);
+  for (const hall of s2.halls) hall.pue = computePUE(hall, getItem);
   let revenueTotal = 0;
   const servedClusterIds = /* @__PURE__ */ new Set();
   const completed = [];
   const defaulted = [];
   const usedFrac = {};
-  const needGbps = totalNeedGbps(s);
-  const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s) / needGbps) : 1;
-  if (netFactor < 1) log("bad", `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
-  for (const ac of s.activeContracts) {
+  const needGbps = totalNeedGbps(s2);
+  const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s2) / needGbps) : 1;
+  if (netFactor < 1) log("bad", `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s2).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
+  for (const ac of s2.activeContracts) {
     const c = ac.contract;
     if (ac.clusterIds.length === 0) {
       const by = ac.deployBy ?? ac.startMonth + 4;
-      if (s.month > by) defaulted.push(ac);
-      else if (s.month === by) log("bad", `Last month to bring capacity online for ${c.customer} (${c.model.name}) — assign a qualifying cluster now or they walk.`);
+      if (s2.month > by) defaulted.push(ac);
+      else if (s2.month === by) log("bad", `Last month to bring capacity online for ${c.customer} (${c.model.name}) — assign a qualifying cluster now or they walk.`);
       continue;
     }
     for (const id of ac.clusterIds) servedClusterIds.add(id);
@@ -9898,12 +11650,12 @@ function advanceMonth(state, opts = {}) {
       let total = 0;
       let eff = 0;
       for (const id of ac.clusterIds) {
-        const cl = s.clusters.find((x) => x.id === id);
+        const cl = s2.clusters.find((x) => x.id === id);
         if (!cl) continue;
         eff += cl.stats?.accelerators ?? 0;
         total += cl.rackIds.reduce((n, rid) => {
           const pr = placedById.get(rid);
-          return n + (pr ? rackAccels(s, pr.designId) : 0);
+          return n + (pr ? rackAccels(s2, pr.designId) : 0);
         }, 0);
       }
       availability = total > 0 ? eff / total : 0;
@@ -9913,7 +11665,7 @@ function advanceMonth(state, opts = {}) {
       let worstTtftMs = 0;
       const parts = [];
       for (const id of ac.clusterIds) {
-        const cl = s.clusters.find((x) => x.id === id);
+        const cl = s2.clusters.find((x) => x.id === id);
         const stats = cl?.stats;
         if (!stats || stats.accelerators <= 0) continue;
         const item = getItem(stats.acceleratorId);
@@ -9948,64 +11700,64 @@ function advanceMonth(state, opts = {}) {
     if (ac.monthsServed >= c.durationMonths) completed.push(ac);
   }
   for (const ac of defaulted) {
-    s.reputation = clamp(s.reputation - 8, 0, 100);
+    s2.reputation = clamp(s2.reputation - 8, 0, 100);
     log("bad", `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.`);
   }
-  s.activeContracts = s.activeContracts.filter((ac) => {
+  s2.activeContracts = s2.activeContracts.filter((ac) => {
     if (defaulted.includes(ac)) return false;
     if (!completed.includes(ac)) return true;
     const c = ac.contract;
     const clean = ac.slaMisses === 0;
     const sloppy = ac.slaMisses > Math.ceil(c.durationMonths / 3);
     const gain = 2 + ARCH_BONUS[c.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
-    s.reputation = clamp(s.reputation + gain, 0, 100);
+    s2.reputation = clamp(s2.reputation + gain, 0, 100);
     log(
       "good",
       `${c.customer} contract complete: ${c.model.name}, ${c.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`
     );
     return false;
   });
-  const expired = s.availableContracts.filter((c) => c.deadlineMonth < s.month);
-  const fresh = generateContracts(s, s.month, rng);
-  s.availableContracts = [
-    ...s.availableContracts.filter((c) => c.deadlineMonth >= s.month),
+  const expired = s2.availableContracts.filter((c) => c.deadlineMonth < s2.month);
+  const fresh = generateContracts(s2, s2.month, rng);
+  s2.availableContracts = [
+    ...s2.availableContracts.filter((c) => c.deadlineMonth >= s2.month),
     ...fresh
-  ].slice(-o.maxAvailableContracts);
+  ].slice(-o2.maxAvailableContracts);
   if (expired.length) log("info", `${expired.length} contract offer(s) expired unserved.`);
   if (fresh.length) log("info", `${fresh.length} new contract offer(s) on the market.`);
-  rollEvents(s, rng, log);
-  stepSpotPrice(s, rng);
-  const spot = spotRevenue(s, servedClusterIds, (d) => rackAccels(s, d));
+  rollEvents(s2, rng, log);
+  stepSpotPrice(s2, rng);
+  const spot = spotRevenue(s2, servedClusterIds, (d) => rackAccels(s2, d));
   if (spot.revenue > 0) {
     revenueTotal += spot.revenue;
-    log("info", `Spot market: ${Math.round(spot.accels)} idle GPUs sold at $${(s.spotPrice ?? 0).toFixed(2)}/GPU-hr (${Math.round(spot.util * 100)}% filled) → +$${Math.round(spot.revenue).toLocaleString("en-US")}.`);
+    log("info", `Spot market: ${Math.round(spot.accels)} idle GPUs sold at $${(s2.spotPrice ?? 0).toFixed(2)}/GPU-hr (${Math.round(spot.util * 100)}% filled) → +$${Math.round(spot.revenue).toLocaleString("en-US")}.`);
   }
-  powerMarketTick(s, rng, log);
-  const opex0 = monthlyOpex(s);
-  const pw2 = settlePower(s, opex0.itPowerKW * opex0.pue / 1e3, rng, log);
+  powerMarketTick(s2, rng, log);
+  const opex0 = monthlyOpex(s2);
+  const pw2 = settlePower(s2, opex0.itPowerKW * opex0.pue / 1e3, rng, log);
   const opex = { powerUSD: pw2.netUSD, totalUSD: opex0.totalUSD - opex0.powerUSD + pw2.netUSD };
-  const depreciation = monthlyDepreciation(estimateCapexBasis(s));
-  const interest = monthlyInterest(s.debt);
-  const prevCash = s.cash;
-  s.cash = round2(s.cash + revenueTotal - opex.totalUSD - interest);
-  if (s.cash < 0 && prevCash >= 0) {
+  const depreciation = monthlyDepreciation(estimateCapexBasis(s2));
+  const interest = monthlyInterest(s2.debt);
+  const prevCash = s2.cash;
+  s2.cash = round2(s2.cash + revenueTotal - opex.totalUSD - interest);
+  if (s2.cash < 0 && prevCash >= 0) {
     log("bad", "Bankruptcy warning: cash is negative. Raise a loan, land contracts, or cut opex before creditors close you down.");
   }
-  const onlineAccels = s.clusters.reduce((n, c) => n + (c.stats?.accelerators ?? 0), 0);
+  const onlineAccels = s2.clusters.reduce((n, c) => n + (c.stats?.accelerators ?? 0), 0);
   const servingAccels = [...servedClusterIds].reduce(
-    (n, id) => n + (s.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0),
+    (n, id) => n + (s2.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0),
     0
   );
   const utilization = onlineAccels > 0 ? Math.min(1, servingAccels / onlineAccels) : 0;
-  s.history.push({
-    month: s.month,
+  s2.history.push({
+    month: s2.month,
     revenue: round2(revenueTotal),
     opex: round2(opex.totalUSD + depreciation + interest),
-    cash: s.cash,
+    cash: s2.cash,
     utilization: round2(utilization)
   });
-  s.log = [...s.log, ...logs].slice(-400);
-  return s;
+  s2.log = [...s2.log, ...logs].slice(-400);
+  return s2;
 }
 const G$2 = () => useGame.getState().game;
 const TECH = ["ib-ndr", "ib-xdr", "spectrum-x", "eth-400", "eth-800", "roce", "uec-eth"];
@@ -10019,7 +11771,7 @@ const ctxOf$1 = (g) => ({
   getItem
 });
 function autoFabric(g, rackIds, targetGBs = 0) {
-  const sw2 = ITEMS_BY_KIND("switch").filter((s) => s.role === "scale-out" && s.rackUnits > 0 && offerAt(s, g.month).available);
+  const sw2 = ITEMS_BY_KIND("switch").filter((s2) => s2.role === "scale-out" && s2.rackUnits > 0 && offerAt(s2, g.month).available);
   const cables = ITEMS_BY_KIND("cable").filter((c) => offerAt(c, g.month).available);
   const node = cables.find((c) => c.cableType === "aoc") ?? cables[0], spine = cables.find((c) => c.cableType === "optic-dr") ?? cables[0];
   if (!sw2.length || !node) return null;
@@ -10042,7 +11794,7 @@ function autoFabric(g, rackIds, targetGBs = 0) {
 }
 const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 function plantChoice(g, hallClass, kind) {
-  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === hallClass).map((i) => offerAt(i, g.month)).filter((o) => o.available);
+  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === hallClass).map((i) => offerAt(i, g.month)).filter((o2) => o2.available);
   cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
   return cand[0];
 }
@@ -10058,7 +11810,7 @@ function stepProject(st2, pid) {
     st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Contract was cancelled — the capacity is yours; offer it on spot in Energy."] });
     return;
   }
-  const note = (s) => st2.patchProject(pid, { notes: [...g.projects.find((x) => x.id === pid).notes, `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, "0")}: ${s}`].slice(-12) });
+  const note = (s2) => st2.patchProject(pid, { notes: [...g.projects.find((x) => x.id === pid).notes, `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, "0")}: ${s2}`].slice(-12) });
   if (p.stage === "building") {
     for (const pl of p.plant) {
       const have2 = g.inventory[pl.id] ?? 0;
@@ -10355,9 +12107,9 @@ const useGame = create()((set, get) => {
       }
       set({ game: g });
     },
-    patchProject: (id, patch2) => set((s) => ({ game: { ...s.game, projects: (s.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
-    addProject: (p) => set((s) => ({ game: { ...s.game, projects: [...s.game.projects ?? [], p] } })),
-    setMode: (m) => set((s) => ({ game: { ...s.game, mode: m } })),
+    patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
+    addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
+    setMode: (m) => set((s2) => ({ game: { ...s2.game, mode: m } })),
     startEasy: (contractId, templateId, racks) => {
       const r = startProject(get(), contractId, templateId, racks);
       if (r.ok) stepAllProjects(get);
@@ -10483,7 +12235,7 @@ const useGame = create()((set, get) => {
         powerEquip: {},
         coolingEquip: {},
         racks: [],
-        floorLoadKgPerRack: 1500
+        floorLoadKgPerRack: { air: 1500, rdhx: 1800, dlc: 2400, immersion: 3200 }[coolingClass] ?? 1500
       };
       g.halls.push(hall);
       logln(
@@ -10545,7 +12297,8 @@ const useGame = create()((set, get) => {
       if (!item || item.kind !== "cooling") return fail("Pick a cooling-equipment catalog item.");
       const n = Math.floor(qty);
       if (n <= 0) return fail("Quantity must be positive.");
-      if (item.serves !== hall.coolingClass) {
+      const compatible = item.serves === hall.coolingClass || hall.coolingClass === "rdhx" && item.serves === "air" || hall.coolingClass === "immersion" && item.serves === "dlc";
+      if (!compatible) {
         return fail(
           `${item.name} serves ${item.serves.toUpperCase()} loads, but ${hall.name} is a ${hall.coolingClass.toUpperCase()} hall.`,
           [
@@ -10592,6 +12345,10 @@ const useGame = create()((set, get) => {
             }
           ]
         );
+      }
+      const wKg = validateRack(design, g.trays, getItem).stats.weightKg;
+      if (wKg > hall.floorLoadKgPerRack) {
+        return fail(`${design.name} weighs ~${Math.round(wKg)} kg but ${hall.name}'s floor is rated ${hall.floorLoadKgPerRack} kg per rack. Build a liquid/immersion-class hall (slab-on-grade, higher rating) or choose a lighter design.`, [{ severity: "error", code: "HALL_FLOOR_LOAD", message: `Rack ${Math.round(wKg)} kg > floor ${hall.floorLoadKgPerRack} kg.`, learn: design.rackId }]);
       }
       const need = rackBom(g, designId) ?? {};
       const missing = Object.entries(need).filter(([id, n]) => (g.inventory[id] ?? 0) < n);
@@ -10762,15 +12519,15 @@ const useGame = create()((set, get) => {
           const cap = inferenceCapacity(stats, item, contract.model, { contextTokens: contract.contextTokens, tpotMs: contract.tpotMs });
           for (const i of cap.issues) if (i.severity === "error") issues.push({ ...i, message: `[${cl.name}] ${i.message}` });
           let used = 0;
-          for (const o of g.activeContracts) {
-            if (o.contract.id === contractId || !o.clusterIds.includes(cl.id)) continue;
-            if (o.contract.kind === "training") {
+          for (const o2 of g.activeContracts) {
+            if (o2.contract.id === contractId || !o2.clusterIds.includes(cl.id)) continue;
+            if (o2.contract.kind === "training") {
               used = 1;
               break;
             }
-            const oct = o.contract;
+            const oct = o2.contract;
             if (oct.kind !== "inference") continue;
-            const oc = o.clusterIds.map((id) => g.clusters.find((x) => x.id === id)?.stats).filter(Boolean);
+            const oc = o2.clusterIds.map((id) => g.clusters.find((x) => x.id === id)?.stats).filter(Boolean);
             const oCap = oc.reduce((n, st2) => {
               const it2 = getItem(st2.acceleratorId);
               return n + (it2?.kind === "accelerator" ? inferenceCapacity(st2, it2, oct.model, { contextTokens: oct.contextTokens, tpotMs: oct.tpotMs }).tokensPerSec : 0);
@@ -10784,7 +12541,7 @@ const useGame = create()((set, get) => {
         if (total < contract.tokensPerSec) issues.push({ severity: "error", code: "tokens-under-capacity", message: `The assigned clusters have ~${usd(total)} tok/s free (after other contracts) of the required ${usd(contract.tokensPerSec)} tok/s at p95 ${contract.tpotMs} ms/TPOT.` });
       }
       if (contract.kind === "training") {
-        for (const cl of clusters) if (g.activeContracts.some((o) => o.contract.id !== contractId && o.clusterIds.includes(cl.id))) issues.push({ severity: "error", code: "cluster-busy", message: `Cluster '${cl.name}' is already serving another contract; a training job needs it exclusively.` });
+        for (const cl of clusters) if (g.activeContracts.some((o2) => o2.contract.id !== contractId && o2.clusterIds.includes(cl.id))) issues.push({ severity: "error", code: "cluster-busy", message: `Cluster '${cl.name}' is already serving another contract; a training job needs it exclusively.` });
       }
       const errors = issues.filter((i) => i.severity === "error");
       if (errors.length) return fail("The assigned clusters do not meet this contract.", issues);
@@ -10818,14 +12575,14 @@ const useGame = create()((set, get) => {
       return ok(`Cluster '${cl.name}' disbanded; racks are free again.`);
     }),
     signPower: (offerId, mwOverride) => commit((g) => {
-      const i = (g.powerOffers ?? []).findIndex((o2) => o2.id === offerId);
+      const i = (g.powerOffers ?? []).findIndex((o22) => o22.id === offerId);
       if (i < 0) return fail("Offer not found or expired.");
-      const o = g.powerOffers[i];
-      const mw = Math.max(1, Math.min(o.mw * 2, Math.round(mwOverride ?? o.mw)));
+      const o2 = g.powerOffers[i];
+      const mw = Math.max(1, Math.min(o2.mw * 2, Math.round(mwOverride ?? o2.mw)));
       g.powerOffers.splice(i, 1);
-      (g.powerContracts ??= []).push({ ...o, mw, startMonth: g.month + 1, endMonth: g.month + o.termMonths });
-      logln(g, "good", `Signed ${mw} MW ${o.source} PPA with ${o.supplier}: $${o.priceUSDPerMWh}/MWh take-or-pay for ${o.termMonths} mo, overdraw up to +${Math.round(o.overdrawPct * 100)}%. ${POWER_LESSON[o.source]}`);
-      return ok(`Signed ${mw} MW with ${o.supplier}; starts next month.`);
+      (g.powerContracts ??= []).push({ ...o2, mw, startMonth: g.month + 1, endMonth: g.month + o2.termMonths });
+      logln(g, "good", `Signed ${mw} MW ${o2.source} PPA with ${o2.supplier}: $${o2.priceUSDPerMWh}/MWh take-or-pay for ${o2.termMonths} mo, overdraw up to +${Math.round(o2.overdrawPct * 100)}%. ${POWER_LESSON[o2.source]}`);
+      return ok(`Signed ${mw} MW with ${o2.supplier}; starts next month.`);
     }),
     setSpot: (clusterId, on) => commit((g) => {
       if (!g.clusters.some((c) => c.id === clusterId)) return fail("Unknown cluster.");
@@ -10959,10 +12716,10 @@ function stable(v2) {
   return "{" + Object.keys(v2).sort().map((k2) => JSON.stringify(k2) + ":" + stable(v2[k2])).join(",") + "}";
 }
 function hashState(g) {
-  const s = stable(g);
+  const s2 = stable(g);
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
+  for (let i = 0; i < s2.length; i++) {
+    h ^= s2.charCodeAt(i);
     h = Math.imul(h, 16777619) >>> 0;
   }
   return h.toString(16).padStart(8, "0");
@@ -10988,7 +12745,7 @@ function observe() {
     rackStatus: by((r) => r.status),
     inventory: g.inventory,
     spares: g.spareStock ?? {},
-    orders: g.orders.map((o) => ({ itemId: o.itemId, qty: o.qty, arriveMonth: o.arriveMonth, spare: !!o.spare })),
+    orders: g.orders.map((o2) => ({ itemId: o2.itemId, qty: o2.qty, arriveMonth: o2.arriveMonth, spare: !!o2.spare })),
     offers: g.availableContracts,
     active: g.activeContracts.map((a) => ({ id: a.contract.id, customer: a.contract.customer, clusterIds: a.clusterIds, monthsServed: a.monthsServed, slaMisses: a.slaMisses, deployBy: a.deployBy })),
     clusters: g.clusters.map((c) => ({ id: c.id, name: c.name, racks: c.rackIds.length, fabric: c.fabric, stats: c.stats })),
@@ -11001,15 +12758,15 @@ function observe() {
   };
 }
 function describe() {
-  const o = observe();
+  const o2 = observe();
   const f = (n) => Math.round(n).toLocaleString("en-US");
   return [
-    `Month ${o.month} (${o.year}). Cash $${f(o.cash)}, debt $${f(o.debt)}, net worth $${f(o.netWorth)}, reputation ${o.reputation.toFixed(0)}.`,
-    `Halls: ${o.halls.map((h) => `${h.name}[${h.coolingClass}, ${h.racks}/${h.rackSlots} racks ${JSON.stringify(h.rackStatus)}]`).join("; ") || "none"}.`,
-    `Orders in flight: ${o.orders.length}. Inventory lines: ${Object.keys(o.inventory).length}. Clusters: ${o.clusters.length}.`,
-    `Contracts: ${o.active.length} active, ${o.offers.length} on offer.`,
+    `Month ${o2.month} (${o2.year}). Cash $${f(o2.cash)}, debt $${f(o2.debt)}, net worth $${f(o2.netWorth)}, reputation ${o2.reputation.toFixed(0)}.`,
+    `Halls: ${o2.halls.map((h) => `${h.name}[${h.coolingClass}, ${h.racks}/${h.rackSlots} racks ${JSON.stringify(h.rackStatus)}]`).join("; ") || "none"}.`,
+    `Orders in flight: ${o2.orders.length}. Inventory lines: ${Object.keys(o2.inventory).length}. Clusters: ${o2.clusters.length}.`,
+    `Contracts: ${o2.active.length} active, ${o2.offers.length} on offer.`,
     `Recent log:
-${o.log.map((l) => ` - [${l.level}] ${l.text}`).join("\n")}`
+${o2.log.map((l) => ` - [${l.level}] ${l.text}`).join("\n")}`
   ].join("\n");
 }
 let scenario = null;
@@ -11079,13 +12836,14 @@ function legalActions(opts = {}) {
 }
 const hash = () => hashState(G$1());
 const st$1 = () => useGame.getState();
-const patch = (f) => useGame.setState((s) => {
-  const g = JSON.parse(JSON.stringify(s.game));
+const patch = (f) => useGame.setState((s2) => {
+  const g = JSON.parse(JSON.stringify(s2.game));
   f(g);
   return { game: g };
 });
-function plantUnit(kind, cls) {
-  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === cls && !["cold-plate-loop", "rdhx"].includes(i.coolingType)).map((i) => offerAt(i, st$1().game.month)).filter((o) => o.available);
+function plantUnit(kind, cls0) {
+  const cls = cls0 === "rdhx" ? "air" : cls0;
+  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === cls && !["cold-plate-loop", "rdhx"].includes(i.coolingType)).map((i) => offerAt(i, st$1().game.month)).filter((o2) => o2.available);
   cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
   return cand[0];
 }
@@ -11362,16 +13120,16 @@ function quote(t, racks, month) {
   let cost = 0, lead = 1;
   for (const [id, n] of Object.entries(templateBom(t, racks))) {
     const item = getItem(id);
-    const o = offerAt(item, month);
-    if (!o.available) {
+    const o2 = offerAt(item, month);
+    if (!o2.available) {
       unavailable.push(item.name);
       continue;
     }
-    if (o.qtyCap && n > o.qtyCap) capped.push(`${item.name} (cap ${o.qtyCap}/qtr)`);
-    const unit = Math.round(o.unitPrice * (1 - volumeDiscount(item, n, o.unitPrice)) * (1 + t.premium));
+    if (o2.qtyCap && n > o2.qtyCap) capped.push(`${item.name} (cap ${o2.qtyCap}/qtr)`);
+    const unit = Math.round(o2.unitPrice * (1 - volumeDiscount(item, n, o2.unitPrice)) * (1 + t.premium));
     lines.push({ id, name: item.name, n, unit, total: unit * n });
     cost += unit * n;
-    lead = Math.max(lead, Math.max(1, Math.round(o.leadMonths * t.leadFactor)));
+    lead = Math.max(lead, Math.max(1, Math.round(o2.leadMonths * t.leadFactor)));
   }
   lines.sort((a, b) => b.total - a.total);
   return { cost, lead, lines, unavailable, capped };
@@ -11413,22 +13171,22 @@ function pipeline(g) {
   }
   const isAccel2 = (id) => getItem(id)?.kind === "accelerator";
   const warehouse = Object.entries(g.inventory).filter(([id]) => isAccel2(id)).reduce((n, [, q]) => n + q, 0);
-  const ordered = g.orders.filter((o) => isAccel2(o.itemId)).reduce((n, o) => n + o.qty, 0);
+  const ordered = g.orders.filter((o2) => isAccel2(o2.itemId)).reduce((n, o2) => n + o2.qty, 0);
   return { online, freeOnline, installing, warehouse, ordered };
 }
 function contractFit(g, c) {
   const all = g.clusters.filter((cl) => cl.stats).map((cl) => {
-    const s = cl.stats;
+    const s2 = cl.stats;
     const checks = [];
     if (c.kind === "training") {
-      checks.push({ label: "Accelerators", need: `≥ ${k(c.minAccelerators)}`, have: k(s.accelerators), ok: s.accelerators >= c.minAccelerators });
-      checks.push({ label: "Scale-up domain", need: `≥ ${c.minScaleUpDomain}`, have: `${s.scaleUpDomain}`, ok: s.scaleUpDomain >= c.minScaleUpDomain });
-      checks.push({ label: "Scale-out / GPU", need: `≥ ${c.minScaleOutGBsPerAccel} GB/s`, have: `${s.effScaleOutGBs.toFixed(1)} GB/s`, ok: s.effScaleOutGBs >= c.minScaleOutGBsPerAccel });
-      checks.push({ label: "Total memory", need: `≥ ${k(c.minTotalMemGB / 1e3)} TB`, have: `${k(s.totalMemGB / 1e3)} TB`, ok: s.totalMemGB >= c.minTotalMemGB });
+      checks.push({ label: "Accelerators", need: `≥ ${k(c.minAccelerators)}`, have: k(s2.accelerators), ok: s2.accelerators >= c.minAccelerators });
+      checks.push({ label: "Scale-up domain", need: `≥ ${c.minScaleUpDomain}`, have: `${s2.scaleUpDomain}`, ok: s2.scaleUpDomain >= c.minScaleUpDomain });
+      checks.push({ label: "Scale-out / GPU", need: `≥ ${c.minScaleOutGBsPerAccel} GB/s`, have: `${s2.effScaleOutGBs.toFixed(1)} GB/s`, ok: s2.effScaleOutGBs >= c.minScaleOutGBsPerAccel });
+      checks.push({ label: "Total memory", need: `≥ ${k(c.minTotalMemGB / 1e3)} TB`, have: `${k(s2.totalMemGB / 1e3)} TB`, ok: s2.totalMemGB >= c.minTotalMemGB });
     } else {
-      const a = getItem(s.acceleratorId);
+      const a = getItem(s2.acceleratorId);
       if (a?.kind === "accelerator") {
-        const cap = inferenceCapacity(s, a, c.model, { contextTokens: c.contextTokens, tpotMs: c.tpotMs });
+        const cap = inferenceCapacity(s2, a, c.model, { contextTokens: c.contextTokens, tpotMs: c.tpotMs });
         checks.push({ label: "Throughput", need: `${k(c.tokensPerSec)} tok/s`, have: `${k(cap.tokensPerSec)} tok/s`, ok: cap.tokensPerSec >= c.tokensPerSec });
         checks.push({ label: "Model fits", need: `${c.model.paramsB}B weights`, have: cap.fitsWeights ? `fits (TP${cap.tpSize})` : "does not fit", ok: cap.fitsWeights });
         checks.push({ label: "p95 TTFT", need: `≤ ${c.ttftMs} ms`, have: `${Math.round(cap.ttftMs)} ms`, ok: cap.ttftMs <= c.ttftMs });
@@ -11549,19 +13307,19 @@ function buildOptions(g, c, signedAt) {
     cover.push({ label: "Hall power / cooling / space", need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? "needs plant" : "fits", ok: hallGaps.length === 0 });
     out.push({ t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
   }
-  const feasible = out.filter((o) => o.cost <= Math.max(g.cash * 4, 1));
+  const feasible = out.filter((o2) => o2.cost <= Math.max(g.cash * 4, 1));
   const pool = feasible.length ? feasible : out;
   pool.sort((a, b) => a.cost - b.cost);
-  const cheapest = pool.find((o) => o.fitsRamp) ?? pool[0];
+  const cheapest = pool.find((o2) => o2.fitsRamp) ?? pool[0];
   const fastest = [...pool].sort((a, b) => a.readyMonth - b.readyMonth || a.cost - b.cost)[0];
-  const payback = [...pool].filter((o) => isFinite(o.paybackMo) && o.fitsRamp).sort((a, b) => a.paybackMo - b.paybackMo)[0];
+  const payback = [...pool].filter((o2) => isFinite(o2.paybackMo) && o2.fitsRamp).sort((a, b) => a.paybackMo - b.paybackMo)[0];
   cheapest && cheapest.tags.push("💰 cheapest");
   fastest && fastest.tags.push("⚡ fastest");
   payback && payback.tags.push("📈 best payback");
   const picked = [...new Set([cheapest, fastest, payback].filter(Boolean))];
-  for (const o of pool) {
+  for (const o2 of pool) {
     if (picked.length >= 4) break;
-    if (!picked.includes(o)) picked.push(o);
+    if (!picked.includes(o2)) picked.push(o2);
   }
   return picked;
 }
@@ -11578,10 +13336,10 @@ function ledger(g) {
   };
   for (const [id, n] of Object.entries(g.inventory)) if (n > 0) row(id).warehouse += n;
   for (const [id, n] of Object.entries(g.spareStock ?? {})) if (n > 0) row(id).spares = (row(id).spares ?? 0) + n;
-  for (const o of g.orders) {
-    const r = row(o.itemId);
-    r.onOrder += o.qty;
-    r.nextEta = Math.min(r.nextEta ?? 1e9, o.arriveMonth);
+  for (const o2 of g.orders) {
+    const r = row(o2.itemId);
+    r.onOrder += o2.qty;
+    r.nextEta = Math.min(r.nextEta ?? 1e9, o2.arriveMonth);
   }
   for (const h of g.halls) {
     for (const [id, n] of Object.entries({ ...h.powerEquip, ...h.coolingEquip })) row(id).deployed += n;
@@ -11594,10 +13352,10 @@ function rackReadiness(g, designId, racks = 1) {
   if (!bom) return void 0;
   const lines = Object.entries(bom).map(([id, per2]) => {
     const need = per2 * racks, have = g.inventory[id] ?? 0;
-    const onOrder = g.orders.filter((o2) => o2.itemId === id && !o2.spare).reduce((n, o2) => n + o2.qty, 0);
+    const onOrder = g.orders.filter((o22) => o22.itemId === id && !o22.spare).reduce((n, o22) => n + o22.qty, 0);
     const it2 = getItem(id);
-    const o = it2 ? offerAt(it2, g.month) : void 0;
-    return { id, name: it2?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o?.available, unitPrice: o?.unitPrice ?? 0, leadMonths: o?.leadMonths ?? 0, reason: o?.reason };
+    const o2 = it2 ? offerAt(it2, g.month) : void 0;
+    return { id, name: it2?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o2?.available, unitPrice: o2?.unitPrice ?? 0, leadMonths: o2?.leadMonths ?? 0, reason: o2?.reason };
   });
   Object.values(bom);
   const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((g.inventory[id] ?? 0) / n)));
@@ -11607,7 +13365,7 @@ function rackReadiness(g, designId, racks = 1) {
     return n + Math.round(l.unitPrice * q * (1 - (it(l.id) ? volumeDiscount(it(l.id), q, l.unitPrice) : 0)));
   }, 0);
   const blocked = toBuy.filter((l) => !l.buyable);
-  const eta = Math.max(0, ...lines.filter((l) => l.short > 0).map((l) => l.onOrder >= l.short ? Math.max(0, (g.orders.filter((o) => o.itemId === l.id).map((o) => o.arriveMonth).sort((a, b) => b - a)[0] ?? g.month) - g.month) : l.leadMonths));
+  const eta = Math.max(0, ...lines.filter((l) => l.short > 0).map((l) => l.onOrder >= l.short ? Math.max(0, (g.orders.filter((o2) => o2.itemId === l.id).map((o2) => o2.arriveMonth).sort((a, b) => b - a)[0] ?? g.month) - g.month) : l.leadMonths));
   return { lines, buildableNow, complete: lines.every((l) => l.short === 0), toBuy, blocked, cost, etaMonths: eta };
 }
 const it = (id) => getItem(id);
@@ -11700,9 +13458,9 @@ const Q = {
   pipeline: () => pipeline(G()),
   powerPreview: () => {
     const g = G();
-    const o = monthlyOpex(g);
-    const drawMW = o.itPowerKW * o.pue / 1e3;
-    return { drawMW, opex: o, settle: settlePower(g, drawMW, () => 0.5, () => {
+    const o2 = monthlyOpex(g);
+    const drawMW = o2.itPowerKW * o2.pue / 1e3;
+    return { drawMW, opex: o2, settle: settlePower(g, drawMW, () => 0.5, () => {
     }), spotAnchor: spotAnchor(g.month), spotPrice: g.spotPrice ?? spotAnchor(g.month), spotUtil: spotUtilization(g.spotPrice ?? spotAnchor(g.month), g.month), hours: HOURS_PER_MONTH };
   },
   spotRevenue: () => {
@@ -11722,12 +13480,12 @@ const Q = {
     const ids = /* @__PURE__ */ new Set();
     g.halls.forEach((h) => h.racks.forEach((p) => Object.keys(rackParts(g, p.designId)).forEach((id) => partClass(id) && ids.add(id))));
     const failed = g.halls.flatMap((h) => h.racks).filter((p) => p.status === "failed").map((p) => ({ id: p.id, part: p.failedPart ? getItem(p.failedPart)?.name ?? "" : "burn-in failure", readyMonth: p.readyMonth }));
-    return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o) => o.spare && o.itemId === id).reduce((n, o) => n + o.qty, 0), adv: recommendedSpares(g, id) })) };
+    return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o2) => o2.spare && o2.itemId === id).reduce((n, o2) => n + o2.qty, 0), adv: recommendedSpares(g, id) })) };
   },
   slotOptions: (chassisId, kind) => {
     const ch = getItem(chassisId);
     if (!ch) return [];
-    const slot = ch.slots.find((s) => s.kind === kind);
+    const slot = ch.slots.find((s2) => s2.kind === kind);
     return ALL_ITEMS.filter((i) => partFitsSlot({ kind, accepts: slot?.accepts }, i)).map((i) => offerAt(i, G().month)).sort((a, b) => Number(b.available) - Number(a.available) || b.item.availableFrom - a.item.availableFrom);
   },
   traySizing: (design) => {
@@ -11819,7 +13577,7 @@ rl.on("line", (line) => {
   } catch {
     return;
   }
-  const out = (o) => process.stdout.write(JSON.stringify({ id: req.id, ...o }) + "\n");
+  const out = (o2) => process.stdout.write(JSON.stringify({ id: req.id, ...o2 }) + "\n");
   try {
     if (req.fn === "init") return out({ ok: true, result: init(), game: snapshot() });
     if (req.fn === "act") {
@@ -11837,7 +13595,7 @@ rl.on("line", (line) => {
       for (const m of MISSIONS) {
         const g = G();
         if (!g.missionsDone.includes(m.id) && m.done(g)) {
-          useGame.setState((s) => ({ game: { ...s.game, cash: s.game.cash + m.reward, missionsDone: [...s.game.missionsDone, m.id], log: [...s.game.log, { month: s.game.month, level: "good", text: `★ Mission complete: ${m.title} (+$${Math.round(m.reward).toLocaleString("en-US")}). ${m.lesson}` }] } }));
+          useGame.setState((s2) => ({ game: { ...s2.game, cash: s2.game.cash + m.reward, missionsDone: [...s2.game.missionsDone, m.id], log: [...s2.game.log, { month: s2.game.month, level: "good", text: `★ Mission complete: ${m.title} (+$${Math.round(m.reward).toLocaleString("en-US")}). ${m.lesson}` }] } }));
           done.push({ id: m.id, title: m.title, reward: m.reward });
           break;
         }
