@@ -23,7 +23,8 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
     s.utilityUSDPerKWh = Math.min(0.2, Math.round(s.utilityUSDPerKWh * 1.3 * 10000) / 10000);
     log('bad', `⚡ Energy crisis: utility rate jumps to $${s.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
   });
-  pool.push(() => {
+  // Grants reward operators who actually host capacity; an empty hall earns nothing (idle play must not profit).
+  if (racks > 0) pool.push(() => {
     const cut = Math.round(1e6 + rng() * 2e6);
     s.cash += cut;
     log('good', `🏛 Sovereign-AI grant: a regional government pays +$${(cut / 1e6).toFixed(1)}M to bring GPU capacity on-shore. Governments are now a real customer class.`);
