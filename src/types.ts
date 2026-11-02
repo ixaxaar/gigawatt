@@ -10,7 +10,9 @@ export type Vendor =
   | 'gigabyte' | 'quanta' | 'foxconn' | 'ocp'
   | 'vertiv' | 'schneider' | 'eaton' | 'delta' | 'submer' | 'coolit' | 'motivair'
   | 'caterpillar' | 'cummins' | 'mtu' | 'kohler' | 'bloom' | 'abb' | 'siemens' | 'trane' | 'carrier' | 'jci' | 'daikin'
-  | 'vast' | 'weka' | 'ddn' | 'samsung' | 'micron' | 'skhynix' | 'generic';
+  | 'vast' | 'weka' | 'ddn' | 'samsung' | 'micron' | 'skhynix' | 'generic'
+  /** Open-ended: catalogue expansion adds vendors by id; each must have a VendorInfo entry. */
+  | (string & {});
 
 /** Learning text attached to every catalog entry. Plain text, no markdown. */
 export interface Codex {

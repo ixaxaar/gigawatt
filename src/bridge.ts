@@ -2,6 +2,8 @@
 // Request:  {"id":1,"fn":"act","name":"buyTemplate","args":[...]}  |  {"id":2,"fn":"q","name":"validateRack","args":[...]}  |  {"id":3,"fn":"init"}
 // Response: {"id":1,"ok":true,"result":...,"game":{...}}   (game is attached to every `act` and `init` response)
 import { createInterface } from 'node:readline';
+import * as ENV from './env/env';
+import { SCENARIOS } from './env/scenarios';
 // localStorage shim so the store's save/load work headless.
 const mem = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
@@ -125,6 +127,15 @@ rl.on('line', (line) => {
       const done: any[] = [];
       for (const m of MISSIONS) { const g = G(); if (!g.missionsDone.includes(m.id) && m.done(g)) { useGame.setState(s => ({ game: { ...s.game, cash: s.game.cash + m.reward, missionsDone: [...s.game.missionsDone, m.id], log: [...s.game.log, { month: s.game.month, level: 'good' as const, text: `★ Mission complete: ${m.title} (+$${Math.round(m.reward).toLocaleString('en-US')}). ${m.lesson}` }] } })); done.push({ id: m.id, title: m.title, reward: m.reward }); break; } }
       return out({ ok: true, result: done, game: snapshot() });
+    }
+    if (req.fn === 'env') { // agent API: reset | step | obs | text | actions | hash | scenarios
+      const a = req.args ?? []; const sc = (id?: string) => id ? SCENARIOS.find(x => x.id === id) : undefined;
+      const r: any = req.name === 'reset' ? ENV.reset({ seed: a[0]?.seed, mode: a[0]?.mode, scenario: sc(a[0]?.scenario) })
+        : req.name === 'step' ? ENV.step(a[0]) : req.name === 'obs' ? ENV.observe() : req.name === 'text' ? ENV.describe()
+        : req.name === 'actions' ? ENV.legalActions(a[0] ?? {}) : req.name === 'hash' ? ENV.hash()
+        : req.name === 'scenarios' ? SCENARIOS.map(x => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed })) : undefined;
+      if (r === undefined) return out({ ok: false, error: 'unknown env fn ' + req.name });
+      return out({ ok: true, result: r });
     }
     if (req.fn === 'ping') return out({ ok: true, result: 'pong' });
     out({ ok: false, error: 'unknown fn' });

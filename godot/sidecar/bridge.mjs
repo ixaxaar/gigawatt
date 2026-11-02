@@ -6774,10 +6774,10 @@ function requireReact_development() {
                 }
               }
               var iterator = iteratorFn.call(iterableChildren);
-              var step;
+              var step2;
               var ii = 0;
-              while (!(step = iterator.next()).done) {
-                child = step.value;
+              while (!(step2 = iterator.next()).done) {
+                child = step2.value;
                 nextName = nextNamePrefix + getElementKey(child, ii++);
                 subtreeCount += mapIntoArray(child, array, escapedPrefix, nextName, callback);
               }
@@ -7561,10 +7561,10 @@ function requireReact_development() {
             if (typeof iteratorFn === "function") {
               if (iteratorFn !== node.entries) {
                 var iterator = iteratorFn.call(node);
-                var step;
-                while (!(step = iterator.next()).done) {
-                  if (isValidElement(step.value)) {
-                    validateExplicitKey(step.value, parentType);
+                var step2;
+                while (!(step2 = iterator.next()).done) {
+                  if (isValidElement(step2.value)) {
+                    validateExplicitKey(step2.value, parentType);
                   }
                 }
               }
@@ -9658,7 +9658,7 @@ function advanceMonth(state, opts = {}) {
   s.log = [...s.log, ...logs].slice(-400);
   return s;
 }
-const G$1 = () => useGame.getState().game;
+const G$2 = () => useGame.getState().game;
 const TECH = ["ib-ndr", "ib-xdr", "spectrum-x", "eth-400", "eth-800", "roce", "uec-eth"];
 const TOPO = "fat-tree-rail-optimized";
 const ctxOf$1 = (g) => ({
@@ -9698,14 +9698,14 @@ function plantChoice(g, hallClass, kind) {
   return cand[0];
 }
 function stepProject(st2, pid) {
-  const g = G$1();
+  const g = G$2();
   const p = (g.projects ?? []).find((x) => x.id === pid);
   if (!p || p.stage === "done" || p.stage === "failed") return;
   const t = getTemplate(p.templateId);
   const hall = g.halls.find((h) => h.id === p.hallId);
   if (!t || !hall) return st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Template or hall disappeared."] });
   const f = templateFacts(t);
-  if (!G$1().activeContracts.some((a) => a.contract.id === p.contractId) && p.stage !== "building") {
+  if (!G$2().activeContracts.some((a) => a.contract.id === p.contractId) && p.stage !== "building") {
     st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Contract was cancelled — the capacity is yours; offer it on spot in Energy."] });
     return;
   }
@@ -9725,11 +9725,11 @@ function stepProject(st2, pid) {
       }
     }
     const h2 = useStoreHall(st2, hall.id);
-    const load = h2.racks.reduce((n, r) => n + (r.status === "failed" ? 0 : templateFactsOfDesign(G$1(), r.designId)), 0) + f.kWPerRack * (p.racks - p.rackIds.length);
+    const load = h2.racks.reduce((n, r) => n + (r.status === "failed" ? 0 : templateFactsOfDesign(G$2(), r.designId)), 0) + f.kWPerRack * (p.racks - p.rackIds.length);
     const free = h2.rackSlots - h2.racks.length;
     const designId = rackIdOf(t);
-    const bom = rackBom(G$1(), designId) ?? {};
-    const have = (n) => Object.entries(bom).every(([id, c]) => (G$1().inventory[id] ?? 0) >= c * n);
+    const bom = rackBom(G$2(), designId) ?? {};
+    const have = (n) => Object.entries(bom).every(([id, c]) => (G$2().inventory[id] ?? 0) >= c * n);
     let placed2 = p.rackIds.length;
     if (load <= h2.itPowerKW && load <= h2.coolingKW) {
       while (placed2 < p.racks && free - (placed2 - p.rackIds.length) > 0 && have(1)) {
@@ -9754,17 +9754,17 @@ function stepProject(st2, pid) {
       stepProject(st2, pid);
     }
   } else if (p.stage === "clustering") {
-    const c = G$1().activeContracts.find((a) => a.contract.id === p.contractId)?.contract;
+    const c = G$2().activeContracts.find((a) => a.contract.id === p.contractId)?.contract;
     const target = c && c.kind === "training" ? c.minScaleOutGBsPerAccel : 0;
-    const af = autoFabric(G$1(), p.rackIds, target);
+    const af = autoFabric(G$2(), p.rackIds, target);
     if (!af) return note("no valid fabric found — build one by hand on the Supercomputer screen");
     const r = st2.createCluster(p.name, p.rackIds, af.fabric);
     if (!r.ok) return note(`cluster blocked: ${r.message}`);
     note(`cluster built: ${af.note}`);
-    st2.patchProject(pid, { stage: "assigning", clusterId: G$1().clusters[G$1().clusters.length - 1].id });
+    st2.patchProject(pid, { stage: "assigning", clusterId: G$2().clusters[G$2().clusters.length - 1].id });
     stepProject(st2, pid);
   } else if (p.stage === "assigning") {
-    const cid = p.clusterId ?? G$1().clusters[G$1().clusters.length - 1]?.id;
+    const cid = p.clusterId ?? G$2().clusters[G$2().clusters.length - 1]?.id;
     if (!cid) return;
     const r = st2.assignContract(p.contractId, [cid]);
     if (r.ok) {
@@ -9773,7 +9773,7 @@ function stepProject(st2, pid) {
     } else note(`not qualified yet: ${r.message}`);
   }
 }
-const useStoreHall = (_st, hid) => G$1().halls.find((h) => h.id === hid);
+const useStoreHall = (_st, hid) => G$2().halls.find((h) => h.id === hid);
 const templateFactsOfDesign = (g, designId) => {
   const d = g.racks.find((r) => r.id === designId);
   if (!d) return 0;
@@ -9781,7 +9781,7 @@ const templateFactsOfDesign = (g, designId) => {
   return t ? templateFacts(t).kWPerRack : 30;
 };
 function ensureUplink(st2) {
-  const g = G$1();
+  const g = G$2();
   if (!g.uplinks) return;
   const live = new Set(g.activeContracts.map((a) => a.contract.id));
   let need = g.activeContracts.reduce((n, a) => n + contractNeedGbps(a.contract), 0);
@@ -9802,7 +9802,7 @@ function stepAllProjects(getSt) {
 function startProject(st2, contractId, templateId, racks) {
   const t = getTemplate(templateId);
   if (!t) return { ok: false, message: "Unknown build." };
-  const g0 = G$1();
+  const g0 = G$2();
   if (!g0.activeContracts.some((a) => a.contract.id === contractId)) {
     const a = st2.acceptContract(contractId);
     if (!a.ok) return a;
@@ -9810,16 +9810,16 @@ function startProject(st2, contractId, templateId, racks) {
   const r = st2.buyTemplate(templateId, racks);
   if (!r.ok) return r;
   const f = templateFacts(t);
-  let hall = G$1().halls.find((h) => COOL_LEVEL$1[h.coolingClass] >= COOL_LEVEL$1[t.rack.cooling] && h.rackSlots - h.racks.length >= racks);
+  let hall = G$2().halls.find((h) => COOL_LEVEL$1[h.coolingClass] >= COOL_LEVEL$1[t.rack.cooling] && h.rackSlots - h.racks.length >= racks);
   const notes = [`ordered ${racks} × ${t.name}`];
   if (!hall) {
-    const b = st2.buildHall(`Hall ${String.fromCharCode(65 + G$1().halls.length)}`, t.rack.cooling, Math.max(8, racks + 4));
+    const b = st2.buildHall(`Hall ${String.fromCharCode(65 + G$2().halls.length)}`, t.rack.cooling, Math.max(8, racks + 4));
     notes.push(b.message);
-    hall = G$1().halls[G$1().halls.length - 1];
+    hall = G$2().halls[G$2().halls.length - 1];
   }
   const need = f.kWPerRack * racks + hall.racks.length * 0;
   const plant = [];
-  const g = G$1();
+  const g = G$2();
   const fresh = g.halls.find((h) => h.id === hall.id);
   const pw2 = plantChoice(g, fresh.coolingClass, "power"), cl = plantChoice(g, fresh.coolingClass, "cooling");
   const loadNow = fresh.racks.length ? need : need;
@@ -9845,7 +9845,7 @@ function startProject(st2, contractId, templateId, racks) {
 }
 function assignFromRacks(st2, contractId, rackIds) {
   if (!rackIds.length) return { ok: false, message: "Pick at least one online rack." };
-  const g = G$1();
+  const g = G$2();
   const placed2 = g.halls.flatMap((h) => h.racks);
   const bad = rackIds.filter((id) => placed2.find((p) => p.id === id)?.status !== "online");
   if (bad.length) return { ok: false, message: "All chosen racks must be online (commissioned)." };
@@ -9853,14 +9853,14 @@ function assignFromRacks(st2, contractId, rackIds) {
     const a2 = st2.acceptContract(contractId);
     if (!a2.ok) return a2;
   }
-  const c = G$1().activeContracts.find((a2) => a2.contract.id === contractId).contract;
-  const af = autoFabric(G$1(), rackIds, c.kind === "training" ? c.minScaleOutGBsPerAccel : 0);
+  const c = G$2().activeContracts.find((a2) => a2.contract.id === contractId).contract;
+  const af = autoFabric(G$2(), rackIds, c.kind === "training" ? c.minScaleOutGBsPerAccel : 0);
   if (!af) return { ok: false, message: "No valid network fabric found for these racks." };
   const free = rackIds.filter((id) => !placed2.find((p) => p.id === id)?.clusterId);
   if (free.length !== rackIds.length) return { ok: false, message: "Some racks already belong to a cluster — assign that cluster instead." };
   const r = st2.createCluster(`Auto · ${c.customer}`, rackIds, af.fabric);
   if (!r.ok) return r;
-  const cl = G$1().clusters[G$1().clusters.length - 1];
+  const cl = G$2().clusters[G$2().clusters.length - 1];
   const a = st2.assignContract(contractId, [cl.id]);
   if (!a.ok) st2.disbandCluster(cl.id);
   return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
@@ -10006,7 +10006,7 @@ const useGame = create()((set, get) => {
       }
       set({ game: g });
     },
-    patchProject: (id, patch) => set((s) => ({ game: { ...s.game, projects: (s.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch } : p) } })),
+    patchProject: (id, patch2) => set((s) => ({ game: { ...s.game, projects: (s.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
     addProject: (p) => set((s) => ({ game: { ...s.game, projects: [...s.game.projects ?? [], p] } })),
     setMode: (m) => set((s) => ({ game: { ...s.game, mode: m } })),
     startEasy: (contractId, templateId, racks) => {
@@ -10602,6 +10602,251 @@ function newGameState(seed) {
   });
   return g;
 }
+const st$2 = () => useGame.getState();
+const G$1 = () => st$2().game;
+function stable(v2) {
+  if (v2 === null || typeof v2 !== "object") return JSON.stringify(v2);
+  if (Array.isArray(v2)) return "[" + v2.map(stable).join(",") + "]";
+  return "{" + Object.keys(v2).sort().map((k2) => JSON.stringify(k2) + ":" + stable(v2[k2])).join(",") + "}";
+}
+function hashState(g) {
+  const s = stable(g);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+function observe() {
+  const g = G$1();
+  const pnl = selectMonthlyPnL(g);
+  const racks = g.halls.flatMap((h) => h.racks);
+  const by = (f) => racks.reduce((m, r) => {
+    const k2 = f(r);
+    m[k2] = (m[k2] ?? 0) + 1;
+    return m;
+  }, {});
+  return {
+    month: g.month,
+    year: +(2020 + g.month / 12).toFixed(2),
+    cash: g.cash,
+    debt: g.debt,
+    netWorth: selectNetWorth(g),
+    reputation: g.reputation,
+    monthlyPnL: pnl,
+    halls: g.halls.map((h) => ({ id: h.id, name: h.name, coolingClass: h.coolingClass, rackSlots: h.rackSlots, racks: h.racks.length, rackStatus: h.racks.reduce((m, r) => (m[r.status] = (m[r.status] ?? 0) + 1, m), {}), itPowerKW: h.itPowerKW, coolingKW: h.coolingKW, pue: h.pue, powerEquip: h.powerEquip, coolingEquip: h.coolingEquip })),
+    rackStatus: by((r) => r.status),
+    inventory: g.inventory,
+    spares: g.spareStock ?? {},
+    orders: g.orders.map((o) => ({ itemId: o.itemId, qty: o.qty, arriveMonth: o.arriveMonth, spare: !!o.spare })),
+    offers: g.availableContracts,
+    active: g.activeContracts.map((a) => ({ id: a.contract.id, customer: a.contract.customer, clusterIds: a.clusterIds, monthsServed: a.monthsServed, slaMisses: a.slaMisses, deployBy: a.deployBy })),
+    clusters: g.clusters.map((c) => ({ id: c.id, name: c.name, racks: c.rackIds.length, fabric: c.fabric, stats: c.stats })),
+    projects: g.projects ?? [],
+    powerContracts: g.powerContracts ?? [],
+    powerOffers: g.powerOffers ?? [],
+    uplinks: g.uplinks ?? {},
+    spotPrice: g.spotPrice,
+    log: g.log.slice(-10)
+  };
+}
+function describe() {
+  const o = observe();
+  const f = (n) => Math.round(n).toLocaleString("en-US");
+  return [
+    `Month ${o.month} (${o.year}). Cash $${f(o.cash)}, debt $${f(o.debt)}, net worth $${f(o.netWorth)}, reputation ${o.reputation.toFixed(0)}.`,
+    `Halls: ${o.halls.map((h) => `${h.name}[${h.coolingClass}, ${h.racks}/${h.rackSlots} racks ${JSON.stringify(h.rackStatus)}]`).join("; ") || "none"}.`,
+    `Orders in flight: ${o.orders.length}. Inventory lines: ${Object.keys(o.inventory).length}. Clusters: ${o.clusters.length}.`,
+    `Contracts: ${o.active.length} active, ${o.offers.length} on offer.`,
+    `Recent log:
+${o.log.map((l) => ` - [${l.level}] ${l.text}`).join("\n")}`
+  ].join("\n");
+}
+let scenario = null;
+let t0 = 0;
+let broke = 0;
+function reset(opts = {}) {
+  scenario = opts.scenario ?? null;
+  const seed = opts.seed ?? scenario?.seed ?? 1;
+  st$2().newGame(seed, opts.mode ?? "operator");
+  scenario?.setup?.();
+  t0 = G$1().month;
+  broke = 0;
+  return observe();
+}
+function step(a) {
+  const before = selectNetWorth(G$1());
+  const fn = st$2()[a.name];
+  if (typeof fn !== "function") return { obs: observe(), reward: -0.01, done: false, truncated: false, info: { ok: false, message: "unknown action " + a.name, issues: [] } };
+  const r = fn(...a.args ?? []);
+  const res = r && typeof r === "object" && "ok" in r ? r : { ok: true, message: "" };
+  let reward = res.ok ? 0 : -0.01;
+  if (a.name === "nextMonth") {
+    const g2 = G$1();
+    reward += (selectNetWorth(g2) - before) / 1e6;
+    broke = g2.cash < 0 ? broke + 1 : 0;
+  }
+  const g = G$1();
+  const horizon = scenario?.horizonMonths ?? 120;
+  const bankrupt = broke >= 2;
+  const truncated = g.month - t0 >= horizon;
+  if (bankrupt) reward -= 10;
+  return { obs: observe(), reward, done: bankrupt, truncated, info: { ok: !!res.ok, message: res.message ?? "", issues: res.issues ?? [], ...bankrupt ? { terminalReason: "bankrupt (cash<0 for 2 months)" } : {} } };
+}
+function probe(a) {
+  const snap = G$1();
+  const fn = st$2()[a.name];
+  try {
+    const r = fn(...a.args ?? []);
+    return !r || typeof r !== "object" || !("ok" in r) || !!r.ok;
+  } catch {
+    return false;
+  } finally {
+    useGame.setState({ game: snap });
+  }
+}
+function legalActions(opts = {}) {
+  const g = G$1();
+  const out = [{ name: "nextMonth", desc: "Advance one month" }];
+  const add = (a, desc) => {
+    if (probe(a)) out.push({ ...a, desc });
+  };
+  add({ name: "takeLoan", args: [5e6] }, "Borrow $5M");
+  add({ name: "takeLoan", args: [25e6] }, "Borrow $25M");
+  for (const c of g.availableContracts) add({ name: "acceptContract", args: [c.id] }, `Accept contract ${c.id}`);
+  for (const t of TEMPLATES) add({ name: "buyTemplate", args: [t.id, 1] }, `Order 1 rack of ${t.name}`);
+  for (const a of g.activeContracts) for (const cl of g.clusters) if (!a.clusterIds.includes(cl.id)) add({ name: "assignContract", args: [a.contract.id, [cl.id]] }, `Serve ${a.contract.id} on ${cl.name}`);
+  for (const a of g.activeContracts) if (a.clusterIds.length) out.push({ name: "unassignContract", args: [a.contract.id], desc: `Release ${a.contract.id}` });
+  for (const cl of g.clusters) out.push({ name: "disbandCluster", args: [cl.id], desc: `Disband ${cl.name}` });
+  if (opts.full) {
+    for (const c of g.activeContracts) for (const t of TEMPLATES) add({ name: "startEasy", args: [c.contract.id, t.id, 4] }, `Auto-build ${c.contract.id} with ${t.name}`);
+    for (const h of g.halls) for (const k2 of Object.keys(g.inventory)) {
+      add({ name: "installPower", args: [h.id, k2, 1] }, `Install ${k2} power in ${h.name}`);
+      add({ name: "installCooling", args: [h.id, k2, 1] }, `Install ${k2} cooling in ${h.name}`);
+    }
+  }
+  return out;
+}
+const hash = () => hashState(G$1());
+const st$1 = () => useGame.getState();
+const patch = (f) => useGame.setState((s) => {
+  const g = JSON.parse(JSON.stringify(s.game));
+  f(g);
+  return { game: g };
+});
+function plantUnit(kind, cls) {
+  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === cls && !["cold-plate-loop", "rdhx"].includes(i.coolingType)).map((i) => offerAt(i, st$1().game.month)).filter((o) => o.available);
+  cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
+  return cand[0];
+}
+const advance = (n) => {
+  for (let i = 0; i < n; i++) st$1().nextMonth();
+};
+function stressFill(racksPerTemplate, hallsPerClass = 1) {
+  const report = { halls: [], skipped: [] };
+  const classes = ["air", "rdhx", "dlc", "immersion"];
+  const hallOf = {};
+  for (const c of classes) for (let k2 = 0; k2 < hallsPerClass; k2++) {
+    const r = st$1().buildHall(`${c.toUpperCase()}-${k2 + 1}`, c, 200);
+    if (r.ok) (hallOf[c] ??= []).push(st$1().game.halls[st$1().game.halls.length - 1].id);
+  }
+  const load = {};
+  const plan = [];
+  let rr = 0;
+  for (const t of TEMPLATES) {
+    const f = templateFacts(t);
+    const cls = classes.find((c) => c === t.rack.cooling) ?? "air";
+    const halls = hallOf[cls] ?? [];
+    if (!halls.length) {
+      report.skipped.push(t.id + ": no hall");
+      continue;
+    }
+    const hall = halls[rr++ % halls.length];
+    let n = racksPerTemplate, r = st$1().buyTemplate(t.id, n, false);
+    while (!r.ok && n > 1 && /llocation/.test(r.message)) {
+      n = Math.max(1, Math.floor(n / 2));
+      r = st$1().buyTemplate(t.id, n, false);
+    }
+    if (!r.ok) {
+      report.skipped.push(`${t.id}: ${r.message.slice(0, 90)}`);
+      continue;
+    }
+    load[hall] = (load[hall] ?? 0) + f.kWPerRack * n;
+    plan.push({ t, hall, n });
+  }
+  const bought = {};
+  for (const [hallId, kw] of Object.entries(load)) {
+    const h = st$1().game.halls.find((x) => x.id === hallId);
+    for (const kind of ["power", "cooling"]) {
+      const u = plantUnit(kind, h.coolingClass);
+      if (!u) {
+        report.skipped.push(`${hallId}: no ${kind} plant`);
+        continue;
+      }
+      const n = Math.ceil(kw * 1.15 / (u.item.capacityKW || 1));
+      const b = st$1().buy(u.item.id, n);
+      if (!b.ok) report.skipped.push(`${hallId} ${kind}: ${b.message.slice(0, 80)}`);
+      else (bought[hallId] ??= []).push({ id: u.item.id, n, kind });
+    }
+  }
+  for (const { t, n } of plan) {
+    const did = st$1().game.racks.find((r) => r.id.includes(t.id))?.id;
+    if (!did) continue;
+    for (const [id, c] of Object.entries(rackBom(st$1().game, did) ?? {})) {
+      const need = c * n - (st$1().game.inventory[id] ?? 0);
+      if (need > 0) {
+        const b = st$1().buy(id, need);
+        if (!b.ok) report.skipped.push(`${t.id} part ${id}: ${b.message.slice(0, 70)}`);
+      }
+    }
+  }
+  for (let i = 0; i < 16 && st$1().game.orders.length; i++) advance(1);
+  for (const [hallId, list] of Object.entries(bought)) for (const p of list) {
+    const ir = p.kind === "power" ? st$1().installPower(hallId, p.id, p.n) : st$1().installCooling(hallId, p.id, p.n);
+    if (!ir.ok) report.skipped.push(`${hallId} install ${p.id}: ${ir.message.slice(0, 90)}`);
+  }
+  for (const { t, hall, n: cnt } of plan) {
+    const designId = `rk-${t.id}`.length ? st$1().game.racks.find((r) => r.id.includes(t.id))?.id ?? "" : "";
+    let placed2 = 0;
+    if (designId) for (let i = 0; i < cnt; i++) {
+      const r = st$1().placeRack(hall, designId);
+      if (!r.ok) {
+        report.skipped.push(`${t.id} place ${i}: ${r.message}`);
+        break;
+      }
+      placed2++;
+    }
+    report[t.id] = placed2;
+  }
+  advance(6);
+  report.halls = st$1().game.halls.map((h) => ({ id: h.id, class: h.coolingClass, racks: h.racks.length, kW: h.itPowerKW, coolKW: h.coolingKW, pue: h.pue }));
+  return report;
+}
+const SCENARIOS = [
+  { id: "classic", title: "Classic start (Jan 2020)", seed: 1, horizonMonths: 120, description: "Default $50M start; the baseline for comparing agents." },
+  { id: "lean", title: "Lean start", seed: 2, horizonMonths: 120, description: "$8M cash: every dollar of capex and every contract choice matters.", setup: () => patch((g) => {
+    g.cash = 8e6;
+  }) },
+  { id: "gold-rush-2025", title: "GPU gold rush (Jan 2025)", seed: 3, horizonMonths: 60, description: "Start in 2025 with $250M into Blackwell-era scarcity, high demand and allocation caps.", setup: () => patch((g) => {
+    g.month = 60;
+    g.cash = 25e7;
+  }) },
+  { id: "stress-all-racks", title: "Stress: every rack type deployed", seed: 4, horizonMonths: 24, description: "Sep-2026 start, effectively unlimited cash; four 200-slot halls (air/RDHx/DLC/immersion) pre-filled with every system template to test extremes of power, cooling, failures and fabric.", setup: () => {
+    patch((g) => {
+      g.month = 80;
+      g.cash = 5e10;
+    });
+    stressFill(6);
+  } },
+  { id: "stress-campus", title: "Stress: multi-hall campus", seed: 5, horizonMonths: 24, description: "Eight halls (two per cooling class), 12 racks of every template each: a gigawatt-class campus for scaling limits.", setup: () => {
+    patch((g) => {
+      g.month = 80;
+      g.cash = 2e11;
+    });
+    stressFill(12, 2);
+  } }
+];
 const placed = (g) => g.halls.flatMap((h) => h.racks);
 const MISSIONS = [
   { id: "order", title: "Place your first order", go: "shop", reward: 25e4, hint: "Open Procurement and buy anything.", lesson: "Hardware has LEAD TIMES (and for GPUs, allocation). Order early — parts arrive months later.", done: (g) => g.orders.length > 0 || Object.keys(g.inventory).length > 0 },
@@ -11249,6 +11494,13 @@ rl.on("line", (line) => {
         }
       }
       return out({ ok: true, result: done, game: snapshot() });
+    }
+    if (req.fn === "env") {
+      const a = req.args ?? [];
+      const sc = (id) => id ? SCENARIOS.find((x) => x.id === id) : void 0;
+      const r = req.name === "reset" ? reset({ seed: a[0]?.seed, mode: a[0]?.mode, scenario: sc(a[0]?.scenario) }) : req.name === "step" ? step(a[0]) : req.name === "obs" ? observe() : req.name === "text" ? describe() : req.name === "actions" ? legalActions(a[0] ?? {}) : req.name === "hash" ? hash() : req.name === "scenarios" ? SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed })) : void 0;
+      if (r === void 0) return out({ ok: false, error: "unknown env fn " + req.name });
+      return out({ ok: true, result: r });
     }
     if (req.fn === "ping") return out({ ok: true, result: "pong" });
     out({ ok: false, error: "unknown fn" });
