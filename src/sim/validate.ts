@@ -408,7 +408,7 @@ export function computePUE(hall: HallState, get: CatalogGet): number {
   let cap = 0, effSum = 0;
   for (const [id, count] of Object.entries(hall.powerEquip)) {
     const p = get(id);
-    if (!p || p.kind !== 'power' || p.efficiency >= 1) continue;
+    if (!p || p.kind !== 'power' || p.efficiency >= 1 || !['transformer', 'ups', 'busway', 'pdu', 'power-shelf', 'switchgear'].includes(p.powerType)) continue; // series chain only: backup gensets/turbines/PPAs carry no IT load in normal operation
     cap += count * p.capacityKW;
     effSum += count * p.capacityKW * p.efficiency;
   }
