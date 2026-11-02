@@ -41,7 +41,8 @@ func _ready() -> void:
 	b.changed.connect(_on_changed)
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
-	if auto != "": _new_game(auto); if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
+	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
+	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 
 func _fatal(msg: String) -> void:
 	var l := Label.new(); l.text = "GIGAWATT engine failed to start:\n" + msg; l.position = Vector2(60, 60); add_child(l)
@@ -123,7 +124,9 @@ func _on_changed() -> void:
 	if hall.get_meta("n", 0) == 0: pass
 	if screens.has(cur): Kit.refresh_keep(screens[cur])
 
+var quiet := false
 func toast(text: String, level := "info") -> void:
+	if quiet: return
 	audio.play("good" if level == "good" else ("bad" if level == "bad" else "click"))
 	var p := PanelContainer.new(); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
 	p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.12, 0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
@@ -235,3 +238,23 @@ func _notification(what: int) -> void:
 		if started and b != null: b.act("save")
 		if b != null: b.stop()
 		get_tree().quit()
+
+## Screenshot helper (GW_DEMO=<months>): start Easy-path projects for the first offers and fast-forward.
+func _demo(months: int) -> void:
+	quiet = true
+	b.act("takeLoan", [200000000.0])
+	for k in 3:
+		for c in b.g.availableContracts:
+			var opts: Array = b.q("buildOptions", [c.id, null])
+			if opts.is_empty(): continue
+			var r: Dictionary = b.act("startEasy", [c.id, opts[0].t.id, int(opts[0].racks)])
+			print("DEMO ", r.ok, " ", r.message.left(120))
+			if r.ok: break
+	for i in months: b.act("nextMonth", [])
+	_seen_log = b.g.log.size(); print("DEMO racks ", b.g.halls[0].racks.size(), " clusters ", b.g.clusters.size(), " active ", b.g.activeContracts.size())
+	hall.rebuild(); _on_changed(); quiet = false
+	if OS.get_environment("GW_THERMAL") != "": hall.thermal = true; hall.rebuild()
+	var cam := OS.get_environment("GW_CAM")
+	if cam != "":
+		var c := cam.split_floats(",")
+		hall.yaw = c[0]; hall.pitch = c[1]; hall.dist = c[2]; hall.target = Vector3(c[3], 0.8, c[4]); hall.auto_orbit = false; hall._update_cam()
