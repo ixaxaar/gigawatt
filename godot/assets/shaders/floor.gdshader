@@ -1,6 +1,8 @@
 shader_type spatial;
 // Raised-access-floor: 600 mm tiles, seams, a perforated pattern, subtle wear and gloss.
 uniform vec2 area = vec2(20.0, 20.0);
+uniform vec2 center = vec2(0.0);
+uniform vec2 fade = vec2(1e6);
 uniform vec4 perf_rect = vec4(0, 0, 0, 0); // x0, z0, x1, z1 in local metres for perforated cold-aisle tiles (unused when zero)
 varying vec3 wpos;
 void vertex() { wpos = VERTEX; }
@@ -17,5 +19,8 @@ void fragment() {
 	float hole = step(length(c), 0.28) * inperf;
 	base = mix(base, vec3(0.02), hole * 0.9);
 	base = mix(base, vec3(0.08), clamp(seam, 0.0, 1.0));
+	vec2 q = (wpos.xz - center);
+	float edge = clamp(1.0 - max(smoothstep(fade.x * 0.6, fade.x * 1.6, abs(q.x)), smoothstep(fade.y * 0.5, fade.y * 1.6, abs(q.y))), 0.0, 1.0);
+	base *= mix(0.12, 1.0, edge);
 	ALBEDO = base; ROUGHNESS = mix(0.28, 0.8, clamp(seam, 0.0, 1.0)); METALLIC = 0.05; SPECULAR = 0.7;
 }

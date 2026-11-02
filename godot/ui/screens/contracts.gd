@@ -80,7 +80,7 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 
 func _offer(parent: Control, c: Dictionary) -> void:
 	var b: Bridge = app.b
-	var pn := Kit.fold_panel("%s · %s · %s" % [c.customer, c.archetype, c.model.name], "o" + str(c.id), folds, refresh, true, parent); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · %s" % [c.customer, c.archetype, c.model.name], "o" + str(c.id), folds, refresh, true, parent, true); var v: VBoxContainer = pn[1]
 	var t: bool = c.kind == "training"
 	v.add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%sB%s · %s[/color]" % [c.model.name, Kit.num(c.model.paramsB, 1), (" (%sB active)" % Kit.num(c.model.activeParamsB, 1)) if c.model.activeParamsB != c.model.paramsB else "", c.kind], 15))
 	var head := ("%s+ GPUs · %s/GPU-hr" % [Kit.num(c.minAccelerators), Kit.usd(c.pricePerAccelHour)]) if t else ("%s tok/s · %s/Mtok" % [Kit.num(c.tokensPerSec), Kit.usd(c.pricePerMTok)])
@@ -120,7 +120,7 @@ func _rack_assign(parent: Control, contract_id: String) -> void:
 func _pending(parent: Control, a: Dictionary) -> void:
 	var b: Bridge = app.b; var c: Dictionary = a.contract
 	var left: int = int(a.get("deployBy", a.startMonth + 4)) - int(b.g.month)
-	var pn := Kit.fold_panel("%s · %s · awaiting deployment" % [c.customer, c.kind], "p" + str(c.id), folds, refresh, true, parent); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · awaiting deployment" % [c.customer, c.kind], "p" + str(c.id), folds, refresh, true, parent, true); var v: VBoxContainer = pn[1]
 	v.add_child(Kit.label("deploy by %s · %d mo left" % [Kit.date_of(a.get("deployBy", a.startMonth + 4)), maxi(0, left)], 13, Kit.RD if left <= 1 else Kit.AM))
 	v.add_child(Kit.label(c.model.name, 15))
 	var f := _checks(v, c)
@@ -138,7 +138,7 @@ func _pending(parent: Control, a: Dictionary) -> void:
 
 func _serving(parent: Control, a: Dictionary) -> void:
 	var b: Bridge = app.b; var c: Dictionary = a.contract
-	var pn := Kit.fold_panel("%s · %s · serving" % [c.customer, c.kind], "s" + str(c.id), folds, refresh, false, parent); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · serving" % [c.customer, c.kind], "s" + str(c.id), folds, refresh, false, parent, true); var v: VBoxContainer = pn[1]
 	v.add_child(Kit.tag("serving", Kit.GR)); v.add_child(Kit.label(c.model.name, 15))
 	v.add_child(Kit.label("%d/%d mo · SLA misses %d" % [int(a.monthsServed), int(c.durationMonths), int(a.slaMisses)], 13))
 	var names := []; for id in a.clusterIds:

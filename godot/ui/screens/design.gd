@@ -23,6 +23,7 @@ var sel_dev := -1
 const ZONE := {"accelerator": "ACCELERATOR", "cpu": "CPU", "dimm": "DIMM", "nic": "PCIe NIC", "dpu": "PCIe DPU", "nvme": "NVMe BAY", "psu": "PSU BAY", "coldplate": "COLD PLATE", "switchchip": "SWITCH CHIP", "fan": "FAN"}
 const RC := {"tray": Color("#76b900"), "switch": Color("#4fd1ff"), "storage": Color("#c792ea"), "power": Color("#ffb020")}
 
+var _gwfilled := false
 func refresh() -> void:
 	for c in get_children(): c.queue_free()
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
@@ -112,6 +113,7 @@ func _tray(root: Control) -> void:
 	for t in b.templates:
 		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
 	var to := Kit.option(topts, "", func(id): if id != "": _load_template(id); refresh()); tools.add_child(to)
+	if OS.get_environment("GW_FILL") != "" and not _gwfilled: _gwfilled = true; _autofill(ch)
 	tools.add_child(Kit.btn("Auto-fill", func(): _autofill(ch); refresh(), "", 13)); tools.add_child(Kit.btn("Clear", func(): sock = {}; refresh(), "", 13))
 	var bd := TrayBoard.new(); bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; bd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bd.ch = ch; bd.sel_kind = _active(ch) if sel_idx >= 0 else ""; bd.sel_idx = sel_idx

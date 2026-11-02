@@ -41,23 +41,30 @@ func _ready() -> void:
 	_build_environment()
 	dyn = Node3D.new(); add_child(dyn)
 	cam = Camera3D.new(); cam.fov = 50.0; cam.far = 300.0; cam.near = 0.1; add_child(cam); cam.current = true
+	var ca := CameraAttributesPractical.new(); ca.dof_blur_far_enabled = true; ca.dof_blur_far_distance = 32.0; ca.dof_blur_far_transition = 30.0; ca.dof_blur_amount = 0.04; cam.attributes = ca
 	_hover_mesh = MeshInstance3D.new(); add_child(_hover_mesh); _hover_mesh.visible = false
 	var bm := BoxMesh.new(); bm.size = Vector3(RW + 0.06, 0.02, RD + 0.06); _hover_mesh.mesh = bm; _hover_mesh.material_override = _emit(Color(0.4, 0.85, 1.0, 0.35), 1.6, true)
 	_update_cam()
 
 func _build_environment() -> void:
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR; env.background_color = Color(0.02, 0.022, 0.028)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.55, 0.6, 0.68); env.ambient_light_energy = 0.7
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC; env.tonemap_exposure = 1.0; env.tonemap_white = 6.0
-	env.glow_enabled = true; env.glow_intensity = 0.55; env.glow_bloom = 0.04; env.glow_hdr_threshold = 1.3; env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-	env.adjustment_enabled = true; env.adjustment_contrast = 1.08; env.adjustment_saturation = 0.95
+	env.background_mode = Environment.BG_COLOR; env.background_color = Color(0.008, 0.011, 0.018)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.36, 0.42, 0.52); env.ambient_light_energy = 0.95
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.3; env.tonemap_white = 5.0
+	env.glow_enabled = true; env.glow_intensity = 0.7; env.glow_bloom = 0.06; env.glow_hdr_threshold = 1.0; env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.set("glow_levels/3", 1.0); env.set("glow_levels/5", 1.0)
+	env.adjustment_enabled = true; env.adjustment_contrast = 1.1; env.adjustment_saturation = 1.05
 	if RenderingServer.get_current_rendering_method() == "forward_plus":
-		env.ssao_enabled = true; env.ssao_intensity = 2.5; env.ssil_enabled = true
-		env.ssr_enabled = true; env.ssr_max_steps = 48
-	env.fog_enabled = true; env.fog_light_color = Color(0.05, 0.06, 0.08); env.fog_density = 0.006
+		env.ssao_enabled = true; env.ssao_intensity = 3.0; env.ssao_radius = 1.2; env.ssil_enabled = true; env.ssil_intensity = 1.2
+		env.ssr_enabled = true; env.ssr_max_steps = 64; env.ssr_fade_in = 0.1; env.ssr_fade_out = 1.5
+		env.volumetric_fog_enabled = true; env.volumetric_fog_density = 0.018; env.volumetric_fog_albedo = Color(0.55, 0.65, 0.8); env.volumetric_fog_emission = Color(0.01, 0.015, 0.025); env.volumetric_fog_length = 48.0; env.volumetric_fog_anisotropy = 0.5
+	env.fog_enabled = true; env.fog_light_color = Color(0.012, 0.016, 0.026); env.fog_density = 0.012
 	var we := WorldEnvironment.new(); we.environment = env; add_child(we)
-	var key := DirectionalLight3D.new(); key.light_energy = 0.5; key.light_color = Color(0.85, 0.9, 1.0); key.rotation_degrees = Vector3(-72, 25, 0); key.shadow_enabled = true; key.directional_shadow_max_distance = 40.0; add_child(key)
+	var key := DirectionalLight3D.new(); key.light_energy = 0.55; key.light_color = Color(0.7, 0.8, 1.0); key.rotation_degrees = Vector3(-62, 28, 0); key.shadow_enabled = true; key.directional_shadow_max_distance = 45.0; key.light_volumetric_fog_energy = 0.0; add_child(key)
+	var vg := CanvasLayer.new(); vg.layer = -1; add_child(vg)                                   # screen vignette + faint grain, under the UI
+	var rect := ColorRect.new(); rect.set_anchors_preset(Control.PRESET_FULL_RECT); rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new(); sh.code = "shader_type canvas_item;\nvoid fragment(){ vec2 uv=UV-0.5; float v=smoothstep(0.35,0.95,length(uv*vec2(1.0,0.85))); float g=fract(sin(dot(FRAGCOORD.xy+TIME*30.0,vec2(12.9898,78.233)))*43758.5453)-0.5; COLOR=vec4(0.0,0.005,0.012,v*0.62+abs(g)*0.02); }"
+	var sm := ShaderMaterial.new(); sm.shader = sh; rect.material = sm; vg.add_child(rect)
 
 func _emit(c: Color, energy: float, alpha: bool) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new(); m.albedo_color = c; m.emission_enabled = true; m.emission = Color(c.r, c.g, c.b); m.emission_energy_multiplier = energy
@@ -129,9 +136,9 @@ func rebuild() -> void:
 	_update_cam()
 
 func _build_shell(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
-	var fw := sz.x + 9.0; var fd := sz.y + 8.0
+	var fw := sz.x + 60.0; var fd := sz.y + 60.0
 	var fm := MeshInstance3D.new(); var pm := PlaneMesh.new(); pm.size = Vector2(fw, fd); fm.mesh = pm; fm.position = Vector3(cx, 0, cz)
-	var sm := ShaderMaterial.new(); sm.shader = FLOOR_SHADER; sm.set_shader_parameter("area", Vector2(fw, fd)); fm.material_override = sm; dyn.add_child(fm)
+	var sm := ShaderMaterial.new(); sm.shader = FLOOR_SHADER; sm.set_shader_parameter("area", Vector2(fw, fd)); sm.set_shader_parameter("center", Vector2(0.0, 0.0)); sm.set_shader_parameter("fade", Vector2(sz.x * 0.5 + 6.0, 16.0)); fm.material_override = sm; dyn.add_child(fm)
 	var red := _emit(Color(0.9, 0.08, 0.06), 1.1, false)
 	var m := 0.7; var lw := 0.12                                                                  # painted red boundary line
 	var x0 := cx - sz.x * 0.5 - m; var x1 := cx + sz.x * 0.5 + m; var z0 := cz - sz.y * 0.5 - m; var z1 := cz + sz.y * 0.5 + m
@@ -155,10 +162,14 @@ func _build_aisles(sz: Vector2, cx: float, ratio: float) -> void:
 			for ex in [-0.33, (cols - 1) * PITCH + 0.33]:
 				_box(dyn, Vector3(ex, 1.06, mid), Vector3(0.03, 2.1, d), _glass(Color(0.6, 0.75, 0.9, 0.08)))
 				_box(dyn, Vector3(ex, 1.06, mid), Vector3(0.05, 2.12, 0.06), _solid(Color(0.05, 0.05, 0.06), 0.4, 0.8))
-			var l := OmniLight3D.new(); l.light_color = Color(0.75, 0.88, 1.0); l.light_energy = 1.1; l.omni_range = 6.0; l.position = Vector3(cx, 1.9, mid); dyn.add_child(l)
+			for lx in range(0, cols, 3):
+				var sp := SpotLight3D.new(); sp.light_color = Color(0.78, 0.9, 1.0); sp.light_energy = 5.0; sp.spot_range = 6.5; sp.spot_angle = 52.0; sp.spot_angle_attenuation = 0.8; sp.light_volumetric_fog_energy = 1.4
+				sp.position = Vector3(lx * PITCH + 0.6, 3.4, mid); sp.rotation_degrees = Vector3(-90, 0, 0); dyn.add_child(sp)
 		else:
 			if ratio > 0.01: _box(dyn, Vector3(cx, 0.006, mid), Vector3(w, 0.004, d), _emit(Color(1.0, 0.25, 0.1, 0.05 + 0.1 * clampf(ratio, 0, 1.5)), 1.0, true))
-			var l2 := OmniLight3D.new(); l2.light_color = Color(1.0, 0.7, 0.5); l2.light_energy = 0.3 + 0.5 * ratio; l2.omni_range = 4.5; l2.position = Vector3(cx, 1.8, mid); dyn.add_child(l2)
+			for lx2 in range(1, cols, 4):
+				var sp2 := SpotLight3D.new(); sp2.light_color = Color(1.0, 0.72, 0.5); sp2.light_energy = 1.6 + 2.0 * ratio; sp2.spot_range = 6.0; sp2.spot_angle = 50.0; sp2.light_volumetric_fog_energy = 0.8
+				sp2.position = Vector3(lx2 * PITCH + 0.6, 3.4, mid); sp2.rotation_degrees = Vector3(-90, 0, 0); dyn.add_child(sp2)
 
 func _build_slot(i: int, p: Vector3) -> void:
 	var valid := place_mode != ""
@@ -183,7 +194,7 @@ func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
 		_box(parent, Vector3(0, 0.95, 0), Vector3(0.64, 1.58, 1.07), _glass(Color(0.85, 0.9, 1.0, 0.13)))                   # stretch wrap
 		_box(parent, Vector3(0, 1.4, 0.54), Vector3(0.3, 0.1, 0.005), _solid(Color(0.9, 0.9, 0.85), 0.9, 0.0))              # shipping label
 	else:
-		var shell := _solid(Color(0.04, 0.042, 0.048), 0.5, 0.8)
+		var shell := _solid(Color(0.085, 0.09, 0.1), 0.45, 0.8)
 		_box(parent, Vector3(0, RH * 0.5, 0), Vector3(RW - 0.004, RH, RD - 0.05), shell)
 		_box(parent, Vector3(0, RH + 0.01, 0), Vector3(RW - 0.004, 0.02, RD - 0.03), _solid(Color(0.1, 0.105, 0.115), 0.6, 0.6))
 		var front := _face(i, sy, st, false); front.position = Vector3(0, 0.07 + 0.935, RD * 0.5 - 0.025 + 0.002); parent.add_child(front)
@@ -286,7 +297,9 @@ func _build_overhead(sz: Vector2, cx: float) -> void:
 	var bus := _solid(Color(0.62, 0.63, 0.65), 0.4, 0.7)
 	for k in row_z.size():
 		var z := row_z[k]
-		_box(dyn, Vector3(cx, 2.55, z - 0.18), Vector3(sz.x + 0.5, 0.05, 0.3), tray)                                                          # wire-basket tray (copper)
+		_box(dyn, Vector3(cx, 2.55, z - 0.18), Vector3(sz.x + 0.5, 0.03, 0.3), tray)
+		for sd in [-0.31, -0.05]: _box(dyn, Vector3(cx, 2.6, z - 0.18 + sd * -1.0 * 0.0 + (sd + 0.18)), Vector3(sz.x + 0.5, 0.06, 0.012), tray)   # tray rails
+		for cc in 3: _cyl(dyn, Vector3(cx, 2.63, z - 0.26 + cc * 0.07), 0.028, sz.x + 0.4, _solid([Color(0.03, 0.03, 0.035), Color(0.1, 0.12, 0.3), Color(0.03, 0.03, 0.035)][cc], 0.6, 0.0), "x")   # cable bundles                                                          # wire-basket tray (copper)
 		_box(dyn, Vector3(cx, 2.6, z - 0.18), Vector3(sz.x + 0.4, 0.05, 0.12), _solid(Color(0.02, 0.02, 0.025), 0.9, 0.0))
 		_box(dyn, Vector3(cx, 2.55, z + 0.22), Vector3(sz.x + 0.5, 0.04, 0.22), tray)                                                         # fibre tray
 		_box(dyn, Vector3(cx, 2.6, z + 0.22), Vector3(sz.x + 0.4, 0.04, 0.09), _solid(Color(0.9, 0.72, 0.1), 0.6, 0.0))
@@ -296,7 +309,8 @@ func _build_overhead(sz: Vector2, cx: float) -> void:
 			_box(dyn, Vector3(j * PITCH + 0.3, 2.72, z + 0.101), Vector3(0.03, 0.03, 0.005), _emit(Color(0.2, 1.0, 0.4), 2.0, false))
 	for k in range(0, row_z.size() - 1):
 		var mid := (row_z[k] + row_z[k + 1]) * 0.5
-		_box(dyn, Vector3(cx, 3.5, mid), Vector3(sz.x, 0.03, 0.14), _emit(Color(0.92, 0.95, 1.0), 0.8, false))
+		for lx in range(0, cols, 3):
+			_box(dyn, Vector3(lx * PITCH + 0.6, 3.45, mid), Vector3(1.2, 0.025, 0.07), _emit(Color(0.85, 0.93, 1.0), 3.5, false))
 
 # ---------- camera & input ----------
 func _update_cam() -> void:

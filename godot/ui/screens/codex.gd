@@ -4,6 +4,9 @@ var app
 var q := ""
 var view := "list"
 var sel := ""
+var folds := {}
+
+const KIND_LBL := {"accelerator": "Accelerators", "cpu": "CPUs", "memory": "Memory", "nic": "Network cards", "switch": "Switches", "cable": "Cables & optics", "chassis": "Chassis & boards", "storage": "Storage", "power": "Power", "cooling": "Cooling", "rack": "Racks", "uplink": "Internet uplinks"}
 
 func refresh() -> void:
 	for c in get_children(): c.queue_free()
@@ -29,13 +32,31 @@ func refresh() -> void:
 	else:
 		var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
 		var lc := Kit.column(cols, 0, true); var dc := Kit.column(cols, 0, true)
-		var ql := q.to_lower(); var n := 0
+		var ql := q.to_lower()
+		var groups := {}
 		for i in b.items.values():
 			var hay := ("%s%s%s%s" % [i.name, i.vendor, i.kind, " ".join(i.codex.get("tags", []))]).to_lower()
 			if ql != "" and not hay.contains(ql): continue
-			n += 1
-			if n > 160: break
-			var rb := Kit.btn("%s\n%s · %s" % [i.name, i.kind, str(i.codex.summary).left(90)], func(): sel = i.id; refresh(), "pri" if sel == i.id else "", 13); rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; lc.add_child(rb)
+			if not groups.has(i.kind): groups[i.kind] = []
+			groups[i.kind].append(i)
+		var kinds := groups.keys(); kinds.sort()
+		if kinds.is_empty(): lc.add_child(Kit.label("Nothing matches.", 14, Kit.DIM))
+		for k in kinds:
+			var arr: Array = groups[k]; arr.sort_custom(func(x, y): return str(x.name) < str(y.name))
+			var holds := arr.any(func(x): return x.id == sel)
+			var key := "k_" + str(k)
+			if ql != "" or holds: if not folds.has(key): folds[key] = false
+			var fp := Kit.fold_panel("%s  (%d)" % [KIND_LBL.get(k, str(k)), arr.size()], key, folds, func(): refresh(), false, lc, true)
+			for i in arr:
+				var on: bool = sel == i.id
+				var card := PanelContainer.new(); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				card.add_theme_stylebox_override("panel", Kit.sb(Color(0.08, 0.16, 0.22) if on else Color(0.05, 0.08, 0.11), Kit.CY if on else Kit.LINE, 8, 1, 8))
+				var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); hb.mouse_filter = Control.MOUSE_FILTER_IGNORE; card.add_child(hb)
+				var st := ColorRect.new(); st.color = Kit.vendor_color(str(i.vendor)); st.custom_minimum_size = Vector2(4, 0); st.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(st)
+				var vb := VBoxContainer.new(); vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vb.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(vb)
+				vb.add_child(Kit.label(i.name, 13, Kit.TX, true)); vb.add_child(Kit.label("%s · %s" % [i.vendor, str(i.codex.summary).left(100)], 11, Kit.DIM, true))
+				var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Control.FOCUS_NONE; click.pressed.connect(func(): sel = i.id; refresh()); card.add_child(click); card.move_child(click, 0)
+				fp[1].add_child(card)
 		if sel != "" and b.items.has(sel):
 			var it: Dictionary = b.item(sel); var dp := Kit.panel(it.name, true, dc)
 			var rows := []; for s in Kit.specs_of(it): rows.append([Kit.label(s[0], 13, Kit.DIM), Kit.label(s[1], 13)])

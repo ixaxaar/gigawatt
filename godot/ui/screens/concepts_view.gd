@@ -1,6 +1,7 @@
 class_name ConceptsView
 ## "Datacenter 101": every concept with a live "do I need this right now?" verdict.
 static var open_id := ""
+static var folds := {}
 const COL := {"now": Kit.RD, "soon": Kit.AM, "ok": Kit.GR, "na": Kit.DIM}
 const LBL := {"now": "YOU NEED THIS NOW", "soon": "COMING UP", "ok": "COVERED", "na": "NOT YET"}
 
@@ -8,9 +9,14 @@ static func build(app, parent: Control, only: Array = [], on_toggle: Callable = 
 	var list: Array = app.b.q("concepts").filter(func(c): return only.is_empty() or only.has(c.id))
 	var rank := {"now": 0, "soon": 1, "ok": 2, "na": 3}
 	list.sort_custom(func(a, b): return rank[a.status.level] < rank[b.status.level])
+	var cur_level := ""; var host: Control = parent
 	for c in list:
+		if only.is_empty() and c.status.level != cur_level:
+			cur_level = c.status.level; var n := list.filter(func(x): return x.status.level == cur_level).size()
+			var fp := Kit.fold_panel("%s  (%d)" % [LBL[cur_level], n], "lv_" + cur_level, folds, on_toggle if on_toggle.is_valid() else func(): pass, cur_level == "now", parent, cur_level != "now" and cur_level != "soon")
+			host = fp[1]
 		var col: Color = COL[c.status.level]
-		var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.11), col if c.status.level == "now" else Kit.LINE, 8, 1, 9)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; parent.add_child(p)
+		var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.11), col if c.status.level == "now" else Kit.LINE, 8, 1, 9)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; host.add_child(p)
 		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); p.add_child(v)
 		var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)
 		var nm := VBoxContainer.new(); nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(nm)

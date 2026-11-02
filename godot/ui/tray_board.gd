@@ -114,42 +114,167 @@ func _txt(pos: Vector2, t: String, px: int, col: Color, center := false) -> void
 	var fnt: Font = Fonts.regular; var s := maxi(8, int(px * _k())); var w := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
 	draw_string(fnt, _p(pos) + Vector2(-w * 0.5 if center else 0.0, 0), t, HORIZONTAL_ALIGNMENT_LEFT, -1, s, col)
 
+# ---------- realistic rendering helpers ----------
+func _grad(rc: Rect2, top_c: Color, bot_c: Color) -> void:
+	draw_polygon(PackedVector2Array([rc.position, rc.position + Vector2(rc.size.x, 0), rc.end, rc.position + Vector2(0, rc.size.y)]), PackedColorArray([top_c, top_c, bot_c, bot_c]))
+
+func _hash(a: float, b: float) -> float: return fposmod(sin(a * 12.9898 + b * 78.233) * 43758.5453, 1.0)
+
+func _screw(c: Vector2, r: float) -> void:
+	draw_circle(c, r * 1.6, Color(0.74, 0.55, 0.25)); draw_circle(c, r * 1.15, Color(0.02, 0.05, 0.04)); draw_circle(c, r * 0.7, Color(0.55, 0.57, 0.6))
+	draw_line(c + Vector2(-r * 0.6, 0), c + Vector2(r * 0.6, 0), Color(0.2, 0.2, 0.22), maxf(1.0, r * 0.25))
+
+func _pin_array(rc: Rect2, col: Color, step: float) -> void:
+	var x := rc.position.x + step * 0.5
+	while x < rc.end.x:
+		var y := rc.position.y + step * 0.5
+		while y < rc.end.y: draw_circle(Vector2(x, y), maxf(0.7, step * 0.2), col); y += step
+		x += step
+
+func _cap(c: Vector2, r: float, col: Color) -> void:
+	draw_circle(c, r, Color(0.05, 0.05, 0.06)); draw_circle(c, r * 0.86, col); draw_circle(c, r * 0.6, col.lightened(0.18))
+	draw_line(c + Vector2(-r * 0.5, 0), c + Vector2(r * 0.5, 0), Color(0, 0, 0, 0.5), maxf(1.0, r * 0.15)); draw_line(c + Vector2(0, -r * 0.5), c + Vector2(0, r * 0.5), Color(0, 0, 0, 0.5), maxf(1.0, r * 0.15))
+
+func _inductor(rc: Rect2) -> void:
+	_grad(rc, Color(0.22, 0.22, 0.25), Color(0.1, 0.1, 0.12)); draw_rect(rc, Color(0.03, 0.03, 0.04), false, 1.0)
+	draw_line(rc.position + Vector2(rc.size.x * 0.5, 1), rc.position + Vector2(rc.size.x * 0.5, rc.size.y - 1), Color(0.02, 0.02, 0.03), 1.0)
+
+func _vrm(rc: Rect2) -> void:   # a power-stage block: inductors + caps + mosfets
+	var k := _k(); var n := maxi(2, int(rc.size.x / (14.0 * k)))
+	for i in n:
+		_inductor(Rect2(rc.position + Vector2(2 + i * 14 * k, 2), Vector2(11 * k, 11 * k)))
+		_cap(rc.position + Vector2(8 * k + i * 14 * k, rc.size.y - 7 * k), 4.2 * k, Color(0.72, 0.74, 0.78))
+
+func _label(rc: Rect2, t: String, col: Color, size: int) -> void:
+	var fnt: Font = Fonts.regular; var fs := maxi(8, int(size * _k())); var w := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	draw_string(fnt, rc.position + Vector2((rc.size.x - w) * 0.5, rc.size.y * 0.5 + fs * 0.35), t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+
+func _heatsink(rc: Rect2, copper := false) -> void:
+	var base := Color(0.74, 0.46, 0.3) if copper else Color(0.62, 0.65, 0.7)
+	_grad(rc, base.lightened(0.2), base.darkened(0.3)); draw_rect(rc, base.darkened(0.55), false, 1.0)
+	var step := maxf(2.5, 3.0 * _k()); var x := rc.position.x + step
+	while x < rc.end.x - 1.0: draw_line(Vector2(x, rc.position.y + 1), Vector2(x, rc.end.y - 1), base.darkened(0.5), 1.0); draw_line(Vector2(x + 1, rc.position.y + 1), Vector2(x + 1, rc.end.y - 1), base.lightened(0.3), 1.0); x += step
+
+func _socket_frame(rc: Rect2, lever := true) -> void:
+	_grad(rc, Color(0.16, 0.17, 0.19), Color(0.07, 0.08, 0.09)); draw_rect(rc, Color(0.32, 0.34, 0.37), false, 1.5)
+	var inner := rc.grow(-rc.size.x * 0.1); draw_rect(inner, Color(0.03, 0.03, 0.035), true); _pin_array(inner.grow(-2), Color(0.85, 0.66, 0.25, 0.8), maxf(3.5, 4.5 * _k()))
+	if lever:
+		var y := rc.position.y + 3; draw_line(Vector2(rc.position.x + 4, y), Vector2(rc.end.x - 4, y), Color(0.8, 0.82, 0.85), maxf(2.0, 3.0 * _k()))
+
+func _draw_gpu(rc: Rect2, it: Dictionary, vc: Color) -> void:
+	_grad(rc, Color(0.07, 0.17, 0.12), Color(0.04, 0.1, 0.08)); draw_rect(rc, Color(0.2, 0.3, 0.26), false, 1.5)
+	var die := Rect2(rc.position + rc.size * Vector2(0.28, 0.2), rc.size * Vector2(0.44, 0.6))
+	_grad(die, Color(0.5, 0.52, 0.56), Color(0.3, 0.32, 0.36)); draw_rect(die, Color(0.12, 0.12, 0.14), false, 1.2)
+	for i in 5: draw_line(die.position + Vector2(0, die.size.y * (i + 1) / 6.0), die.position + Vector2(die.size.x, die.size.y * (i + 1) / 6.0), Color(0, 0, 0, 0.18), 1.0)
+	var hbm := int(clampf(float(it.get("memGB", 80)) / 24.0, 4, 8)) / 2
+	for side in [0, 1]:
+		var hx := rc.position.x + (rc.size.x * 0.06 if side == 0 else rc.size.x * 0.74)
+		for j in hbm:
+			var hr := Rect2(Vector2(hx, rc.position.y + rc.size.y * (0.1 + j * (0.8 / maxf(1, hbm)))), Vector2(rc.size.x * 0.2, rc.size.y * (0.7 / maxf(1, hbm))))
+			_grad(hr, Color(0.28, 0.3, 0.34), Color(0.15, 0.16, 0.19)); draw_rect(hr, Color(0, 0, 0, 0.6), false, 1.0)
+	draw_rect(Rect2(rc.position + Vector2(rc.size.x * 0.72, rc.size.y - 6 * _k()), Vector2(rc.size.x * 0.26, 4 * _k())), vc, true)
+	for q in [Vector2(0.06, 0.92), Vector2(0.94, 0.92), Vector2(0.06, 0.08), Vector2(0.94, 0.08)]: _screw(rc.position + rc.size * q, 2.2 * _k())
+
+func _draw_cpu(rc: Rect2, it: Dictionary) -> void:
+	_socket_frame(rc, true); var ih := rc.grow(-rc.size.x * 0.12)
+	_grad(ih, Color(0.8, 0.82, 0.86), Color(0.55, 0.57, 0.62)); draw_rect(ih, Color(0.25, 0.26, 0.3), false, 1.5)
+	draw_line(ih.position + Vector2(2, 2), ih.position + Vector2(ih.size.x - 2, 2), Color(1, 1, 1, 0.5), 1.0)
+	_label(ih, str(it.get("name", "")).replace("AMD ", "").replace("Intel ", "").left(10), Color(0.15, 0.16, 0.2), 9)
+
+func _draw_dimm(rc: Rect2, filled: bool, vc: Color) -> void:
+	draw_rect(rc, Color(0.03, 0.03, 0.04), true); draw_rect(rc, Color(0.2, 0.22, 0.26), false, 1.0)
+	draw_rect(Rect2(rc.position + Vector2(0, -3 * _k()), Vector2(rc.size.x, 4 * _k())), Color(0.88, 0.88, 0.85), true)           # latches
+	draw_rect(Rect2(rc.position + Vector2(0, rc.size.y - 1 * _k()), Vector2(rc.size.x, 4 * _k())), Color(0.88, 0.88, 0.85), true)
+	if filled:
+		var pcb := rc.grow(-1.5); _grad(pcb, Color(0.1, 0.34, 0.22), Color(0.06, 0.2, 0.14))
+		var n := 8; for i in n: draw_rect(Rect2(pcb.position + Vector2(1, 4 + i * (pcb.size.y - 14) / n), Vector2(pcb.size.x - 2, (pcb.size.y - 14) / n - 2)), Color(0.04, 0.04, 0.05), true)
+		draw_rect(Rect2(pcb.position + Vector2(0, pcb.size.y - 4), Vector2(pcb.size.x, 3)), Color(0.88, 0.7, 0.28), true)
+		draw_rect(Rect2(pcb.position + Vector2(1, 1), Vector2(pcb.size.x - 2, 3)), vc, true)
+
+func _draw_nic(rc: Rect2, it: Dictionary, vc: Color, filled: bool, dpu: bool) -> void:
+	draw_rect(rc, Color(0.02, 0.02, 0.025), true); draw_rect(rc, Color(0.2, 0.22, 0.26), false, 1.0)
+	_pin_array(Rect2(rc.position + Vector2(rc.size.x * 0.28, rc.size.y * 0.7), Vector2(rc.size.x * 0.5, rc.size.y * 0.2)), Color(0.88, 0.7, 0.28, 0.7), 3.0)
+	if filled:
+		var card := Rect2(rc.position + Vector2(2, 2), Vector2(rc.size.x - 4, rc.size.y * 0.66)); _grad(card, Color(0.08, 0.22, 0.2), Color(0.04, 0.12, 0.12)); draw_rect(card, Color(0.3, 0.4, 0.38), false, 1.0)
+		_heatsink(Rect2(card.position + card.size * Vector2(0.3, 0.12), card.size * Vector2(0.28, 0.76)), dpu)
+		var cage := Rect2(card.position + Vector2(card.size.x * 0.84, card.size.y * 0.08), Vector2(card.size.x * 0.14, card.size.y * 0.84)); _grad(cage, Color(0.8, 0.82, 0.85), Color(0.5, 0.52, 0.56)); draw_rect(cage, Color(0.2, 0.2, 0.22), false, 1.0)
+		draw_rect(Rect2(cage.position + Vector2(1, cage.size.y * 0.35), Vector2(cage.size.x - 2, cage.size.y * 0.3)), Color(0.02, 0.02, 0.03), true)
+		draw_rect(Rect2(card.position + Vector2(card.size.x * 0.05, card.size.y * 0.1), Vector2(card.size.x * 0.2, 3)), vc, true)
+
+func _draw_nvme(rc: Rect2, filled: bool, vc: Color) -> void:
+	draw_rect(rc, Color(0.04, 0.045, 0.055), true); draw_rect(rc, Color(0.22, 0.25, 0.3), false, 1.0)
+	if filled:
+		var d := rc.grow(-2); _grad(d, Color(0.2, 0.21, 0.24), Color(0.1, 0.1, 0.12)); draw_rect(Rect2(d.position + Vector2(3, d.size.y * 0.5 - 1), Vector2(d.size.x * 0.5, 2)), vc, true)
+		draw_circle(d.position + Vector2(d.size.x - 6 * _k(), d.size.y * 0.5), 2.2 * _k(), Color(0.2, 1.0, 0.45))
+	else: draw_line(rc.position + Vector2(4, rc.size.y * 0.5), rc.end - Vector2(4, rc.size.y * 0.5), Color(0.1, 0.1, 0.12), 2.0)
+
+func _draw_psu(rc: Rect2, filled: bool) -> void:
+	draw_rect(rc, Color(0.04, 0.045, 0.055), true); draw_rect(rc, Color(0.22, 0.25, 0.3), false, 1.0)
+	if filled:
+		var d := rc.grow(-2); _grad(d, Color(0.55, 0.57, 0.6), Color(0.3, 0.32, 0.35)); draw_rect(d, Color(0.1, 0.1, 0.12), false, 1.0)
+		var c := d.position + Vector2(d.size.x * 0.3, d.size.y * 0.5); var r := d.size.y * 0.36
+		draw_circle(c, r, Color(0.04, 0.04, 0.05)); for i in 7: var an := TAU * i / 7.0; draw_line(c, c + Vector2(cos(an), sin(an)) * r * 0.95, Color(0.25, 0.26, 0.3), maxf(1.0, 2.0 * _k()))
+		draw_circle(c, r * 0.22, Color(0.7, 0.7, 0.72)); draw_circle(d.position + Vector2(d.size.x * 0.86, d.size.y * 0.25), 2.4 * _k(), Color(0.2, 1.0, 0.45))
+
+func _draw_chip(rc: Rect2, text: String, hot: bool) -> void:
+	_heatsink(rc, false) if hot else _grad(rc, Color(0.13, 0.13, 0.15), Color(0.05, 0.05, 0.06))
+	draw_rect(rc, Color(1.0, 0.5, 0.2) if hot else Color(0.4, 0.45, 0.5), false, 1.2)
+	var plate := Rect2(rc.position + rc.size * Vector2(0.15, 0.35), rc.size * Vector2(0.7, 0.3)); draw_rect(plate, Color(0.05, 0.05, 0.06, 0.85), true); _label(plate, text, Color(0.85, 0.9, 0.95), 8)
+
 func _draw() -> void:
 	if ch.is_empty(): return
-	compute(); _rects.clear()
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.08), true)
+	compute(); _rects.clear(); var k := _k()
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.035, 0.05), true)
 	var cooled: bool = str(ch.get("cooling", "air")) != "air"
-	draw_rect(_r(Vector2(4, 4), Vector2(W - 8, H - 8)), Color(0.22, 0.74, 0.97) if cooled else Color(0.29, 0.39, 0.49), false, 3.0)
-	draw_rect(_r(Vector2(12, 12), Vector2(W - 24, 30)), Color(0.06, 0.12, 0.18), true)
-	_txt(Vector2(26, 32), "◀ FRONT · %s · %sU · %s · REAR ▶" % [str(ch.name).to_upper().left(56), int(ch.rackUnits), str(ch.cooling).to_upper()], 14, Color(0.56, 0.7, 0.81))
+	# chassis tray + header
+	_grad(_r(Vector2(4, 4), Vector2(W - 8, H - 8)), Color(0.13, 0.15, 0.18), Color(0.08, 0.09, 0.11))
+	draw_rect(_r(Vector2(4, 4), Vector2(W - 8, H - 8)), Color(0.22, 0.74, 0.97) if cooled else Color(0.34, 0.4, 0.47), false, 3.0)
+	_grad(_r(Vector2(12, 12), Vector2(W - 24, 30)), Color(0.1, 0.17, 0.24), Color(0.05, 0.1, 0.15))
+	_txt(Vector2(26, 32), "◀ FRONT · %s · %sU · %s · REAR ▶" % [str(ch.name).to_upper().left(56), int(ch.rackUnits), str(ch.cooling).to_upper()], 14, Color(0.6, 0.74, 0.86))
 	_txt(Vector2(W - 380, 32), "click a socket, then choose a part →", 12, Color(0.42, 0.54, 0.65))
-	if _has("nvme"): draw_rect(_r(Vector2(30, top + 8), Vector2(nvW + 20, minf(_cnt("nvme"), 10) * 36.0 + 44)), Color(0.05, 0.08, 0.11), true); _txt(Vector2(40, top + 24), "NVME CAGE", 10, Color(0.5, 0.6, 0.7))
-	if _has("psu"): draw_rect(_r(Vector2(bx1 + 16, top + 8), Vector2(psW + 20, minf(_cnt("psu"), 6) * 62.0 + 44)), Color(0.05, 0.08, 0.11), true); _txt(Vector2(bx1 + 26, top + 24), "REAR PSU BAY", 10, Color(0.5, 0.6, 0.7))
-	draw_rect(_r(Vector2(bx0 - 8, top), Vector2(bx1 - bx0 + 16, H - top - 18)), Color(0.04, 0.16, 0.12), true); draw_rect(_r(Vector2(bx0 - 8, top), Vector2(bx1 - bx0 + 16, H - top - 18)), Color(0.12, 0.3, 0.22), false, 2.0)
+	if _has("nvme"): _grad(_r(Vector2(30, top + 8), Vector2(nvW + 20, minf(_cnt("nvme"), 10) * 36.0 + 44)), Color(0.07, 0.09, 0.12), Color(0.04, 0.05, 0.07)); _txt(Vector2(40, top + 24), "NVME CAGE", 10, Color(0.5, 0.6, 0.7))
+	if _has("psu"): _grad(_r(Vector2(bx1 + 16, top + 8), Vector2(psW + 20, minf(_cnt("psu"), 6) * 62.0 + 44)), Color(0.07, 0.09, 0.12), Color(0.04, 0.05, 0.07)); _txt(Vector2(bx1 + 26, top + 24), "REAR PSU BAY", 10, Color(0.5, 0.6, 0.7))
+	# the PCB: dark solder-mask green with fibreglass speckle, copper edge, mounting holes
+	var pcb := _r(Vector2(bx0 - 8, top), Vector2(bx1 - bx0 + 16, H - top - 18))
+	_grad(pcb, Color(0.035, 0.17, 0.11), Color(0.02, 0.1, 0.07))
+	for i in 420: draw_circle(pcb.position + Vector2(_hash(i, 1.0) * pcb.size.x, _hash(i, 2.0) * pcb.size.y), maxf(0.6, k * 0.9), Color(0.1, 0.32, 0.22, 0.28))
+	draw_rect(pcb, Color(0.7, 0.52, 0.22, 0.65), false, 2.0); draw_rect(pcb.grow(-5), Color(0.05, 0.2, 0.14), false, 1.0)
+	for q in [Vector2(0.015, 0.02), Vector2(0.985, 0.02), Vector2(0.015, 0.98), Vector2(0.985, 0.98), Vector2(0.5, 0.02), Vector2(0.5, 0.98), Vector2(0.015, 0.5), Vector2(0.985, 0.5)]: _screw(pcb.position + pcb.size * q, 3.5 * k)
 	for t in traces:
 		var a: Vector2 = t[0]; var b: Vector2 = t[1]; var n: int = t[2]; var gap: float = t[3]; var vert: bool = t[4]
 		for i in n:
 			var off := (i - (n - 1) / 2.0) * gap
-			draw_line(_p(a + (Vector2(off, 0) if vert else Vector2(0, off))), _p(b + (Vector2(off, 0) if vert else Vector2(0, off))), Color(0.78, 0.6, 0.25, 0.55), maxf(1.0, 1.4 * _k()))
-	for c in chips:
-		draw_rect(_r(c[0], c[1]), Color(0.08, 0.09, 0.1), true); draw_rect(_r(c[0], c[1]), Color(1.0, 0.45, 0.2) if c[3] else Color(0.4, 0.45, 0.5), false, 1.5)
-		_txt(c[0] + Vector2(c[1].x / 2, c[1].y / 2 + 4), c[2], 9, Color(0.8, 0.85, 0.9), true)
-	for s in silk: _txt(s[0], s[1], 9, Color(0.75, 0.82, 0.8), s[2])
+			var pa := _p(a + (Vector2(off, 0) if vert else Vector2(0, off))); var pb := _p(b + (Vector2(off, 0) if vert else Vector2(0, off)))
+			draw_line(pa, pb, Color(0, 0.04, 0.02, 0.8), maxf(2.6, 3.2 * k)); draw_line(pa, pb, Color(0.82, 0.62, 0.26, 0.85), maxf(1.2, 1.7 * k)); draw_line(pa, pb, Color(1, 0.9, 0.6, 0.35), maxf(0.6, 0.6 * k))
+			draw_circle(pa, maxf(1.6, 2.2 * k), Color(0.85, 0.65, 0.3)); draw_circle(pb, maxf(1.6, 2.2 * k), Color(0.85, 0.65, 0.3))
+	for c in chips: _draw_chip(_r(c[0], c[1]), c[2], c[3])
+	for s in silk: _txt(s[0], s[1], 9, Color(0.82, 0.9, 0.86, 0.85), s[2])
+	# VRMs flanking each accelerator / CPU
+	for kind in ["accelerator", "cpu"]:
+		for pos in place.get(kind, []):
+			var sk0: Vector2 = SOCK[kind]; _vrm(_r(pos + Vector2(0, sk0.y + 6), Vector2(sk0.x, 22)))
 	for s in ch.slots:
 		var arr: Array = cells.get(s.kind, []); var pos: Array = place.get(s.kind, []); var sk: Vector2 = SOCK.get(s.kind, Vector2(40, 30))
 		for i in arr.size():
 			if i >= pos.size(): continue
 			var p: Vector2 = pos[i]; var id = arr[i]; var it: Dictionary = items.get(id, {}) if id != null else {}
-			var rr := _r(p, sk); draw_rect(rr, Color(0.03, 0.04, 0.05), true)
-			if not it.is_empty():
-				var vc := Kit.vendor_color(it.get("vendor", "generic")); draw_rect(rr.grow(-2.0 * _k()), Color(vc.r * 0.45, vc.g * 0.45, vc.b * 0.45), true)
-				if s.kind != "dimm": _txt(p + Vector2(5, sk.y / 2 + 4), str(it.name).left(int(sk.x / 7.0)), 10, Color.WHITE)
-				else: draw_rect(rr.grow(-1.0), Color(vc.r * 0.8, vc.g * 0.8, vc.b * 0.8), true)
-			else:
-				draw_rect(rr, Color(0.25, 0.4, 0.5), false, 1.0)
-				if s.kind != "dimm": _txt(p + Vector2(5, sk.y / 2 + 4), "%s%d" % [str(s.kind).to_upper().left(6), i], 9, Color(0.4, 0.55, 0.65))
+			var rr := _r(p, sk); var vc := Kit.vendor_color(it.get("vendor", "generic")) if not it.is_empty() else Color(0.4, 0.5, 0.6); var filled := not it.is_empty()
+			match s.kind:
+				"accelerator": _draw_gpu(rr, it, vc) if filled else _socket_frame(rr)
+				"cpu": _draw_cpu(rr, it) if filled else _socket_frame(rr)
+				"dimm": _draw_dimm(rr, filled, vc)
+				"nic": _draw_nic(rr, it, vc, filled, false)
+				"dpu": _draw_nic(rr, it, vc, filled, true)
+				"nvme": _draw_nvme(rr, filled, vc)
+				"psu": _draw_psu(rr, filled)
+				"switchchip": _draw_chip(rr, str(it.get("name", "SW")).left(8), true) if filled else _socket_frame(rr, false)
+				"coldplate": _heatsink(rr, true) if filled else _socket_frame(rr, false)
+				_: draw_rect(rr, Color(0.03, 0.04, 0.05), true); draw_rect(rr, Color(0.3, 0.45, 0.55), false, 1.0)
+			if filled and s.kind in ["accelerator", "nic", "dpu"]: _txt(p + Vector2(5, sk.y + 12), str(it.name).left(int(sk.x / 6.0)), 9, Color(0.85, 0.92, 0.96))
+			if not filled and s.kind in ["accelerator", "cpu", "nic", "dpu"]: _label(rr, "%s%d" % [str(s.kind).to_upper().left(5), i], Color(0.55, 0.7, 0.8, 0.9), 9)
 			var selected: bool = sel_kind == s.kind and sel_idx == i
-			draw_rect(rr.grow(4.0 * _k()), Color.WHITE if selected else Color(0, 0, 0, 0), false, 2.5 if selected else 0.0)
+			if selected:
+				draw_rect(rr.grow(4.0 * k), Color(1, 1, 1, 0.95), false, 2.5); draw_rect(rr.grow(7.0 * k), Color(0.3, 0.9, 1.0, 0.4), false, 4.0)
 			_rects.append({"kind": s.kind, "idx": i, "rect": rr})
 
 func _gui_input(e: InputEvent) -> void:
