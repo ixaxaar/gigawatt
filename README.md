@@ -44,6 +44,22 @@ cd godot
 
 **Controls:** `1`–`9` switch screens · `Space` next month · right-drag orbit · wheel zoom · `WASD` pan · `Q/E` rotate · `T` thermal view · `Esc` menu · `Ctrl+Q` quit.
 
+## Train agents on it
+
+The simulation core is deterministic and headless, so it doubles as an environment for agents (RL, LLM tool-use, scripted bots).
+It has a Gymnasium-shaped API (`reset` / `step` / `legalActions` / state `hash`), a scenario library (including multi-hall stress
+campuses with every rack type deployed), and a Python client.
+
+```python
+from gigawatt_env import GigawattEnv            # python/gigawatt_env.py
+env = GigawattEnv()
+obs, _ = env.reset(seed=1, scenario="lean")
+obs, reward, done, truncated, info = env.step({"name": "nextMonth"})
+```
+
+Reward is net-worth change per month; the reference agents separate cleanly (idle −$1.0M, random +$0.6M, scripted operator +$15.5M
+over 30 months). Details, action list and limits: [`docs/AGENT_ENV.md`](docs/AGENT_ENV.md).
+
 ## Architecture
 
 ```
@@ -53,7 +69,9 @@ godot/                 Godot 4 front-end (GDScript)
   world/hall_view.gd   realistic 3D hall: shader-drawn racks, raised floor, containment, cluster markers
   ui/                  every screen, Kit (widgets), tray/rack boards, topology view
 src/                   the TypeScript engine (types, data catalog, sim, store) + web UI
-src/bridge.ts          actions + read-only queries exposed to Godot
+src/bridge.ts          actions, read-only queries and the agent API exposed to Godot / Python
+src/env/               agent environment: env, scenarios, reference agents, determinism + stress tests
+python/                Gymnasium-style client
 ```
 
 Rebuild the sidecar after changing the engine:
