@@ -259,9 +259,12 @@ describe('cable helpers', () => {
 
   it('suggests AOC for 3 m and optics for 60 m runs', () => {
     const ids = ITEMS_BY_KIND('cable').map((c) => c.id);
-    expect(suggestCable(getItem, ids, 'ib-ndr', 400, 3)?.id).toBe('gen-aoc-400-30m');
-    expect(suggestCable(getItem, ids, 'ib-ndr', 400, 60)?.id).toBe('gen-sr8-400-70m');
-    expect(suggestCable(getItem, ids, 'eth-400', 400, 800)?.id).toBe('gen-fr4-400-2km');
+    // Assert the *class and reach* of the pick, not a specific SKU: the catalogue keeps growing.
+    const pick = (tech: any, gbps: number, m: number) => { const c = suggestCable(getItem, ids, tech, gbps, m); return c ? { cls: cableClass(c as any), reach: (c as any).maxReachM, gbps: (c as any).gbps } : undefined; };
+    expect(pick('ib-ndr', 400, 3)).toMatchObject({ cls: 'aoc', gbps: 400 });
+    expect(pick('ib-ndr', 400, 60)?.cls).toBe('optic');
+    expect(pick('ib-ndr', 400, 60)!.reach).toBeGreaterThanOrEqual(60);
+    expect(pick('eth-400', 400, 800)!.reach).toBeGreaterThanOrEqual(800);
     expect(suggestCable(getItem, ids, 'ib-ndr', 400, 800)).toBeUndefined();
   });
 });
