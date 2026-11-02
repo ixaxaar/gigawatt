@@ -248,14 +248,14 @@ describe('validateHall', () => {
 
 describe('computePUE', () => {
   it('adds cooling electricity and conversion losses over IT load', () => {
-    // 1000 kW IT; one 1600kW CDU at 22 W per removed kW serves min(1000,1600)*22/1000 = 22 kW;
-    // one 2.5MVA padmount at 98.8% eff loses 1000*(1-0.988) = 12 kW.
+    // 1000 kW IT; one CDU (terminal) at 22 W/kW = 22 kW; no heat-rejection plant installed so a building plant is assumed
+    // for a liquid hall at 60 W/kW = 60 kW; 2.5MVA padmount at 98.8% eff loses 12 kW; fixed 2% overhead (lighting/BMS) = 20 kW.
     const hall = {
       id: 'h', name: 'h', coolingClass: 'dlc' as const, rackSlots: 4, itPowerKW: 1000,
       coolingKW: 1600, pue: 1, powerEquip: { 'et-padmount-2500': 1 },
       coolingEquip: { 'ct-cdu-1600': 1 }, racks: [], floorLoadKgPerRack: 2000,
     };
-    expect(computePUE(hall, get)).toBeCloseTo(1 + (22 + 12) / 1000, 4);
+    expect(computePUE(hall, get)).toBeCloseTo(1 + (22 + 60 + 12 + 20) / 1000, 4);
   });
 
   it('returns 1 with no IT load or no plant', () => {

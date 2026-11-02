@@ -12,7 +12,8 @@ const st = () => useGame.getState();
 const patch = (f: (g: any) => void) => useGame.setState(s => { const g = JSON.parse(JSON.stringify(s.game)); f(g); return { game: g }; });
 const LEVEL: Record<string, number> = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 
-function plantUnit(kind: 'power' | 'cooling', cls: string) {
+function plantUnit(kind: 'power' | 'cooling', cls0: string) {
+  const cls = cls0 === 'rdhx' ? 'air' : cls0; // rear-door halls reject heat through the chilled-water (air-class) plant
   const cand = ALL_ITEMS.filter(i => kind === 'power' ? (i.kind === 'power' && i.powerType === 'transformer') : (i.kind === 'cooling' && i.serves === cls && !['cold-plate-loop', 'rdhx'].includes(i.coolingType)))
     .map(i => offerAt(i, st().game.month)).filter(o => o.available);
   cand.sort((a, b) => a.unitPrice / ((a.item as any).capacityKW || 1) - b.unitPrice / ((b.item as any).capacityKW || 1));

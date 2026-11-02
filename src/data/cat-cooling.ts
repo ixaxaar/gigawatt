@@ -23,7 +23,7 @@ const cc = coo('cooling-tower', 'dlc', 32, 3);   // closed-circuit / hybrid cool
 const tank = coo('immersion-tank', 'immersion', 45, 2);
 const plate = coo('cold-plate-loop', 'dlc', 32, 0.25);
 
-export const CAT_COOLING: CoolingEquip[] = [
+const RAW_COOLING: CoolingEquip[] = [
   // ---- Vertiv (Liebert) ----
   crac('vt-pdx-30', 'Vertiv Liebert PDX 30 kW CRAC', 'vertiv', 38000, 30, 35, 2, ['Packaged 30 kW direct-expansion CRAC with air-cooled condenser.', 'DX CRACs are self-contained: refrigerant circuit and condenser in one unit, no chilled-water plant required.', ['No plant to build: power, duct and go', 'Compressor power makes PUE poor in heat']]),
   crac('vt-pdx-60', 'Vertiv Liebert PDX 60 kW CRAC', 'vertiv', 62000, 60, 35, 2, ['60 kW step of the Liebert PDX DX CRAC range (air/glycol/water-cooled variants).', 'Bigger frames share the same iCOM controls; pick water-cooled variants when a condenser loop already exists.', ['Familiar service footprint worldwide', 'Still 1.2-1.4 kW electrical per kW at part load']]),
@@ -154,3 +154,9 @@ export const CAT_COOLING_VENDORS: VendorInfo[] = [
   v('lu-ve', 'LU-VE', ['cooling'], 'Italian heat-exchanger maker: dry coolers and condenser coils.'),
   v('thermokey', 'Thermokey', ['cooling'], 'Value-tier coils and dry coolers for budget heat-rejection plants.'),
 ];
+
+/** Self-contained DX units carry their own compressors (real units draw ~0.25-0.35 kW per kW of heat; free-cooling variants ~0.15-0.2).
+ *  GLM's first pass listed them at fan-only values (~35 W/kW), which made all-DX halls look free to cool. */
+export const CAT_COOLING: CoolingEquip[] = RAW_COOLING.map(c =>
+  c.coolingType === 'crah' && /\bDX\b|PDX|DSE|CRAC/.test(c.name) && c.wattsPerKW < 120
+    ? { ...c, wattsPerKW: /free|adiabatic|AFC|DSE/i.test(c.name) ? 180 : 280 } : c);

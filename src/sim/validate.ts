@@ -322,9 +322,11 @@ export function validateRack(design: RackDesign, trays: TrayDesign[], get: Catal
       `${stats.units}U of gear in a ${rack.units}U rack — U is physical height; the excess simply has nowhere to bolt in.`,
       rack.id));
   }
-  if (stats.kW > rack.maxKW) {
+  // A rear-door heat exchanger captures ~20 kW at the rack, lifting the air-limited rating accordingly.
+  const maxKW = rack.maxKW + (design.coolingInterface === 'rdhx' && rack.cooling.includes('rdhx') ? 20 : 0);
+  if (stats.kW > maxKW) {
     issues.push(err('RACK_POWER',
-      `Rack draws ~${stats.kW.toFixed(1)} kW but the ${rack.name} is rated ${rack.maxKW} kW. Rack power is limited by feed/breakers and how much heat its cooling path removes — either thin the rack or move to a higher-density rack.`,
+      `Rack draws ~${stats.kW.toFixed(1)} kW but the ${rack.name} is rated ${maxKW} kW${maxKW > rack.maxKW ? ' with a rear-door heat exchanger' : ''}. Rack power is limited by feed/breakers and how much heat its cooling path removes — either thin the rack or move to a higher-density rack.`,
       rack.id));
   }
   if (stats.weightKg > rack.maxWeightKg) {
@@ -398,12 +400,19 @@ export function computePUE(hall: HallState, get: CatalogGet): number {
   const itKW = hall.itPowerKW;
   if (itKW <= 0) return 1;
 
-  let coolingElecKW = 0;
-  for (const [id, count] of Object.entries(hall.coolingEquip)) {
-    const c = get(id);
-    if (!c || c.kind !== 'cooling') continue;
-    coolingElecKW += count * Math.min(itKW, c.capacityKW) * (c.wattsPerKW / 1000);
-  }
+  // Cooling electricity, stage-wise. Terminal units (CRAH, in-row, rear doors, CDUs, cold-plate kits, immersion tanks) move heat
+  // into a loop; plant units (chillers, dry/adiabatic coolers, towers) or self-contained DX units reject it. Each stage handles the
+  // whole IT heat load, shared in proportion to capacity. A hall with terminals but no plant is assumed to tie into a building plant
+  // at a typical cost, so "buy only cheap CRAHs" cannot produce an unrealistically low PUE.
+  const isPlant = (c: any) => ['chiller', 'dry-cooler', 'cooling-tower'].includes(c.coolingType) || (c.coolingType === 'crah' && c.wattsPerKW >= 120);
+  const stage = (plant: boolean) => { let capT = 0, w = 0; for (const [id, count] of Object.entries(hall.coolingEquip)) { const c = get(id); if (!c || c.kind !== 'cooling' || isPlant(c) !== plant) continue; capT += count * c.capacityKW; w += count * c.capacityKW * c.wattsPerKW; } return { capT, avg: capT > 0 ? w / capT : 0 }; };
+  const term = stage(false), plant = stage(true);
+  const liquid = hall.coolingClass === 'dlc' || hall.coolingClass === 'immersion';
+  const plantAvg = plant.capT > 0 ? plant.avg : term.capT > 0 ? (liquid ? 60 : 250) : 0;
+  // The mirror case: a plant with no air handlers / CDUs still needs terminal units (self-contained DX excepted).
+  const termAvg = term.capT > 0 ? term.avg : plant.capT > 0 && plant.avg < 120 ? (liquid ? 15 : 40) : 0;
+  const coolingElecKW = itKW * ((termAvg + plantAvg) / 1000);
+  const overheadKW = term.capT + plant.capT > 0 ? itKW * 0.02 : 0; // lighting, BMS, security, small fans
 
   let cap = 0, effSum = 0;
   for (const [id, count] of Object.entries(hall.powerEquip)) {
@@ -414,5 +423,5 @@ export function computePUE(hall: HallState, get: CatalogGet): number {
   }
   const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
 
-  return 1 + (coolingElecKW + lossKW) / itKW;
+  return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
 }

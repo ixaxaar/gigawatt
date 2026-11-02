@@ -386,7 +386,7 @@ export const useGame = create<GameStore>()((set, get) => {
           powerEquip: {},
           coolingEquip: {},
           racks: [],
-          floorLoadKgPerRack: 1500,
+          floorLoadKgPerRack: { air: 1500, rdhx: 1800, dlc: 2400, immersion: 3200 }[coolingClass] ?? 1500,
         };
         g.halls.push(hall);
         logln(
@@ -454,7 +454,9 @@ export const useGame = create<GameStore>()((set, get) => {
         if (!item || item.kind !== 'cooling') return fail('Pick a cooling-equipment catalog item.');
         const n = Math.floor(qty);
         if (n <= 0) return fail('Quantity must be positive.');
-        if (item.serves !== hall.coolingClass) {
+        // Rear-door halls reject heat through the same chilled-water (air-class) plant; immersion loops can use warm-water (DLC-class) plant.
+        const compatible = item.serves === hall.coolingClass || (hall.coolingClass === 'rdhx' && item.serves === 'air') || (hall.coolingClass === 'immersion' && item.serves === 'dlc');
+        if (!compatible) {
           return fail(
             `${item.name} serves ${item.serves.toUpperCase()} loads, but ${hall.name} is a ${hall.coolingClass.toUpperCase()} hall.`,
             [
@@ -503,6 +505,10 @@ export const useGame = create<GameStore>()((set, get) => {
               },
             ],
           );
+        }
+        const wKg = validateRack(design, g.trays, getItem).stats.weightKg;
+        if (wKg > hall.floorLoadKgPerRack) {
+          return fail(`${design.name} weighs ~${Math.round(wKg)} kg but ${hall.name}'s floor is rated ${hall.floorLoadKgPerRack} kg per rack. Build a liquid/immersion-class hall (slab-on-grade, higher rating) or choose a lighter design.`, [{ severity: 'error', code: 'HALL_FLOOR_LOAD', message: `Rack ${Math.round(wKg)} kg > floor ${hall.floorLoadKgPerRack} kg.`, learn: design.rackId }]);
         }
         const need = rackBom(g, designId) ?? {};
         const missing = Object.entries(need).filter(([id, n]) => (g.inventory[id] ?? 0) < n);
