@@ -4,3 +4,5 @@ dist
 *.log
 godot/.godot/
 *.import
+godot/build/
+dist/

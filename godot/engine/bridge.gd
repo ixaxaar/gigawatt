@@ -16,10 +16,21 @@ var concepts: Array = []
 var _cache: Dictionary = {}
 var last_error := ""
 
+## Find a file shipped next to the game: <exe dir>/<rel>, or <app>.app/Contents/Resources/<rel> on macOS.
+static func _shipped(rel: String) -> String:
+	var dir := OS.get_executable_path().get_base_dir()
+	for base in [dir, dir.path_join("../Resources").simplify_path()]:
+		var f: String = base.path_join(rel)
+		if FileAccess.file_exists(f): return f
+	return ""
+
 func start() -> bool:
-	var path := ProjectSettings.globalize_path("res://sidecar/bridge.mjs")
-	var p := OS.execute_with_pipe("node", [path])
-	if p.is_empty(): last_error = "Could not start node. Install Node.js 18+."; return false
+	var path := _shipped("sidecar/bridge.mjs")
+	if path == "": path = ProjectSettings.globalize_path("res://sidecar/bridge.mjs")  # running from the editor
+	var node := _shipped("runtime/node.exe" if OS.get_name() == "Windows" else "runtime/node")
+	if node == "": node = "node"                                                       # fall back to system Node
+	var p := OS.execute_with_pipe(node, [path])
+	if p.is_empty(): last_error = "Could not start the engine (%s). Install Node.js 18+ or use the packaged release." % node; return false
 	_io = p.stdio; _pid = p.pid
 	var r := _req({"fn": "init"})
 	if not r.get("ok", false): last_error = str(r.get("error", "engine init failed")); return false
