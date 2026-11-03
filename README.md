@@ -31,7 +31,20 @@ Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon** — and 
 | **Customers & contracts** | **Codex** |
 | ![customers](docs/screenshots/customers.png) | ![codex](docs/screenshots/codex.png) |
 
-## Run it
+## Download
+
+Grab the archive for your OS from [Releases](https://github.com/ixaxaar/gigawatt/releases), extract, and run. Node.js is bundled; nothing else to install.
+
+| OS | File | Run |
+|---|---|---|
+| Windows (x64) | `GIGAWATT-<ver>-windows.zip` | `GIGAWATT\GIGAWATT.exe` (SmartScreen: *More info → Run anyway*) |
+| Linux (x86_64) | `GIGAWATT-<ver>-linux.tar.gz` | `GIGAWATT/gigawatt.sh` (needs a Vulkan GPU/driver) |
+| macOS, Apple Silicon | `GIGAWATT-<ver>-macos-arm64.zip` | `xattr -dr com.apple.quarantine GIGAWATT.app`, then open |
+| macOS, Intel | `GIGAWATT-<ver>-macos-x64.zip` | same as above |
+
+Builds are unsigned, hence the OS warnings. Releases are built by `.github/workflows/release.yml` on every `v*` tag (`scripts/package.sh` assembles the Godot export, the sidecar and a Node runtime).
+
+## Run from source
 
 Requirements: **Godot 4.x** (developed on 4.7), **Node 18+**, a Vulkan GPU recommended.
 
