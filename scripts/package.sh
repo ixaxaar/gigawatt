@@ -3,6 +3,7 @@
 # usage: package.sh <linux|windows|macos-arm64|macos-x64> <godot-export-dir> <node-dist-dir> <out-dir> <version>
 set -euo pipefail
 target=$1; exp=$2; nodedir=$3; out=$4; ver=$5
+exp=$(cd "$exp" && pwd); nodedir=$(cd "$nodedir" && pwd)
 root=$(cd "$(dirname "$0")/.." && pwd)
 name="GIGAWATT-$ver-$target"
 stage=$(mktemp -d); mkdir -p "$out"; out=$(cd "$out" && pwd)
