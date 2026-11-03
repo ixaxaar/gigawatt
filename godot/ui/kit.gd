@@ -206,8 +206,27 @@ static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle:
 	if parent: parent.add_child(p)
 	return [p, body]
 
-static func cluster_color(g: Dictionary, id) -> Color:
-	var idx := 0
-	for k in g.clusters.size():
-		if g.clusters[k].id == id: idx = k
-	return Color.from_hsv(fmod(idx * 0.137 + 0.02, 1.0), 0.75, 1.0)
+## Stable per cluster: derived from the id itself, so disbanding another cluster never recolours this one.
+static func cluster_color(_g: Dictionary, id) -> Color:
+	var n := int(str(id).substr(3)) if str(id).length() > 3 else 0
+	return Color.from_hsv(fmod(n * 0.137 + 0.02, 1.0), 0.75, 1.0)
+
+## Run `rebuild` (which frees and recreates the UI) without losing scroll positions.
+static func rebuild_keep(node: Control, rebuild: Callable) -> void:
+	var vals := []
+	for sc in node.find_children("*", "ScrollContainer", true, false): vals.append((sc as ScrollContainer).scroll_vertical)
+	rebuild.call()
+	if vals.is_empty() or not node.is_inside_tree(): return
+	var tree := node.get_tree()
+	await tree.process_frame; await tree.process_frame
+	if not is_instance_valid(node): return
+	var scs := node.find_children("*", "ScrollContainer", true, false)
+	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
+
+## True when the mouse is over an interactive UI panel (so the 3D view must not react).
+static func over_ui(node: Node) -> bool:
+	var h := node.get_viewport().gui_get_hovered_control()
+	while h != null:
+		if h is PanelContainer or h is ScrollContainer or h is BaseButton or h is LineEdit or h is SpinBox or h is RichTextLabel or h is Range: return true
+		h = h.get_parent() as Control
+	return false

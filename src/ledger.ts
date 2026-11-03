@@ -1,6 +1,7 @@
 // Warehouse ledger: what you own, where it is (warehouse / on order / deployed) and what a rack still needs.
 import { getItem } from './data';
-import { offerAt, rackBom, volumeDiscount } from './store';
+import { validateRack } from './sim/validate';
+import { availableFor, offerAt, rackBom, volumeDiscount } from './store';
 import type { GameState } from './types';
 
 export interface LedgerRow { id: string; name: string; kind: string; vendor: string; warehouse: number; spares?: number; onOrder: number; nextEta?: number; deployed: number; }
@@ -28,15 +29,16 @@ export interface MissingLine { id: string; name: string; need: number; have: num
 export function rackReadiness(g: GameState, designId: string, racks = 1) {
   const bom = rackBom(g, designId);
   if (!bom) return undefined;
+  const free = availableFor(g, designId);
   const lines: MissingLine[] = Object.entries(bom).map(([id, per]) => {
-    const need = per * racks, have = g.inventory[id] ?? 0;
+    const need = per * racks, have = free[id] ?? 0;
     const onOrder = g.orders.filter((o) => o.itemId === id && !o.spare).reduce((n, o) => n + o.qty, 0);
     const it = getItem(id)!;
     const o = it ? offerAt(it, g.month) : undefined;
     return { id, name: it?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o?.available, unitPrice: o?.unitPrice ?? 0, leadMonths: o?.leadMonths ?? 0, reason: o?.reason };
   });
   const per = Object.values(bom);
-  const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((g.inventory[id] ?? 0) / n)));
+  const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((free[id] ?? 0) / n)));
   void per;
   const toBuy = lines.filter((l) => l.short - l.onOrder > 0);
   const cost = toBuy.reduce((n, l) => { const q = l.short - l.onOrder; return n + Math.round(l.unitPrice * q * (1 - (it(l.id) ? volumeDiscount(it(l.id)!, q, l.unitPrice) : 0))); }, 0);
@@ -45,3 +47,33 @@ export function rackReadiness(g: GameState, designId: string, racks = 1) {
   return { lines, buildableNow, complete: lines.every((l) => l.short === 0), toBuy, blocked, cost, etaMonths: eta };
 }
 const it = (id: string) => getItem(id);
+
+export interface MachineRow {
+  serial: string; id: string; hallId: string; hall: string; slot: number; design: string; status: string; readyMonth: number;
+  clusterId?: string; cluster?: string; role: string; customer?: string; model?: string; accels: number; kW: number;
+}
+
+/** One row per physical rack: what it is, where it sits, and exactly what it is doing right now. */
+export function machineLedger(g: GameState): MachineRow[] {
+  const rows: MachineRow[] = [];
+  const spot = new Set([...(g.spotClusters ?? [])]), spotRacks = new Set(g.spotRacks ?? []);
+  let n = 0;
+  for (const h of g.halls) for (const r of h.racks) {
+    n++;
+    const d = g.racks.find((x) => x.id === r.designId);
+    const st = d ? validateRack(d, g.trays, getItem).stats : undefined;
+    const cl = r.clusterId ? g.clusters.find((c) => c.id === r.clusterId) : undefined;
+    const ac = cl ? g.activeContracts.find((a) => a.clusterIds.includes(cl.id)) : undefined;
+    let role = 'unassigned';
+    if (r.status !== 'online') role = r.status === 'failed' ? 'failed — awaiting repair' : r.status;
+    else if (ac) role = ac.contract.kind === 'training' ? 'training' : 'serving';
+    else if (cl && spot.has(cl.id) || spotRacks.has(r.id)) role = 'spot market';
+    else if (cl) role = 'clustered, idle';
+    rows.push({
+      serial: `RK-${String(r.serial ?? n).padStart(4, '0')}`, id: r.id, hallId: h.id, hall: h.name, slot: r.slot, design: d?.name ?? r.designId,
+      status: r.status, readyMonth: r.readyMonth, clusterId: cl?.id, cluster: cl?.name, role, customer: ac?.contract.customer, model: ac?.contract.model.name,
+      accels: st?.accels ?? 0, kW: st?.kW ?? 0,
+    });
+  }
+  return rows;
+}

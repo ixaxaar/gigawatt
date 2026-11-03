@@ -6,7 +6,9 @@ var msg := ""
 var mw := {}
 const ICON := {"grid": "GRID", "solar": "SOLAR", "gas": "GAS", "hydro": "HYDRO", "nuclear": "NUCLEAR"}
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	var pv: Dictionary = b.q("powerPreview"); var sources: Dictionary = b.q("powerSources")

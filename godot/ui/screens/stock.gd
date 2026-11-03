@@ -8,7 +8,9 @@ var n := 1
 var sp_state := {"sp": true}
 const KIND_ORDER := ["accelerator", "cpu", "memory", "nvme", "nic", "switch", "cable", "chassis", "rack", "storage", "power", "cooling"]
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	if hall_id == "" or b.hall(hall_id).is_empty(): hall_id = g.halls[0].id
@@ -30,6 +32,7 @@ func refresh() -> void:
 		var box := VBoxContainer.new(); box.add_theme_constant_override("separation", 6); ra[1].add_child(box); ra[1].add_child(Kit.hsep())
 		var h1 := HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1)
 		h1.add_child(Kit.label(d.name, 15)); h1.add_child(Kit.tag("%d ready to deploy" % int(r.buildableNow), Kit.GR)); h1.add_child(Kit.tag("%d deployed" % placed_n))
+		if int(g.get("rackReserve", {}).get(d.id, 0)) > 0: h1.add_child(Kit.tag("%d reserved" % int(g.rackReserve[d.id]), Kit.CY))
 		var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h1.add_child(sp)
 		if r.buildableNow > 0:
 			var opts := []; for h in g.halls: opts.append([h.id, "%s (%d/%d)" % [h.name, h.racks.size(), int(h.rackSlots)]])
@@ -58,15 +61,18 @@ func refresh() -> void:
 	for o in ords:
 		var nm: String = b.item(o.itemId).get("name", o.itemId)
 		tr[1].add_child(Kit.label("%d× %s%s → %s (%d mo)" % [int(o.qty), nm, " (spare)" if o.get("spare", false) else "", Kit.date_of(o.arriveMonth), int(o.arriveMonth - g.month)], 12, Kit.TX, true))
-	var fl := Kit.panel("Racks on the floor", false, right); var any := false
-	for h in g.halls:
-		for p in h.racks:
-			any = true; var dn := ""
-			for d in g.racks:
-				if d.id == p.designId: dn = d.name
-			var col := Kit.GR if p.status == "online" else (Kit.RD if p.status == "failed" else Kit.AM)
-			fl[1].add_child(Kit.rich("%s · %s  [color=#%s]%s%s[/color]" % [h.name, dn, col.to_html(false), p.status, ("" if p.status == "online" else " → " + Kit.date_of(p.readyMonth))], 12))
-	if not any: fl[1].add_child(Kit.label("None deployed.", 13, Kit.DIM))
+	var fl := Kit.panel("Machine ledger — every rack and what it is doing", false, right)
+	var ml: Array = b.q("machineLedger")
+	if ml.is_empty(): fl[1].add_child(Kit.label("None deployed.", 13, Kit.DIM))
+	else:
+		var mrows := []
+		for m in ml:
+			var doing: String = m.role
+			if m.get("customer") != null: doing += " · %s" % m.customer
+			elif m.get("cluster") != null: doing += " · " + str(m.cluster)
+			var col := Kit.GR if m.status == "online" else (Kit.RD if m.status == "failed" else Kit.AM)
+			mrows.append([m.serial, Kit.label(m.design, 12, Kit.TX, true), "%s #%d" % [m.hall, int(m.slot + 1)], Kit.label(str(m.status) + ("" if m.status == "online" else " → " + Kit.date_of(m.readyMonth)), 12, col, true), Kit.label(doing, 12, Kit.GR if ["training", "serving"].has(m.role) else Kit.DIM, true)])
+		fl[1].add_child(Kit.table(["Serial", "Machine", "Where", "Status", "Doing"], mrows))
 	var value := 0.0; for r in led: value += r.warehouse
 	var lp := Kit.panel("Full inventory ledger (%d units in warehouse)" % int(value), false, right)
 	var kinds := []; for r in led:

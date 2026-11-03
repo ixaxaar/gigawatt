@@ -24,7 +24,9 @@ const ZONE := {"accelerator": "ACCELERATOR", "cpu": "CPU", "dimm": "DIMM", "nic"
 const RC := {"tray": Color("#76b900"), "switch": Color("#4fd1ff"), "storage": Color("#c792ea"), "power": Color("#ffb020")}
 
 var _gwfilled := false
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)

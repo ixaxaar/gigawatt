@@ -13,7 +13,9 @@ func _plaque(parent: Control, label: String, value: String, col: Color, trend: A
 	v.add_child(Kit.label(label, 11, Kit.DIM)); v.add_child(Kit.label(value, 26, col))
 	var sp := Spark.new(); sp.values = trend; sp.color = col; v.add_child(sp); v.add_child(Kit.label(sub, 11, Kit.DIM, true))
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	var p: Dictionary = b.q("pnl"); var hist: Array = g.history.slice(maxi(0, g.history.size() - 24))

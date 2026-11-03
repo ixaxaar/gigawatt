@@ -328,6 +328,8 @@ export interface HallState {
   /** Placed racks. */
   racks: PlacedRack[];
   floorLoadKgPerRack: number;
+  /** Floor space on order: units of FLOOR_UNIT_SLOTS racks, commissioned at readyMonth. */
+  expansions?: { units: number; readyMonth: number }[];
 }
 export interface PlacedRack {
   id: string;
@@ -336,6 +338,8 @@ export interface PlacedRack {
   status: 'ordered' | 'installing' | 'commissioning' | 'online' | 'failed';
   readyMonth: number;
   clusterId?: string;
+  /** Unique, never-reused serial (RK-0001 style) for the machine ledger. */
+  serial?: number;
   /** Part id that broke (needs a spare, otherwise a slow RMA). */
   failedPart?: string;
 }
@@ -446,6 +450,12 @@ export type Contract = TrainingContract | InferenceContract;
 // Top-level game state (serializable)
 // ===========================================================================
 export interface GameState {
+  /** Last cluster number handed out (ids are never reused). */
+  clusterSeq?: number;
+  /** Next rack serial. */
+  rackSeq?: number;
+  /** Racks earmarked per design (bought/ordered as that design); other designs can't consume their parts. */
+  rackReserve?: Record<string, number>;
   month: number;                 // 0 = Jan 2020
   seed: number;
   cash: number;

@@ -29,7 +29,9 @@ func _default_fabric() -> Dictionary:
 		if optic == "" and c.cableType == "optic-dr": optic = c.id
 	return {"id": "fab", "name": "Fabric", "scaleOutTech": "ib-ndr", "topology": "fat-tree-rail-optimized", "oversubscription": 1, "leafSwitchId": sw[0].id if sw.size() > 0 else "", "spineSwitchId": sw[0].id if sw.size() > 0 else "", "nodeToLeafCableId": aoc, "leafToSpineCableId": optic}
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	if f.is_empty(): f = _default_fabric()
@@ -52,7 +54,7 @@ func refresh() -> void:
 		for r in free:
 			var dn := ""; for d in g.racks:
 				if d.id == r.designId: dn = d.name
-			fl.add_child(Kit.btn("%s · %s" % [dn.left(16), str(r.id).substr(3, 6)], func(): sel = sel.filter(func(x): return x != r.id) if sel.has(r.id) else sel + [r.id]; refresh(), "pri" if sel.has(r.id) else "", 12))
+			fl.add_child(Kit.btn("%s · %s" % [dn.left(16), "RK-%04d" % int(r.get("serial", 0))], func(): sel = sel.filter(func(x): return x != r.id) if sel.has(r.id) else sel + [r.id]; refresh(), "pri" if sel.has(r.id) else "", 12))
 		var br := HBoxContainer.new(); p1[1].add_child(br); br.add_child(Kit.btn("select all", func(): sel = free.map(func(r): return r.id); refresh(), "", 12)); br.add_child(Kit.btn("none", func(): sel = []; refresh(), "", 12))
 	var p2 := Kit.panel("2 · Wire the network", true, c1)
 	p2[1].add_child(Kit.btn("Auto-design for TRAINING", func(): _auto(tier), "go", 14)); p2[1].add_child(Kit.btn("Auto-design for INFERENCE (cheaper)", func(): _auto(0.0), "", 14))

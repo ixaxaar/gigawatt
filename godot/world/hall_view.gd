@@ -99,7 +99,7 @@ func _vendor_color(sy: Dictionary) -> Color:
 func slot_pos(i: int) -> Vector3: return Vector3((i % cols) * PITCH, 0, row_z[i / cols])
 
 func _layout(hall: Dictionary) -> void:
-	cols = clampi(int(ceil(sqrt(int(hall.rackSlots) * 1.6))), 5, 12)
+	cols = 10  # fixed width: buying floor space only ever adds rows, so racks never move
 	var rows := int(ceil(float(int(hall.rackSlots)) / cols))
 	row_z.clear(); var z := 0.0
 	for k in rows:
@@ -358,6 +358,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	if b == null: return
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
+		if mb.pressed and Kit.over_ui(self): return
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP: dist = maxf(2.5, dist * 0.9); auto_orbit = false; _update_cam()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN: dist = minf(60.0, dist * 1.1); auto_orbit = false; _update_cam()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT: _drag = (2 if Input.is_key_pressed(KEY_SHIFT) else 1) if mb.pressed else 0

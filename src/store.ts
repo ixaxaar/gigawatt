@@ -138,6 +138,25 @@ export const rackBom = (state: GameState, designId: string): Record<string, numb
   return need;
 };
 
+/** Parts of `designId`'s BOM that are free for it: warehouse stock minus what other designs have reserved. */
+export const availableFor = (g: GameState, designId: string): Record<string, number> => {
+  const bom = rackBom(g, designId) ?? {};
+  const held: Record<string, number> = {};
+  for (const [did, n] of Object.entries(g.rackReserve ?? {})) {
+    if (did === designId || !(n > 0)) continue;
+    for (const [p, per] of Object.entries(rackBom(g, did) ?? {})) held[p] = (held[p] ?? 0) + per * n;
+  }
+  const out: Record<string, number> = {};
+  for (const p of Object.keys(bom)) out[p] = Math.max(0, (g.inventory[p] ?? 0) - (held[p] ?? 0));
+  return out;
+};
+const reserve = (g: GameState, designId: string, n: number) => { g.rackReserve = { ...(g.rackReserve ?? {}), [designId]: Math.max(0, (g.rackReserve?.[designId] ?? 0) + n) }; if (!g.rackReserve[designId]) delete g.rackReserve[designId]; };
+
+/** Floor space is sold in units of this many rack slots. */
+export const FLOOR_UNIT_SLOTS = 10;
+export const FLOOR_UNIT_COST = 250_000 * FLOOR_UNIT_SLOTS;
+export const floorCommissionMonths = (units: number) => 2 + Math.ceil(units / 5);
+
 /** Borrowing headroom: fixed line + collateral against capitalized equipment. */
 export const creditLimit = (state: GameState): number => 5_000_000 + estimateCapexBasis(state) * 0.6;
 
@@ -197,6 +216,10 @@ export interface GameStore {
   saveTray: (tray: TrayDesign) => ActionResult;
   saveRack: (rack: RackDesign) => ActionResult;
   buildHall: (name: string, coolingClass: CoolingClass, rackSlots: number) => ActionResult;
+  /** Buy floor space: `units` blocks of FLOOR_UNIT_SLOTS racks; they come online after a commissioning delay. */
+  expandHall: (hallId: string, units: number) => ActionResult;
+  /** Earmark `racks` of a design's parts so other designs can't consume them. */
+  reserveRacks: (designId: string, racks: number) => ActionResult;
   installPower: (hallId: string, itemId: string, qty: number) => ActionResult;
   installCooling: (hallId: string, itemId: string, qty: number) => ActionResult;
   placeRack: (hallId: string, designId: string) => ActionResult;
@@ -343,6 +366,7 @@ export const useGame = create<GameStore>()((set, get) => {
         }
         if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
+        reserve(g, rackIdOf(t), nRacks);
         for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...(l.spare ? { spare: true } : {}) });
         logln(g, 'info', `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium). Full bill of materials arrives by month ${g.month + lead}.`);
         return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.`);
@@ -367,10 +391,32 @@ export const useGame = create<GameStore>()((set, get) => {
         return ok('Rack saved.');
       }),
 
+    expandHall: (hallId, units) =>
+      commit((g) => {
+        const hall = g.halls.find((h) => h.id === hallId);
+        if (!hall) return fail(`Hall '${hallId}' not found.`);
+        const n = Math.floor(units);
+        if (!(n >= 1)) return fail('Buy at least one floor unit.');
+        const cost = n * FLOOR_UNIT_COST;
+        if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd(cost)} — not enough cash.`);
+        g.cash -= cost;
+        const readyMonth = g.month + floorCommissionMonths(n);
+        (hall.expansions ??= []).push({ units: n, readyMonth });
+        logln(g, 'info', `Ordered ${n * FLOOR_UNIT_SLOTS} more rack positions for ${hall.name} ($${usd(cost)}). Slab, containment and fit-out finish in month ${readyMonth}.`);
+        return ok(`${n * FLOOR_UNIT_SLOTS} slots ordered for ${hall.name}; commissioned ${readyMonth - g.month} months from now.`);
+      }),
+
+    reserveRacks: (designId, racks) =>
+      commit((g) => {
+        if (!g.racks.some((r) => r.id === designId)) return fail('Unknown rack design.');
+        reserve(g, designId, Math.floor(racks));
+        return ok(`Reserved ${Math.floor(racks)} rack(s) of this design.`);
+      }),
+
     buildHall: (name, coolingClass, rackSlots) =>
       commit((g) => {
         const slots = Math.floor(rackSlots);
-        if (slots < 4 || slots > 200) return fail('Halls hold between 4 and 200 rack slots.');
+        if (slots < 4 || slots > 200) return fail('A new hall starts with 4–200 rack slots; buy more floor space later in units.');
         const cost = 2_000_000 + 250_000 * slots;
         if (cost > g.cash) return fail(`This hall costs $${usd(cost)} — not enough cash.`);
         g.cash -= cost;
@@ -511,16 +557,17 @@ export const useGame = create<GameStore>()((set, get) => {
           return fail(`${design.name} weighs ~${Math.round(wKg)} kg but ${hall.name}'s floor is rated ${hall.floorLoadKgPerRack} kg per rack. Build a liquid/immersion-class hall (slab-on-grade, higher rating) or choose a lighter design.`, [{ severity: 'error', code: 'HALL_FLOOR_LOAD', message: `Rack ${Math.round(wKg)} kg > floor ${hall.floorLoadKgPerRack} kg.`, learn: design.rackId }]);
         }
         const need = rackBom(g, designId) ?? {};
-        const missing = Object.entries(need).filter(([id, n]) => (g.inventory[id] ?? 0) < n);
+        const free = availableFor(g, designId);
+        const missing = Object.entries(need).filter(([id, n]) => (free[id] ?? 0) < n);
         if (missing.length) {
           return fail(
             `Missing parts: ${missing
-              .map(([id, n]) => `${n - (g.inventory[id] ?? 0)} more × ${getItem(id)?.name ?? id}`)
+              .map(([id, n]) => `${n - (free[id] ?? 0)} more × ${getItem(id)?.name ?? id}`)
               .join(', ')}.`,
             missing.map(([id, n]) => ({
               severity: 'error' as const,
               code: 'missing-parts',
-              message: `Need ${n} × ${getItem(id)?.name ?? id}, have ${g.inventory[id] ?? 0}.`,
+              message: `Need ${n} × ${getItem(id)?.name ?? id}, ${free[id] ?? 0} free (${g.inventory[id] ?? 0} in warehouse, rest reserved for other racks).`,
               learn: id,
             })),
           );
@@ -533,8 +580,11 @@ export const useGame = create<GameStore>()((set, get) => {
           g.inventory[id] -= n;
           if (g.inventory[id] <= 0) delete g.inventory[id];
         }
+        g.rackSeq = (g.rackSeq ?? g.halls.reduce((n, h) => n + h.racks.length, 0)) + 1;
+        reserve(g, designId, -1);
         const rack: PlacedRack = {
-          id: `pr-${g.month}-${hall.racks.length + 1}-${designId}`,
+          id: `pr-${g.rackSeq}-${designId}`,
+          serial: g.rackSeq,
           designId,
           slot: hall.racks.length,
           status: 'installing',
@@ -581,7 +631,9 @@ export const useGame = create<GameStore>()((set, get) => {
         if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(', ')}.`);
         const claimed = ids.filter((id) => placed.get(id)?.clusterId);
         if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(', ')}.`);
-        const nextN = g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, '')) || 0), 0) + 1;
+        // monotonic: ids are never reused, so stale references can't silently point at a different cluster
+        const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, '')) || 0), 0)) + 1;
+        g.clusterSeq = nextN;
         const cluster: Cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
         const stats = evaluateCluster(cluster, {
           getRack: (id) => { const pid = placed.get(id)?.designId ?? id; return g.racks.find((r) => r.id === pid); },

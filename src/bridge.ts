@@ -8,7 +8,7 @@ import { SCENARIOS } from './env/scenarios';
 const mem = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
 
-import { useGame, offerAt, selectMonthlyPnL, selectNetWorth, selectCapexBasis, rackBom, volumeDiscount } from './store';
+import { FLOOR_UNIT_SLOTS, FLOOR_UNIT_COST, floorCommissionMonths, useGame, offerAt, selectMonthlyPnL, selectNetWorth, selectCapexBasis, rackBom, volumeDiscount } from './store';
 import { ALL_ITEMS, VENDORS, getItem } from './data';
 import { TEMPLATES } from './data/templates';
 import { MODELS, scaleOutTier, gpuHourAnchor } from './sim/market';
@@ -21,7 +21,7 @@ import { quote, hallChecks } from './ui/quote';
 import { templateFacts, templateBom, racksFor, rackIdOf, trayIdOf } from './plan';
 import { contractFit, buildOptions, pipeline } from './contractfit';
 import { autoFabric } from './autopilot';
-import { ledger, rackReadiness } from './ledger';
+import { ledger, rackReadiness, machineLedger } from './ledger';
 import { hallResilience } from './sim/resilience';
 import { uplinkGbps, uplinkMonthlyUSD, carrierCount, totalNeedGbps, contractNeedGbps } from './sim/internet';
 import { monthlyOpex, HOURS_PER_MONTH } from './sim/economy';
@@ -56,6 +56,8 @@ const Q: Record<string, (...a: any[]) => any> = {
   rackBom: (designId) => rackBom(G(), designId),
   rackReadiness: (designId, racks) => rackReadiness(G(), designId, racks ?? 1),
   ledger: () => ledger(G()),
+  machineLedger: () => machineLedger(G()),
+  floorQuote: (n) => ({ units: n, slots: n * FLOOR_UNIT_SLOTS, cost: n * FLOOR_UNIT_COST, months: floorCommissionMonths(n) }),
   pnl: () => selectMonthlyPnL(G()),
   netWorth: () => selectNetWorth(G()),
   capexBasis: () => selectCapexBasis(G()),

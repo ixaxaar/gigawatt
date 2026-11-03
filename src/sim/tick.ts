@@ -119,6 +119,17 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
     log('good', `Delivered ${units} unit(s) from ${arrived.length} order(s) into inventory.`);
   }
 
+  // ---------- 1b. floor space commissioning ----------
+  for (const hall of s.halls) {
+    if (!hall.expansions?.length) continue;
+    const due = hall.expansions.filter((e) => e.readyMonth <= s.month);
+    if (!due.length) continue;
+    const slots = due.reduce((n, e) => n + e.units * 10, 0);
+    hall.rackSlots += slots;
+    hall.expansions = hall.expansions.filter((e) => e.readyMonth > s.month);
+    log('good', `${hall.name}: ${slots} new rack positions commissioned (${hall.rackSlots} total).`);
+  }
+
   // ---------- 2. rack commissioning progress ----------
   const placed: PlacedRack[] = [];
   for (const hall of s.halls) placed.push(...hall.racks);

@@ -8,7 +8,9 @@ var folds := {}
 
 const KIND_LBL := {"accelerator": "Accelerators", "cpu": "CPUs", "memory": "Memory", "nic": "Network cards", "switch": "Switches", "cable": "Cables & optics", "chassis": "Chassis & boards", "storage": "Storage", "power": "Power", "cooling": "Cooling", "rack": "Racks", "uplink": "Internet uplinks"}
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b
 	if app.learn_id != "": sel = app.learn_id; app.learn_id = ""; view = "list"

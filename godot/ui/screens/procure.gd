@@ -20,7 +20,9 @@ const TIER := {"diy": ["DIY", "Build it yourself"], "oem": ["OEM", "OEM integrat
 
 func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)

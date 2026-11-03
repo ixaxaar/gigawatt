@@ -9,6 +9,14 @@ var sp_state := {"sp": true}
 var nh_name := "Hall 2"
 var nh_cool := "dlc"
 var nh_slots := 20
+var _focus := ""
+var _focus_panel: Control
+var _scroll: ScrollContainer
+
+## Called by the Datacenter 101 "Show me where" button: jump to the relevant section of this screen.
+func focus_concept(cid: String) -> void:
+	plant_kind = "power" if ["power", "ups"].has(cid) else "cooling"
+	_focus = "plant"; refresh()
 
 func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -21,7 +29,9 @@ func _gauge(parent: Control, label: String, v: float, mx: float, unit: String) -
 	var h := HBoxContainer.new(); parent.add_child(h); h.add_child(Kit.label(label, 13, Kit.DIM)); var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(sp)
 	h.add_child(Kit.label("%s / %s %s" % [Kit.num(v), Kit.num(mx), unit], 13)); parent.add_child(Kit.bar(v, mx))
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	var hi: int = clampi(app.hall.hall_i, 0, g.halls.size() - 1); var hall: Dictionary = g.halls[hi]
@@ -37,6 +47,30 @@ func refresh() -> void:
 	var pc := Kit.panel("Power & cooling", true, col)
 	_gauge(pc[1], "IT load", hs.kw, hall.itPowerKW, "kW"); _gauge(pc[1], "Heat rejection", hs.kw, hall.coolingKW, "kW")
 	pc[1].add_child(Kit.stats([["PUE", "%.2f" % hs.pue], ["Racks", "%d/%d" % [hall.racks.size(), int(hall.rackSlots)]], ["Class", str(hall.coolingClass)]], 3))
+	# floor space (the floor is endless: buy it in units, wait for commissioning)
+	var fp := Kit.panel("Floor space", false, col)
+	var used: int = hall.racks.size(); var total: int = int(hall.rackSlots)
+	fp[1].add_child(Kit.label("%d of %d rack positions used" % [used, total], 13)); fp[1].add_child(Kit.bar(used, maxf(1.0, total), used >= total))
+	for e in hall.get("expansions", []): fp[1].add_child(Kit.label("◔ +%d positions being fitted out · ready %s" % [int(e.units) * 10, Kit.date_of(e.readyMonth)], 12, Kit.AM, true))
+	var fr := HFlowContainer.new(); fr.add_theme_constant_override("h_separation", 6); fp[1].add_child(fr)
+	for n in [1, 5, 20]:
+		var q: Dictionary = b.q("floorQuote", [n])
+		var fb := Kit.btn("+%d positions · %s · %d mo" % [int(q.slots), Kit.usd(q.cost), int(q.months)], func(): msg = b.act("expandHall", [hall.id, n]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 12)
+		fb.disabled = q.cost > g.cash; fr.add_child(fb)
+	fp[1].add_child(Kit.label("Space is sold in blocks and takes a few months to build out before racks can go in. Bigger orders take longer.", 11, Kit.DIM, true))
+	# machine ledger: what every rack in this hall is doing
+	var ml: Array = b.q("machineLedger").filter(func(m): return m.hallId == hall.id)
+	var mp := Kit.panel("Machines in %s (%d)" % [hall.name, ml.size()], false, col)
+	if ml.is_empty(): mp[1].add_child(Kit.label("No racks deployed here yet.", 12, Kit.DIM))
+	else:
+		var mrows := []
+		for m in ml:
+			var doing: String = m.role
+			if m.get("customer") != null: doing += " · %s (%s)" % [m.customer, m.model]
+			elif m.get("cluster") != null: doing += " · " + str(m.cluster)
+			var dc := Kit.GR if ["training", "serving"].has(m.role) else (Kit.RD if str(m.role).begins_with("failed") else Kit.DIM)
+			mrows.append([m.serial, Kit.label(m.design, 12, Kit.TX, true), "%d" % int(m.slot + 1), Kit.label(m.status, 12, Kit.GR if m.status == "online" else Kit.AM), Kit.label(doing, 12, dc, true)])
+		mp[1].add_child(Kit.table(["Serial", "Machine", "Slot", "Status", "Doing"], mrows))
 	# install from inventory
 	var ip := Kit.panel("Install equipment from inventory", false, col); var any := false
 	for id in g.inventory:
@@ -50,6 +84,7 @@ func refresh() -> void:
 	ip[1].add_child(Kit.label("Installed: " + (", ".join(inst) if inst.size() > 0 else "nothing"), 11, Kit.DIM, true))
 	# buy plant
 	var bp := Kit.panel("Buy plant for this hall", false, col)
+	_focus_panel = bp[0]; _scroll = col.get_parent() as ScrollContainer
 	var tb := HBoxContainer.new(); bp[1].add_child(tb)
 	for k in ["cooling", "power"]: tb.add_child(Kit.btn(k, func(): plant_kind = k; refresh(), "pri" if plant_kind == k else "", 12))
 	var offers: Dictionary = b.q("offersAll")
@@ -111,3 +146,7 @@ func refresh() -> void:
 		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)
 		MissingParts.build(app, mv, design, 1, func(m): msg = m; refresh(), sp_state)
 	if msg != "": bv.add_child(Kit.label(msg, 12, Kit.DIM, true))
+	if _focus != "" and _scroll != null:
+		_focus = ""; var sc := _scroll; var fpn := _focus_panel
+		await get_tree().process_frame; await get_tree().process_frame; await get_tree().process_frame
+		if is_instance_valid(sc) and is_instance_valid(fpn): sc.ensure_control_visible(fpn)

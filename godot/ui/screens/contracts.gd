@@ -18,9 +18,16 @@ func _say(r: Dictionary) -> String:
 			if i is Dictionary and i.get("severity", "error") == "error": t += "\n  ✗ " + str(i.message)
 	return t
 
-func refresh() -> void:
+func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+
+func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
+	# drop selections that point at clusters which no longer exist (disbanded / re-clustered)
+	var live_ids: Array = g.clusters.map(func(c): return c.id)
+	for k in pick.keys():
+		pick[k] = pick[k].filter(func(id): return live_ids.has(id))
+		if pick[k].is_empty(): pick.erase(k)
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
 	hd.add_child(Kit.label("CUSTOMERS & CONTRACTS", 26, Kit.CY))
@@ -112,7 +119,7 @@ func _rack_assign(parent: Control, contract_id: String) -> void:
 	for r in free:
 		var dn := ""; for d in b.g.racks:
 			if d.id == r.designId: dn = d.name
-		fl.add_child(Kit.btn("%s · %s" % [dn.left(18), str(r.id).substr(3, 6)], func(): sel = sel.filter(func(x): return x != r.id) if sel.has(r.id) else sel + [r.id]; rack_pick[contract_id] = sel; refresh(), "pri" if sel.has(r.id) else "", 12))
+		fl.add_child(Kit.btn("%s · %s" % [dn.left(18), "RK-%04d" % int(r.get("serial", 0))], func(): sel = sel.filter(func(x): return x != r.id) if sel.has(r.id) else sel + [r.id]; rack_pick[contract_id] = sel; refresh(), "pri" if sel.has(r.id) else "", 12))
 	fl.add_child(Kit.btn("all", func(): rack_pick[contract_id] = free.map(func(r): return r.id); refresh(), "", 12))
 	var go := Kit.btn("SERVE FROM %s RACK%s" % [str(sel.size()) if sel.size() > 0 else "", "" if sel.size() == 1 else "S"], func(): msg = b.act("assignRacks", [contract_id, sel]).message; rack_pick.erase(contract_id); refresh(), "go", 12)
 	go.disabled = sel.is_empty(); v.add_child(go)

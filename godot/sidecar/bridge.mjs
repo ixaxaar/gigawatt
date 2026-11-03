@@ -11565,6 +11565,15 @@ function advanceMonth(state, opts = {}) {
     const units = arrived.reduce((n, od) => n + od.qty, 0);
     log("good", `Delivered ${units} unit(s) from ${arrived.length} order(s) into inventory.`);
   }
+  for (const hall of s2.halls) {
+    if (!hall.expansions?.length) continue;
+    const due = hall.expansions.filter((e) => e.readyMonth <= s2.month);
+    if (!due.length) continue;
+    const slots = due.reduce((n, e) => n + e.units * 10, 0);
+    hall.rackSlots += slots;
+    hall.expansions = hall.expansions.filter((e) => e.readyMonth > s2.month);
+    log("good", `${hall.name}: ${slots} new rack positions commissioned (${hall.rackSlots} total).`);
+  }
   const placed2 = [];
   for (const hall of s2.halls) placed2.push(...hall.racks);
   for (const rack of placed2) {
@@ -12047,6 +12056,24 @@ const rackBom = (state, designId) => {
   }
   return need;
 };
+const availableFor = (g, designId) => {
+  const bom = rackBom(g, designId) ?? {};
+  const held = {};
+  for (const [did, n] of Object.entries(g.rackReserve ?? {})) {
+    if (did === designId || !(n > 0)) continue;
+    for (const [p, per] of Object.entries(rackBom(g, did) ?? {})) held[p] = (held[p] ?? 0) + per * n;
+  }
+  const out = {};
+  for (const p of Object.keys(bom)) out[p] = Math.max(0, (g.inventory[p] ?? 0) - (held[p] ?? 0));
+  return out;
+};
+const reserve = (g, designId, n) => {
+  g.rackReserve = { ...g.rackReserve ?? {}, [designId]: Math.max(0, (g.rackReserve?.[designId] ?? 0) + n) };
+  if (!g.rackReserve[designId]) delete g.rackReserve[designId];
+};
+const FLOOR_UNIT_SLOTS = 10;
+const FLOOR_UNIT_COST = 25e4 * FLOOR_UNIT_SLOTS;
+const floorCommissionMonths = (units) => 2 + Math.ceil(units / 5);
 const creditLimit = (state) => 5e6 + estimateCapexBasis(state) * 0.6;
 const selectCapexBasis = estimateCapexBasis;
 const selectNetWorth = (g) => g.cash - g.debt + estimateCapexBasis(g) * 0.5;
@@ -12198,6 +12225,7 @@ const useGame = create()((set, get) => {
         }
         if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
+        reserve(g, rackIdOf(t), nRacks);
         for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
         logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium). Full bill of materials arrives by month ${g.month + lead}.`);
         return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.`);
@@ -12217,9 +12245,27 @@ const useGame = create()((set, get) => {
       logln(g, "info", `Rack design '${rack.name}' saved.`);
       return ok("Rack saved.");
     }),
+    expandHall: (hallId, units) => commit((g) => {
+      const hall = g.halls.find((h) => h.id === hallId);
+      if (!hall) return fail(`Hall '${hallId}' not found.`);
+      const n = Math.floor(units);
+      if (!(n >= 1)) return fail("Buy at least one floor unit.");
+      const cost = n * FLOOR_UNIT_COST;
+      if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd(cost)} — not enough cash.`);
+      g.cash -= cost;
+      const readyMonth = g.month + floorCommissionMonths(n);
+      (hall.expansions ??= []).push({ units: n, readyMonth });
+      logln(g, "info", `Ordered ${n * FLOOR_UNIT_SLOTS} more rack positions for ${hall.name} ($${usd(cost)}). Slab, containment and fit-out finish in month ${readyMonth}.`);
+      return ok(`${n * FLOOR_UNIT_SLOTS} slots ordered for ${hall.name}; commissioned ${readyMonth - g.month} months from now.`);
+    }),
+    reserveRacks: (designId, racks) => commit((g) => {
+      if (!g.racks.some((r) => r.id === designId)) return fail("Unknown rack design.");
+      reserve(g, designId, Math.floor(racks));
+      return ok(`Reserved ${Math.floor(racks)} rack(s) of this design.`);
+    }),
     buildHall: (name, coolingClass, rackSlots) => commit((g) => {
       const slots = Math.floor(rackSlots);
-      if (slots < 4 || slots > 200) return fail("Halls hold between 4 and 200 rack slots.");
+      if (slots < 4 || slots > 200) return fail("A new hall starts with 4–200 rack slots; buy more floor space later in units.");
       const cost = 2e6 + 25e4 * slots;
       if (cost > g.cash) return fail(`This hall costs $${usd(cost)} — not enough cash.`);
       g.cash -= cost;
@@ -12351,14 +12397,15 @@ const useGame = create()((set, get) => {
         return fail(`${design.name} weighs ~${Math.round(wKg)} kg but ${hall.name}'s floor is rated ${hall.floorLoadKgPerRack} kg per rack. Build a liquid/immersion-class hall (slab-on-grade, higher rating) or choose a lighter design.`, [{ severity: "error", code: "HALL_FLOOR_LOAD", message: `Rack ${Math.round(wKg)} kg > floor ${hall.floorLoadKgPerRack} kg.`, learn: design.rackId }]);
       }
       const need = rackBom(g, designId) ?? {};
-      const missing = Object.entries(need).filter(([id, n]) => (g.inventory[id] ?? 0) < n);
+      const free = availableFor(g, designId);
+      const missing = Object.entries(need).filter(([id, n]) => (free[id] ?? 0) < n);
       if (missing.length) {
         return fail(
-          `Missing parts: ${missing.map(([id, n]) => `${n - (g.inventory[id] ?? 0)} more × ${getItem(id)?.name ?? id}`).join(", ")}.`,
+          `Missing parts: ${missing.map(([id, n]) => `${n - (free[id] ?? 0)} more × ${getItem(id)?.name ?? id}`).join(", ")}.`,
           missing.map(([id, n]) => ({
             severity: "error",
             code: "missing-parts",
-            message: `Need ${n} × ${getItem(id)?.name ?? id}, have ${g.inventory[id] ?? 0}.`,
+            message: `Need ${n} × ${getItem(id)?.name ?? id}, ${free[id] ?? 0} free (${g.inventory[id] ?? 0} in warehouse, rest reserved for other racks).`,
             learn: id
           }))
         );
@@ -12370,8 +12417,11 @@ const useGame = create()((set, get) => {
         g.inventory[id] -= n;
         if (g.inventory[id] <= 0) delete g.inventory[id];
       }
+      g.rackSeq = (g.rackSeq ?? g.halls.reduce((n, h) => n + h.racks.length, 0)) + 1;
+      reserve(g, designId, -1);
       const rack = {
-        id: `pr-${g.month}-${hall.racks.length + 1}-${designId}`,
+        id: `pr-${g.rackSeq}-${designId}`,
+        serial: g.rackSeq,
         designId,
         slot: hall.racks.length,
         status: "installing",
@@ -12413,7 +12463,8 @@ const useGame = create()((set, get) => {
       if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(", ")}.`);
       const claimed = ids.filter((id) => placed2.get(id)?.clusterId);
       if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(", ")}.`);
-      const nextN = g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, "")) || 0), 0) + 1;
+      const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, "")) || 0), 0)) + 1;
+      g.clusterSeq = nextN;
       const cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
       const stats = evaluateCluster(cluster, {
         getRack: (id) => {
@@ -13350,15 +13401,16 @@ function ledger(g) {
 function rackReadiness(g, designId, racks = 1) {
   const bom = rackBom(g, designId);
   if (!bom) return void 0;
+  const free = availableFor(g, designId);
   const lines = Object.entries(bom).map(([id, per2]) => {
-    const need = per2 * racks, have = g.inventory[id] ?? 0;
+    const need = per2 * racks, have = free[id] ?? 0;
     const onOrder = g.orders.filter((o22) => o22.itemId === id && !o22.spare).reduce((n, o22) => n + o22.qty, 0);
     const it2 = getItem(id);
     const o2 = it2 ? offerAt(it2, g.month) : void 0;
     return { id, name: it2?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o2?.available, unitPrice: o2?.unitPrice ?? 0, leadMonths: o2?.leadMonths ?? 0, reason: o2?.reason };
   });
   Object.values(bom);
-  const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((g.inventory[id] ?? 0) / n)));
+  const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((free[id] ?? 0) / n)));
   const toBuy = lines.filter((l) => l.short - l.onOrder > 0);
   const cost = toBuy.reduce((n, l) => {
     const q = l.short - l.onOrder;
@@ -13369,6 +13421,41 @@ function rackReadiness(g, designId, racks = 1) {
   return { lines, buildableNow, complete: lines.every((l) => l.short === 0), toBuy, blocked, cost, etaMonths: eta };
 }
 const it = (id) => getItem(id);
+function machineLedger(g) {
+  const rows = [];
+  const spot = /* @__PURE__ */ new Set([...g.spotClusters ?? []]), spotRacks = new Set(g.spotRacks ?? []);
+  let n = 0;
+  for (const h of g.halls) for (const r of h.racks) {
+    n++;
+    const d = g.racks.find((x) => x.id === r.designId);
+    const st2 = d ? validateRack(d, g.trays, getItem).stats : void 0;
+    const cl = r.clusterId ? g.clusters.find((c) => c.id === r.clusterId) : void 0;
+    const ac = cl ? g.activeContracts.find((a) => a.clusterIds.includes(cl.id)) : void 0;
+    let role = "unassigned";
+    if (r.status !== "online") role = r.status === "failed" ? "failed — awaiting repair" : r.status;
+    else if (ac) role = ac.contract.kind === "training" ? "training" : "serving";
+    else if (cl && spot.has(cl.id) || spotRacks.has(r.id)) role = "spot market";
+    else if (cl) role = "clustered, idle";
+    rows.push({
+      serial: `RK-${String(r.serial ?? n).padStart(4, "0")}`,
+      id: r.id,
+      hallId: h.id,
+      hall: h.name,
+      slot: r.slot,
+      design: d?.name ?? r.designId,
+      status: r.status,
+      readyMonth: r.readyMonth,
+      clusterId: cl?.id,
+      cluster: cl?.name,
+      role,
+      customer: ac?.contract.customer,
+      model: ac?.contract.model.name,
+      accels: st2?.accels ?? 0,
+      kW: st2?.kW ?? 0
+    });
+  }
+  return rows;
+}
 const mem = /* @__PURE__ */ new Map();
 globalThis.localStorage = { getItem: (k2) => mem.get(k2) ?? null, setItem: (k2, v2) => void mem.set(k2, v2), removeItem: (k2) => void mem.delete(k2) };
 const st = () => useGame.getState();
@@ -13418,6 +13505,8 @@ const Q = {
   rackBom: (designId) => rackBom(G(), designId),
   rackReadiness: (designId, racks) => rackReadiness(G(), designId, racks ?? 1),
   ledger: () => ledger(G()),
+  machineLedger: () => machineLedger(G()),
+  floorQuote: (n) => ({ units: n, slots: n * FLOOR_UNIT_SLOTS, cost: n * FLOOR_UNIT_COST, months: floorCommissionMonths(n) }),
   pnl: () => selectMonthlyPnL(G()),
   netWorth: () => selectNetWorth(G()),
   capexBasis: () => selectCapexBasis(G()),

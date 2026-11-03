@@ -26,6 +26,7 @@ static func build(app, parent: Control, design_id: String, racks: int, on_msg: C
 					var m := b.act("buy", [l.id, int(l.short - l.onOrder)]); out.append("✓" if m.ok else m.message)
 					var sq := int(b.q("spareQty", [l.id, int(l.need)]))
 					if sp_state.get("sp", true) and sq > 0: b.act("buy", [l.id, sq, true])
+			b.act("reserveRacks", [design_id, racks])   # these parts are now earmarked for THIS design
 			var bad := out.filter(func(x): return x != "✓")
 			on_msg.call("Ordered %d part type(s) · arrives within ~%d mo." % [r.toBuy.size(), int(r.etaMonths)] if bad.is_empty() else " ".join(bad)), "go", 14)
 		order.disabled = r.cost > b.g.cash; h.add_child(order); h.add_child(Kit.label("arrives in ~%d mo" % int(r.etaMonths), 13, Kit.DIM))

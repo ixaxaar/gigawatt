@@ -122,7 +122,7 @@ func _on_changed() -> void:
 	_seen_log = g.log.size()
 	hall.rebuild()
 	if hall.get_meta("n", 0) == 0: pass
-	if screens.has(cur): Kit.refresh_keep(screens[cur])
+	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
 
 var quiet := false
 func toast(text: String, level := "info") -> void:
