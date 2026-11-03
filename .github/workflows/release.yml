@@ -71,7 +71,9 @@ jobs:
           ver=${GITHUB_REF_NAME}; [ "${GITHUB_REF_TYPE}" = tag ] || ver=${{ github.event.inputs.version || 'dev' }}
           scripts/package.sh ${{ matrix.target }} build/$(echo ${{ matrix.target }} | sed 's/-.*//') nodedist dist "$ver"
       - uses: actions/upload-artifact@v4
-        with: { name: dist-${{ matrix.target }}, path: dist/* }
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
 
   publish:
     needs: package
