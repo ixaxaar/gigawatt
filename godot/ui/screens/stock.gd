@@ -8,6 +8,11 @@ var n := 1
 var sp_state := {"sp": true}
 const KIND_ORDER := ["accelerator", "cpu", "memory", "nvme", "nic", "switch", "cable", "chassis", "rack", "storage", "power", "cooling"]
 
+func _serial(rack_id: String) -> String:
+	for m in app.b.q("machineLedger"):
+		if m.id == rack_id: return m.serial
+	return rack_id
+
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
 func _rebuild() -> void:
@@ -46,7 +51,7 @@ func _rebuild() -> void:
 	var sv: Dictionary = b.q("sparesView"); var spp := Kit.panel("Spares — parts WILL break", false, right)
 	if sv.rows.is_empty(): spp[1].add_child(Kit.label("Deploy racks first; then keep a few spare GPUs, PSUs, NICs and drives on the shelf. A failed rack with a spare is back in 1 month; without one it waits ~4 months for RMA.", 13, Kit.DIM, true))
 	else:
-		for f in sv.failed: spp[1].add_child(Kit.label("✗ %s: %s · back month %d" % [f.id, f.part, int(f.readyMonth)], 12, Kit.RD, true))
+		for f in sv.failed: spp[1].add_child(Kit.label("✗ %s: %s · back month %d" % [_serial(f.id), f.part, int(f.readyMonth)], 12, Kit.RD, true))
 		var rows := []
 		for r in sv.rows:
 			var nm := VBoxContainer.new(); nm.add_child(Kit.label(r.name, 13, Kit.TX, true)); nm.add_child(Kit.label(r.label, 10, Kit.DIM))

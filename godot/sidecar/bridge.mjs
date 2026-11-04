@@ -12420,7 +12420,7 @@ const useGame = create()((set, get) => {
       g.rackSeq = (g.rackSeq ?? g.halls.reduce((n, h) => n + h.racks.length, 0)) + 1;
       reserve(g, designId, -1);
       const rack = {
-        id: `pr-${g.rackSeq}-${designId}`,
+        id: `RK-${String(g.rackSeq).padStart(4, "0")}`,
         serial: g.rackSeq,
         designId,
         slot: hall.racks.length,
@@ -13696,7 +13696,7 @@ rl.on("line", (line) => {
       const sc = (id) => id ? SCENARIOS.find((x) => x.id === id) : void 0;
       const r = req.name === "reset" ? reset({ seed: a[0]?.seed, mode: a[0]?.mode, scenario: sc(a[0]?.scenario) }) : req.name === "step" ? step(a[0]) : req.name === "obs" ? observe() : req.name === "text" ? describe() : req.name === "actions" ? legalActions(a[0] ?? {}) : req.name === "hash" ? hash() : req.name === "scenarios" ? SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed })) : void 0;
       if (r === void 0) return out({ ok: false, error: "unknown env fn " + req.name });
-      return out({ ok: true, result: r });
+      return out({ ok: true, result: r, game: snapshot() });
     }
     if (req.fn === "ping") return out({ ok: true, result: "pong" });
     out({ ok: false, error: "unknown fn" });

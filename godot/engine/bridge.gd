@@ -59,6 +59,12 @@ func act(name: String, args: Array = []) -> Dictionary:
 	var res = r.get("result", null)
 	return res if typeof(res) == TYPE_DICTIONARY else {"ok": true, "message": ""}
 
+## Agent-environment call (reset / step / ...): used by screenshot tooling to load scenarios into the UI.
+func env(name: String, args: Array = []):
+	var r := _req({"fn": "env", "name": name, "args": args})
+	if r.get("ok", false) and r.has("game"): g = r.game; _cache.clear(); changed.emit()
+	return r.get("result")
+
 ## Run a read-only engine query. Cached until the next act().
 func q(name: String, args: Array = []):
 	var key := name + JSON.stringify(args)

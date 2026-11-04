@@ -42,7 +42,9 @@ func _ready() -> void:
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
+	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
+	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
 
 func _fatal(msg: String) -> void:
 	var l := Label.new(); l.text = "GIGAWATT engine failed to start:\n" + msg; l.position = Vector2(60, 60); add_child(l)
@@ -98,6 +100,21 @@ func _title() -> void:
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
 
 func _demo_hall() -> void: pass
+
+## Screenshot helper (GW_SCENARIO=<id>, GW_HALL=<index>, GW_CAM=auto|yaw,pitch,dist,x,z): load an agent-env scenario into the UI.
+func _load_scenario(id: String) -> void:
+	b.env("reset", [{"scenario": id}]); b.act("setMode", ["operator"]); _begin()
+	hall.hall_i = clampi(int(OS.get_environment("GW_HALL")) if OS.get_environment("GW_HALL") != "" else 0, 0, b.g.halls.size() - 1); hall.rebuild()
+	if OS.get_environment("GW_THERMAL") != "": hall.thermal = true; hall.rebuild()
+	var cam := OS.get_environment("GW_CAM")
+	if cam == "auto":
+		var hl: Dictionary = b.g.halls[hall.hall_i]; var mx := 0
+		for r in hl.racks: mx = maxi(mx, int(r.slot))
+		var far: Vector3 = hall.slot_pos(mx); var w: float = (hall.cols - 1) * HallView.PITCH
+		hall.yaw = 0.55; hall.pitch = 0.7; hall.dist = (w + far.z) * 0.9 + 10.0
+		hall.target = Vector3(w * 0.5 + 2.0, 0.8, far.z * 0.5); hall.auto_orbit = false; hall._update_cam()
+	elif cam != "":
+		var c := cam.split_floats(","); hall.yaw = c[0]; hall.pitch = c[1]; hall.dist = c[2]; hall.target = Vector3(c[3], 0.8, c[4]); hall.auto_orbit = false; hall._update_cam()
 
 func _new_game(mode: String) -> void:
 	b.act("newGame", [int(Time.get_unix_time_from_system()) % 100000, mode]); b.act("setMode", [mode]); _begin()
@@ -242,8 +259,9 @@ func _notification(what: int) -> void:
 ## Screenshot helper (GW_DEMO=<months>): start Easy-path projects for the first offers and fast-forward.
 func _demo(months: int) -> void:
 	quiet = true
-	b.act("takeLoan", [200000000.0])
-	for k in 3:
+	b.act("takeLoan", [200000000.0 * maxf(1.0, float(OS.get_environment("GW_DEMO_N").to_int()) / 3.0)])
+	var nproj := int(OS.get_environment("GW_DEMO_N")) if OS.get_environment("GW_DEMO_N") != "" else 3
+	for k in nproj:
 		for c in b.g.availableContracts:
 			var opts: Array = b.q("buildOptions", [c.id, null])
 			if opts.is_empty(): continue

@@ -69,7 +69,9 @@ func _rebuild() -> void:
 			if m.get("customer") != null: doing += " · %s (%s)" % [m.customer, m.model]
 			elif m.get("cluster") != null: doing += " · " + str(m.cluster)
 			var dc := Kit.GR if ["training", "serving"].has(m.role) else (Kit.RD if str(m.role).begins_with("failed") else Kit.DIM)
-			mrows.append([m.serial, Kit.label(m.design, 12, Kit.TX, true), "%d" % int(m.slot + 1), Kit.label(m.status, 12, Kit.GR if m.status == "online" else Kit.AM), Kit.label(doing, 12, dc, true)])
+			var dl := Kit.label(m.design, 12, Kit.TX, true); dl.custom_minimum_size = Vector2(150, 0)
+			var gl := Kit.label(doing, 12, dc, true); gl.custom_minimum_size = Vector2(80, 0)
+			mrows.append([Kit.label(m.serial, 12), dl, Kit.label("%d" % int(m.slot + 1), 12), Kit.label(m.status, 12, Kit.GR if m.status == "online" else Kit.AM), gl])
 		mp[1].add_child(Kit.table(["Serial", "Machine", "Slot", "Status", "Doing"], mrows))
 	# install from inventory
 	var ip := Kit.panel("Install equipment from inventory", false, col); var any := false

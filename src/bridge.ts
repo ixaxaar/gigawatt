@@ -137,7 +137,7 @@ rl.on('line', (line) => {
         : req.name === 'actions' ? ENV.legalActions(a[0] ?? {}) : req.name === 'hash' ? ENV.hash()
         : req.name === 'scenarios' ? SCENARIOS.map(x => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed })) : undefined;
       if (r === undefined) return out({ ok: false, error: 'unknown env fn ' + req.name });
-      return out({ ok: true, result: r });
+      return out({ ok: true, result: r, game: snapshot() });
     }
     if (req.fn === 'ping') return out({ ok: true, result: 'pong' });
     out({ ok: false, error: 'unknown fn' });

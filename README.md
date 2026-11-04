@@ -31,6 +31,20 @@ Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon** — and 
 | **Customers & contracts** | **Codex** |
 | ![customers](docs/screenshots/customers.png) | ![codex](docs/screenshots/codex.png) |
 
+## At campus scale
+
+The same engine runs multi-hall campuses (the `stress-campus` scenario: eight halls, every rack type, hundreds of racks, a few hundred MW).
+
+| Liquid-cooled hall (DLC) | Thermal view of the same hall |
+|---|---|
+| ![dlc](docs/screenshots/campus-dlc.png) | ![thermal](docs/screenshots/campus-thermal.png) |
+| **Rear-door heat exchanger hall** | **Down the cold aisle** |
+| ![rdhx](docs/screenshots/campus-rdhx.png) | ![aisle](docs/screenshots/campus-aisle.png) |
+
+![Build screen with the machine ledger](docs/screenshots/build-ledger.png)
+
+The Build screen shows floor space (bought in blocks, with a commissioning delay) and a machine ledger: every rack's serial, slot, status and what it is doing right now.
+
 ## Download
 
 Grab the archive for your OS from [Releases](https://github.com/ixaxaar/gigawatt/releases), extract, and run. Node.js is bundled; nothing else to install.

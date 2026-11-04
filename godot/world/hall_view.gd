@@ -99,7 +99,8 @@ func _vendor_color(sy: Dictionary) -> Color:
 func slot_pos(i: int) -> Vector3: return Vector3((i % cols) * PITCH, 0, row_z[i / cols])
 
 func _layout(hall: Dictionary) -> void:
-	cols = 10  # fixed width: buying floor space only ever adds rows, so racks never move
+	# width steps up with floor size (rarely), so ordinary expansion just adds rows and racks stay put
+	var n := int(hall.rackSlots); cols = 10 if n <= 80 else (16 if n <= 240 else 24)
 	var rows := int(ceil(float(int(hall.rackSlots)) / cols))
 	row_z.clear(); var z := 0.0
 	for k in rows:

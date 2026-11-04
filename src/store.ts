@@ -583,7 +583,7 @@ export const useGame = create<GameStore>()((set, get) => {
         g.rackSeq = (g.rackSeq ?? g.halls.reduce((n, h) => n + h.racks.length, 0)) + 1;
         reserve(g, designId, -1);
         const rack: PlacedRack = {
-          id: `pr-${g.rackSeq}-${designId}`,
+          id: `RK-${String(g.rackSeq).padStart(4, "0")}`,
           serial: g.rackSeq,
           designId,
           slot: hall.racks.length,
