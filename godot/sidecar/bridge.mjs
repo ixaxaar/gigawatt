@@ -7211,11 +7211,11 @@ const GPU_HOUR_ANCHOR = [
   [2023.2, 2.9],
   [2024, 2.6],
   [2024.6, 3],
-  [2025, 2.8],
-  [2026, 2.6],
-  [2026.8, 3.4],
-  [2027, 3.2],
-  [2028, 3]
+  [2025, 3.6],
+  [2026, 4.4],
+  [2026.8, 5.6],
+  [2027, 5.6],
+  [2028, 5.2]
 ];
 const gpuHourAnchor = (year) => lerpCurve$1(GPU_HOUR_ANCHOR, year);
 const MTOK_DECAY = [
@@ -7242,14 +7242,14 @@ const ERA_MEM_GB = [
 const ERA_SCALEOUT_GBPS = [[2020, 6], [2022, 12.5], [2023.5, 25], [2024.5, 50], [2026, 100], [2027, 200], [2028, 200]];
 const ERA_TOKENS_PER_SEC = [
   [2020, 3e3],
-  [2021, 2e4],
-  [2022, 1e5],
-  [2023, 5e5],
-  [2024, 3e6],
-  [2025, 2e7],
-  [2026, 8e7],
-  [2027, 2e8],
-  [2028, 5e8]
+  [2021, 12e3],
+  [2022, 4e4],
+  [2023, 12e4],
+  [2024, 3e5],
+  [2025, 6e5],
+  [2026, 1e6],
+  [2027, 15e5],
+  [2028, 22e5]
 ];
 const ACCEL_BUCKETS = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
 const bucket = (n) => ACCEL_BUCKETS.find((b) => b >= n) ?? ACCEL_BUCKETS[ACCEL_BUCKETS.length - 1];
@@ -7284,7 +7284,8 @@ function generateContracts(state, month, rng) {
   const out = [];
   const n = 1 + Math.floor(rng() * 3);
   for (let i = 0; i < n; i++) {
-    const model = pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
+    const tail = eligible.filter((m) => m.activeParamsB <= 80 && m.paramsB <= 700);
+    const model = rng() < 0.5 && tail.length ? pick(rng, tail) : pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
     const trainP = model.paramsB > 200 ? 0.7 : model.paramsB < 15 ? 0.12 : 0.4;
     const archetype = rollArchetype(rng, state.reputation);
     const t = ARCHETYPE_TABLE[archetype];
@@ -7304,7 +7305,7 @@ function generateContracts(state, month, rng) {
       const raw = stateGB / memPerAccel * randRange(rng, 2, 4.5) * t.accelMult;
       const minAccelerators = Math.min(32768, Math.max(32, bucket(Math.ceil(raw))));
       const isMoe = model.activeParamsB < model.paramsB * 0.8;
-      const moeDomain = year >= 2027 ? 128 : year >= 2025.5 ? 64 : year >= 2024 ? 32 : 16;
+      const moeDomain = year >= 2025.5 ? 32 : year >= 2024 ? 16 : 8;
       const minScaleUpDomain = Math.min(
         minAccelerators,
         isMoe ? moeDomain : year >= 2025 ? 16 : 8
@@ -7387,7 +7388,7 @@ const maintenanceUSD = (g) => {
 };
 const HOURS_PER_MONTH = 730;
 const STAFF_COST_PER_MONTH = 12e3;
-const SUPPORT_RATE_PER_YEAR = 0.05;
+const SUPPORT_RATE_PER_YEAR = 0.035;
 const DEPRECIATION_YEARS = 5;
 const DEFAULT_APR = 0.07;
 const FALLBACK_PUE = 1.4;
@@ -7538,7 +7539,7 @@ function powerMarketTick(s2, rng, log) {
 }
 const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
 function spotUtilization(price, month) {
-  return clamp$5(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
+  return clamp$5(1.45 - 1 * (price / gpuHourAnchor(2020 + month / 12)), 0.15, 0.95);
 }
 function stepSpotPrice(s2, rng) {
   const anchor = spotAnchor(s2.month);
@@ -8317,6 +8318,7 @@ function makeCtx(get, set) {
     },
     logln: (g, level, text) => {
       g.log.push({ month: g.month, level, text });
+      if (g.log.length > 400) g.log.splice(0, g.log.length - 400);
     }
   };
 }
@@ -8471,6 +8473,32 @@ const PLATFORMS = [
     extras: [sw("nv-nvlink-switch-tray5", 9)],
     story: "Blackwell Ultra NVL72: 288 GB HBM3e per GPU for long-context reasoning inference at rack scale.",
     variants: [OEM("foxconn", 0.06), TURNKEY("nvidia", "NVIDIA GB300 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("dell", 0.09), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
+  },
+  {
+    key: "vr200",
+    label: "Vera Rubin NVL144 rack-scale",
+    from: 2026.75,
+    chassisId: "nv-gb200-nvl72-ct",
+    rackId: "fox-nvl72-mgx",
+    trays: 18,
+    cooling: "dlc",
+    parts: [{ slot: "accelerator", itemId: "nv-rubin-vr200", count: 2 }, { slot: "nic", itemId: "nv-connectx9", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
+    extras: [sw("nv-nvlink-switch-tray5", 9)],
+    story: "Rubin: HBM4 and NVLink6 in one liquid-cooled rack-scale domain, with 1.6T ConnectX-9 NICs for scale-out. The 2027 frontier-training workhorse.",
+    variants: [OEM("foxconn", 0.06), TURNKEY("nvidia", "NVIDIA Vera Rubin NVL144 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("dell", 0.09), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
+  },
+  {
+    key: "mi400x",
+    label: "AMD Instinct MI400X 8-GPU (liquid)",
+    from: 2026.75,
+    chassisId: "gig-ubb-oam8-lq",
+    rackId: "gen-rack-19-48u-dlc",
+    trays: 4,
+    cooling: "dlc",
+    parts: [...hdr("amd-mi400x", "amd-epyc-turin", "skh-ddr5-6400-96", 12, "nv-connectx8", 4, "mic-9550-15t36", 4), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
+    extras: [sw("nv-sn5600")],
+    story: "CDNA5-era MI400X with HBM4, UALink/UEC scale-out, liquid cooled — AMD's answer to Rubin for operators who want a second source.",
+    variants: [DIY("gigabyte"), OEM("supermicro", 0.08), OEM("dell", 0.09), OEM("hpe", 0.09), OEM("asus", 0.06), OEM("lenovo", 0.09)]
   },
   {
     key: "mi300x",
@@ -9424,8 +9452,8 @@ const commissioning = {
       } else if (rack.status === "commissioning" && s2.month >= rack.readyMonth) {
         if (rng() < o2.commissionFailProb * commissionFailMult(s2)) {
           rack.status = "failed";
-          rack.readyMonth = s2.month + o2.repairMonths;
-          log("bad", `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
+          rack.readyMonth = s2.month + Math.min(o2.repairMonths, 2);
+          log("bad", `Rack ${rack.id} failed burn-in during commissioning (dead on arrival); warranty swap ETA month ${rack.readyMonth}.`);
         } else {
           rack.status = "online";
           log("good", `Rack ${rack.id} commissioned and online.`);
@@ -10000,7 +10028,7 @@ function generationsBehind(accel, month) {
 function residualFactor(g, rack) {
   const ageYears = rackAgeMonths(rack, g.month) / 12;
   const accel = rackAccelItem(g, rack.designId);
-  return accel ? clamp(1 - 0.16 * ageYears - 0.12 * generationsBehind(accel, g.month), 0.08, 1) : clamp(1 - 0.12 * ageYears, 0.2, 1);
+  return accel ? clamp(1 - 0.12 * ageYears - 0.07 * generationsBehind(accel, g.month), 0.1, 1) : clamp(1 - 0.1 * ageYears, 0.25, 1);
 }
 const rackResidualUSD = (g, rack) => {
   const design = g.racks.find((r) => r.id === rack.designId);
@@ -10010,6 +10038,7 @@ function assetValue(g) {
   let v2 = 0;
   for (const [id, n] of Object.entries(g.inventory)) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
   for (const [id, n] of Object.entries(g.spareStock ?? {})) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
+  for (const o2 of g.orders) v2 += 0.9 * o2.unitPrice * o2.qty;
   for (const hall of g.halls) {
     for (const [id, n] of Object.entries(hall.powerEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
     for (const [id, n] of Object.entries(hall.coolingEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
@@ -10216,7 +10245,12 @@ const deployActions = (c) => {
         id: `RK-${String(g.rackSeq).padStart(4, "0")}`,
         serial: g.rackSeq,
         designId,
-        slot: hall.racks.length,
+        slot: (() => {
+          const used = new Set(hall.racks.map((r) => r.slot));
+          let i = 0;
+          while (used.has(i)) i++;
+          return i;
+        })(),
         status: "installing",
         readyMonth: g.month + RACK_READY_LEAD + burnInLeadDelta(g),
         installedMonth: g.month
@@ -10301,6 +10335,216 @@ const clustersActions = (c) => {
     })
   };
 };
+function quote(t, racks, month) {
+  const lines = [];
+  const unavailable = [];
+  const capped = [];
+  let cost = 0, lead = 1;
+  for (const [id, n] of Object.entries(templateBom(t, racks))) {
+    const item = getItem(id);
+    const o2 = offerAt(item, month);
+    if (!o2.available) {
+      unavailable.push(item.name);
+      continue;
+    }
+    if (o2.qtyCap && n > o2.qtyCap) capped.push(`${item.name} (cap ${o2.qtyCap}/qtr)`);
+    const unit = Math.round(o2.unitPrice * (1 - volumeDiscount(item, n, o2.unitPrice)) * (1 + t.premium));
+    lines.push({ id, name: item.name, n, unit, total: unit * n });
+    cost += unit * n;
+    lead = Math.max(lead, Math.max(1, Math.round(o2.leadMonths * t.leadFactor)));
+  }
+  lines.sort((a, b) => b.total - a.total);
+  return { cost, lead, lines, unavailable, capped };
+}
+function hallChecks(g, t, racks) {
+  const f = templateFacts(t);
+  const h = g.halls[0];
+  const kw = f.kWPerRack * racks;
+  const used = g.halls.flatMap((x) => x.racks).length;
+  const cls = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+  return [
+    { ok: kw <= (h?.itPowerKW ?? 0), label: `Power: ${kw.toFixed(0)} kW IT load`, detail: `Hall A has ${h?.itPowerKW ?? 0} kW of IT power. ${kw > (h?.itPowerKW ?? 0) ? "Buy transformers/UPS in the Parts bin and install them in Facility." : "Fits."}` },
+    {
+      ok: kw <= (h?.coolingKW ?? 0) && (cls[h?.coolingClass ?? "air"] ?? 0) >= (cls[t.rack.cooling] ?? 0),
+      label: `Cooling: ${t.rack.cooling.toUpperCase()}, ${kw.toFixed(0)} kW of heat`,
+      detail: (cls[h?.coolingClass ?? "air"] ?? 0) < (cls[t.rack.cooling] ?? 0) ? `Hall A is ${h?.coolingClass}-cooled; this needs a ${t.rack.cooling} hall with CDUs. Build a new hall in Facility.` : kw > (h?.coolingKW ?? 0) ? `Only ${h?.coolingKW ?? 0} kW of heat rejection installed - add CRAH/CDU units.` : "Fits."
+    },
+    { ok: used + racks <= (h?.rackSlots ?? 0), label: `Floor space: ${racks} rack slot${racks > 1 ? "s" : ""}`, detail: `${used}/${h?.rackSlots ?? 0} slots used.` }
+  ];
+}
+const k = (n) => n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : `${Math.round(n)}`;
+function pipeline(g) {
+  const clustered = new Set(g.clusters.flatMap((c) => c.rackIds));
+  let online = 0, installing = 0;
+  for (const c of g.clusters) online += c.stats?.accelerators ?? 0;
+  const accelsIn = (designId) => {
+    const d = g.racks.find((r) => r.id === designId);
+    let n = 0;
+    for (const i of d?.items ?? []) if (i.type === "tray") {
+      for (const p of g.trays.find((t) => t.id === i.trayId)?.parts ?? []) if (getItem(p.itemId)?.kind === "accelerator") n += p.count * i.count;
+    }
+    return n;
+  };
+  let freeOnline = 0;
+  for (const h of g.halls) for (const p of h.racks) {
+    if (clustered.has(p.id)) continue;
+    if (p.status === "online") freeOnline += accelsIn(p.designId);
+    else installing += accelsIn(p.designId);
+  }
+  const isAccel2 = (id) => getItem(id)?.kind === "accelerator";
+  const warehouse = Object.entries(g.inventory).filter(([id]) => isAccel2(id)).reduce((n, [, q]) => n + q, 0);
+  const ordered = g.orders.filter((o2) => isAccel2(o2.itemId)).reduce((n, o2) => n + o2.qty, 0);
+  return { online, freeOnline, installing, warehouse, ordered };
+}
+function contractFit(g, c) {
+  const all = g.clusters.filter((cl) => cl.stats).map((cl) => {
+    const s2 = cl.stats;
+    const checks = [];
+    if (c.kind === "training") {
+      checks.push({ label: "Accelerators", need: `≥ ${k(c.minAccelerators)}`, have: k(s2.accelerators), ok: s2.accelerators >= c.minAccelerators });
+      checks.push({ label: "Scale-up domain", need: `≥ ${c.minScaleUpDomain}`, have: `${s2.scaleUpDomain}`, ok: s2.scaleUpDomain >= c.minScaleUpDomain });
+      checks.push({ label: "Scale-out / GPU", need: `≥ ${c.minScaleOutGBsPerAccel} GB/s`, have: `${s2.effScaleOutGBs.toFixed(1)} GB/s`, ok: s2.effScaleOutGBs >= c.minScaleOutGBsPerAccel });
+      checks.push({ label: "Total memory", need: `≥ ${k(c.minTotalMemGB / 1e3)} TB`, have: `${k(s2.totalMemGB / 1e3)} TB`, ok: s2.totalMemGB >= c.minTotalMemGB });
+    } else {
+      const a = getItem(s2.acceleratorId);
+      if (a?.kind === "accelerator") {
+        const cap = inferenceCapacity(s2, a, c.model, { contextTokens: c.contextTokens, tpotMs: c.tpotMs });
+        checks.push({ label: "Throughput", need: `${k(c.tokensPerSec)} tok/s`, have: `${k(cap.tokensPerSec)} tok/s`, ok: cap.tokensPerSec >= c.tokensPerSec });
+        checks.push({ label: "Model fits", need: `${c.model.paramsB}B weights`, have: cap.fitsWeights ? `fits (TP${cap.tpSize})` : "does not fit", ok: cap.fitsWeights });
+        checks.push({ label: "p95 TTFT", need: `≤ ${c.ttftMs} ms`, have: `${Math.round(cap.ttftMs)} ms`, ok: cap.ttftMs <= c.ttftMs });
+        checks.cap = cap.tokensPerSec;
+      } else checks.push({ label: "Accelerators", need: "any", have: "none", ok: false });
+    }
+    return { cluster: cl, checks, ok: checks.every((x) => x.ok), score: checks.filter((x) => x.ok).length / checks.length };
+  }).sort((a, b) => b.score - a.score);
+  const best = all[0];
+  const p = pipeline(g);
+  const pipelineAccels = p.freeOnline + p.installing + p.warehouse + p.ordered;
+  let shortfall = "";
+  let verdict = "none";
+  if (best?.ok) verdict = "ready";
+  else if (c.kind === "training") {
+    const have = best?.cluster.stats?.accelerators ?? 0;
+    const gap = Math.max(0, c.minAccelerators - have);
+    shortfall = gap > 0 ? `Short ${k(gap)} accelerators vs your best cluster (${k(have)}). ` : "";
+    const failing = (best?.checks ?? []).filter((x) => !x.ok && x.label !== "Accelerators").map((x) => x.label.toLowerCase());
+    if (failing.length) shortfall += `Also fails: ${failing.join(", ")} — needs a different platform/fabric, not just more of the same.`;
+    verdict = pipelineAccels + have >= c.minAccelerators && !failing.length ? "building" : "short";
+    if (!best) {
+      shortfall = `${p.freeOnline > 0 ? `You have ${k(p.freeOnline)} online accelerators not yet in a cluster — group them in Network. ` : ""}You have no cluster yet. Needs ${k(c.minAccelerators)} accelerators in one fabric with a ${c.minScaleUpDomain}-wide scale-up domain.`;
+      verdict = pipelineAccels >= c.minAccelerators ? "building" : "short";
+    }
+  } else {
+    const cap = best?.checks?.cap;
+    if (cap !== void 0 && cap > 0 && cap < c.tokensPerSec) {
+      shortfall = `Your best cluster serves ${k(cap)} tok/s; need ${k(c.tokensPerSec)} → about ${Math.ceil(c.tokensPerSec / cap)}× that capacity.`;
+      verdict = pipelineAccels > 0 ? "building" : "short";
+    } else if (best) {
+      shortfall = "A hard limit fails (weights/TTFT) — more of the same GPU will not help; pick more memory or faster prefill.";
+      verdict = "short";
+    } else {
+      shortfall = "You have no cluster yet.";
+      verdict = pipelineAccels > 0 ? "building" : "short";
+    }
+  }
+  const monthsToDeploy = verdict === "ready" ? 0 : p.ordered + p.warehouse + p.installing + p.freeOnline > 0 ? 3 : 7;
+  return { best, all, verdict, shortfall, pipelineAccels, monthsToDeploy };
+}
+const HOURS = 730;
+function buildOptions(g, c, signedAt) {
+  const year = 2020 + g.month / 12;
+  const hall = g.halls[0];
+  const cls = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+  const ramp = c.rampMonths ?? 4;
+  const deployBy = signedAt != null ? signedAt : g.month + ramp;
+  const out = [];
+  for (const t of TEMPLATES) {
+    if (t.availableFrom > year || t.eolAfter && year > t.eolAfter || t.tier === "turnkey" && false) continue;
+    const f = templateFacts(t);
+    if (f.errors.length || f.accels <= 0) continue;
+    let racks = 0, why = "";
+    let capInfo;
+    const accelItem = (() => {
+      for (const p of t.tray.parts) {
+        const it2 = getItem(p.itemId);
+        if (it2?.kind === "accelerator") return it2;
+      }
+    })();
+    if (!accelItem) continue;
+    const trayAccels = t.tray.parts.filter((p) => getItem(p.itemId)?.kind === "accelerator").reduce((n, p) => n + p.count, 0) || 1;
+    const nicGBs = t.tray.parts.reduce((n, p) => {
+      const it2 = getItem(p.itemId);
+      return n + (it2?.kind === "nic" ? it2.gbps * p.count : 0);
+    }, 0) / 8 / trayAccels;
+    if (c.kind === "training") {
+      if (f.scaleUp < c.minScaleUpDomain) continue;
+      if (nicGBs < c.minScaleOutGBsPerAccel * 0.98) continue;
+      racks = Math.max(Math.ceil(c.minAccelerators / f.accels), Math.ceil(c.minTotalMemGB / Math.max(1, f.memGB)));
+      why = `${racks * f.accels} accelerators, ${f.scaleUp}-wide NVLink/scale-up domain, ${Math.round(racks * f.memGB / 1e3)} TB memory`;
+    } else {
+      for (let r = 1; r <= 96; r++) {
+        const stats = { accelerators: r * f.accels, acceleratorId: accelItem.id, scaleUpDomain: f.scaleUp };
+        const cap = inferenceCapacity(stats, accelItem, c.model, { contextTokens: c.contextTokens, tpotMs: c.tpotMs });
+        if (cap.fitsWeights && cap.ttftMs <= c.ttftMs && cap.tokensPerSec >= c.tokensPerSec) {
+          capInfo = cap;
+          racks = r;
+          why = `${Math.round(cap.tokensPerSec).toLocaleString()} tok/s, TTFT ${Math.round(cap.ttftMs)} ms, TP${cap.tpSize} × ${cap.replicas} replicas`;
+          break;
+        }
+        if (!cap.fitsWeights && r >= 8) break;
+      }
+      if (!racks) continue;
+    }
+    if (racks > 256) continue;
+    const q = quote(t, racks, g.month);
+    if (q.unavailable.length || !q.lines.length) continue;
+    const kw = f.kWPerRack * racks, accels = racks * f.accels;
+    const readyMonth = g.month + q.lead + 2 + 1;
+    const hallGaps = [];
+    const used = g.halls.flatMap((h) => h.racks).length;
+    if (kw > (hall?.itPowerKW ?? 0)) hallGaps.push(`Power: need ${kw.toFixed(0)} kW IT, hall has ${hall?.itPowerKW ?? 0} kW`);
+    if ((cls[hall?.coolingClass ?? "air"] ?? 0) < (cls[t.rack.cooling] ?? 0)) hallGaps.push(`Cooling type: needs a ${t.rack.cooling.toUpperCase()} hall — build one in Build`);
+    else if (kw > (hall?.coolingKW ?? 0)) hallGaps.push(`Cooling: need ${kw.toFixed(0)} kW heat rejection, hall has ${hall?.coolingKW ?? 0} kW`);
+    if (used + racks > (hall?.rackSlots ?? 0)) hallGaps.push(`Space: ${racks} racks but only ${(hall?.rackSlots ?? 0) - used} free slots`);
+    const revenueMo = c.kind === "training" ? accels * c.pricePerAccelHour * HOURS : Math.min(c.tokensPerSec, c.tokensPerSec) * HOURS * 3600 / 1e6 * c.pricePerMTok;
+    const powerMo = kw * 1.3 * HOURS * g.utilityUSDPerKWh;
+    const net = revenueMo - powerMo;
+    const cover = c.kind === "training" ? [
+      { label: "Accelerators", need: `≥ ${c.minAccelerators}`, have: `${accels}`, ok: accels >= c.minAccelerators },
+      { label: "Scale-up domain", need: `≥ ${c.minScaleUpDomain}`, have: `${f.scaleUp}`, ok: f.scaleUp >= c.minScaleUpDomain },
+      { label: "Scale-out per GPU", need: `≥ ${c.minScaleOutGBsPerAccel} GB/s`, have: `${nicGBs.toFixed(1)} GB/s (NICs)`, ok: nicGBs >= c.minScaleOutGBsPerAccel * 0.98 },
+      { label: "Memory", need: `≥ ${Math.round(c.minTotalMemGB / 1e3)} TB`, have: `${Math.round(racks * f.memGB / 1e3)} TB`, ok: racks * f.memGB >= c.minTotalMemGB }
+    ] : [
+      { label: "Throughput", need: `${Math.round(c.tokensPerSec).toLocaleString()} tok/s`, have: `${Math.round(capInfo?.tokensPerSec ?? 0).toLocaleString()} tok/s`, ok: (capInfo?.tokensPerSec ?? 0) >= c.tokensPerSec },
+      { label: "Model fits", need: `${c.model.paramsB}B`, have: capInfo?.fitsWeights ? `TP${capInfo.tpSize}` : "no", ok: !!capInfo?.fitsWeights },
+      { label: "p95 TTFT", need: `≤ ${c.ttftMs} ms`, have: `${Math.round(capInfo?.ttftMs ?? 0)} ms`, ok: (capInfo?.ttftMs ?? 1e9) <= c.ttftMs }
+    ];
+    const headroom = uplinkGbps(g) - totalNeedGbps(g), needNet = contractNeedGbps(c);
+    cover.push({ label: "Internet uplink", need: `${needNet.toFixed(1)} Gb/s`, have: g.uplinks ? `${Number.isFinite(headroom) ? Math.max(0, headroom).toFixed(0) : "∞"} Gb/s free${headroom >= needNet ? "" : " — buy transit (Easy path does)"}` : "unlimited", ok: headroom >= needNet });
+    if (c.slaAvailability >= 0.995 && hall) {
+      const r = hallResilience(hall);
+      cover.push({ label: "Outage protection", need: `${(c.slaAvailability * 100).toFixed(1)}% SLA → tier N or better`, have: `${r.tier}${r.gaps[0] ? " — " + r.gaps[0] : ""}`, ok: r.score >= 0.9 });
+    }
+    cover.push({ label: "Deploy window", need: `by ${Math.round(deployBy)}`, have: `ready ${readyMonth}`, ok: readyMonth <= deployBy });
+    cover.push({ label: "Hall power / cooling / space", need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? "needs plant" : "fits", ok: hallGaps.length === 0 });
+    out.push({ t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
+  }
+  const feasible = out.filter((o2) => o2.cost <= Math.max(g.cash * 4, 1));
+  const pool = feasible.length ? feasible : out;
+  pool.sort((a, b) => a.cost - b.cost);
+  const cheapest = pool.find((o2) => o2.fitsRamp) ?? pool[0];
+  const fastest = [...pool].sort((a, b) => a.readyMonth - b.readyMonth || a.cost - b.cost)[0];
+  const payback = [...pool].filter((o2) => isFinite(o2.paybackMo) && o2.fitsRamp).sort((a, b) => a.paybackMo - b.paybackMo)[0];
+  cheapest && cheapest.tags.push("💰 cheapest");
+  fastest && fastest.tags.push("⚡ fastest");
+  payback && payback.tags.push("📈 best payback");
+  const picked = [...new Set([cheapest, fastest, payback].filter(Boolean))];
+  for (const o2 of pool) {
+    if (picked.length >= 4) break;
+    if (!picked.includes(o2)) picked.push(o2);
+  }
+  return picked;
+}
 const G$3 = () => useGame.getState().game;
 const TECH = ["ib-ndr", "ib-xdr", "spectrum-x", "eth-400", "eth-800", "roce", "uec-eth"];
 const TOPO = "fat-tree-rail-optimized";
@@ -10374,6 +10618,7 @@ function stepProject(st2, pid) {
     const bom = rackBom(G$3(), designId) ?? {};
     const have = (n) => Object.entries(bom).every(([id, c]) => (G$3().inventory[id] ?? 0) >= c * n);
     let placed2 = p.rackIds.length;
+    const before = new Set(useStoreHall(st2, hall.id).racks.map((r) => r.id));
     if (load <= h2.itPowerKW && load <= h2.coolingKW) {
       while (placed2 < p.racks && free - (placed2 - p.rackIds.length) > 0 && have(1)) {
         const r = st2.placeRack(hall.id, designId);
@@ -10385,9 +10630,16 @@ function stepProject(st2, pid) {
       }
     }
     if (placed2 > p.rackIds.length) {
-      const ids = useStoreHall(st2, hall.id).racks.filter((r) => r.designId === designId && !r.clusterId).map((r) => r.id).slice(0, p.racks);
+      const ids = [...p.rackIds, ...useStoreHall(st2, hall.id).racks.filter((r) => !before.has(r.id)).map((r) => r.id)];
       note(`deployed ${placed2}/${p.racks} racks`);
       st2.patchProject(pid, { rackIds: ids, ...placed2 >= p.racks ? { stage: "commissioning" } : {} });
+    } else {
+      const why = load > h2.itPowerKW ? `waiting for power: need ${load.toFixed(0)} kW IT, hall has ${h2.itPowerKW.toFixed(0)} kW (order a transformer on Build)` : load > h2.coolingKW ? `waiting for cooling: need ${load.toFixed(0)} kW, hall rejects ${h2.coolingKW.toFixed(0)} kW (add cooling on Build)` : free <= 0 ? `${hall.name} is full — buy floor space on Build` : !have(1) ? "waiting for parts to arrive (lead time)" : "waiting";
+      const last = (G$3().projects ?? []).find((x) => x.id === pid)?.notes.slice(-1)[0] ?? "";
+      if (!last.endsWith(why)) note(why);
+      if (G$3().month - p.startMonth > 16) {
+        st2.patchProject(pid, { stage: "failed", notes: [...(G$3().projects ?? []).find((x) => x.id === pid).notes, "Gave up after 16 months stuck — the parts are in your warehouse; finish the build by hand."].slice(-12) });
+      }
     }
   } else if (p.stage === "commissioning") {
     const racks = useStoreHall(st2, hall.id).racks.filter((r) => p.rackIds.includes(r.id));
@@ -10446,6 +10698,23 @@ function startProject(st2, contractId, templateId, racks) {
   const t = getTemplate(templateId);
   if (!t) return { ok: false, message: "Unknown build." };
   const g0 = G$3();
+  const cand = g0.activeContracts.find((a) => a.contract.id === contractId)?.contract ?? g0.availableContracts.find((c) => c.id === contractId);
+  if (!cand) return { ok: false, message: "Contract not found." };
+  const busy = new Set(g0.activeContracts.flatMap((a) => a.clusterIds));
+  const idle = contractFit(g0, cand).all.find((x) => x.ok && !busy.has(x.cluster.id));
+  if (idle) {
+    if (!g0.activeContracts.some((a) => a.contract.id === contractId)) {
+      const a = st2.acceptContract(contractId);
+      if (!a.ok) return a;
+    }
+    const r22 = st2.assignContract(contractId, [idle.cluster.id]);
+    if (r22.ok) return { ok: true, message: `Reused your idle cluster "${idle.cluster.name}" — no new hardware needed. Revenue starts next month.` };
+  }
+  const opts = buildOptions(g0, cand);
+  const opt = opts.find((o2) => o2.t.id === templateId);
+  if (!opt) return { ok: false, message: `${t.name} cannot serve ${cand.customer}'s ${cand.model.name} (${opts.length ? "qualifying builds: " + opts.slice(0, 3).map((o2) => o2.t.name).join(", ") : "no build you can buy today qualifies"}).` };
+  if (racks < opt.racks) return { ok: false, message: `${cand.customer} needs at least ${opt.racks} × ${t.name} to qualify (you asked for ${racks}).` };
+  if (!opt.fitsRamp) return { ok: false, message: `Parts take ${opt.lead} months to arrive but ${cand.customer} requires capacity within ${cand.rampMonths ?? 4} months of signing — they would walk away. Pick a build with a shorter lead time.` };
   if (!g0.activeContracts.some((a) => a.contract.id === contractId)) {
     const a = st2.acceptContract(contractId);
     if (!a.ok) return a;
@@ -10460,7 +10729,15 @@ function startProject(st2, contractId, templateId, racks) {
     notes.push(b.message);
     hall = G$3().halls[G$3().halls.length - 1];
   }
-  const need = f.kWPerRack * racks + hall.racks.length * 0;
+  const kwOf = (did) => {
+    const d = G$3().racks.find((r22) => r22.id === did);
+    return d ? validateRack(d, G$3().trays, getItem).stats.kW : 0;
+  };
+  const inFlightKW = (G$3().projects ?? []).filter((pp) => pp.hallId === hall.id && pp.stage === "building").reduce((n, pp) => {
+    const tt = getTemplate(pp.templateId);
+    return n + (tt ? templateFacts(tt).kWPerRack * Math.max(0, pp.racks - pp.rackIds.length) : 0);
+  }, 0);
+  const need = f.kWPerRack * racks + hall.racks.reduce((n, r22) => n + kwOf(r22.designId), 0) + inFlightKW;
   const plant = [];
   const g = G$3();
   const fresh = g.halls.find((h) => h.id === hall.id);
@@ -11539,43 +11816,6 @@ const designQueries = {
     return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o2) => o2.spare && o2.itemId === id).reduce((n, o2) => n + o2.qty, 0), adv: recommendedSpares(g, id) })) };
   }
 };
-function quote(t, racks, month) {
-  const lines = [];
-  const unavailable = [];
-  const capped = [];
-  let cost = 0, lead = 1;
-  for (const [id, n] of Object.entries(templateBom(t, racks))) {
-    const item = getItem(id);
-    const o2 = offerAt(item, month);
-    if (!o2.available) {
-      unavailable.push(item.name);
-      continue;
-    }
-    if (o2.qtyCap && n > o2.qtyCap) capped.push(`${item.name} (cap ${o2.qtyCap}/qtr)`);
-    const unit = Math.round(o2.unitPrice * (1 - volumeDiscount(item, n, o2.unitPrice)) * (1 + t.premium));
-    lines.push({ id, name: item.name, n, unit, total: unit * n });
-    cost += unit * n;
-    lead = Math.max(lead, Math.max(1, Math.round(o2.leadMonths * t.leadFactor)));
-  }
-  lines.sort((a, b) => b.total - a.total);
-  return { cost, lead, lines, unavailable, capped };
-}
-function hallChecks(g, t, racks) {
-  const f = templateFacts(t);
-  const h = g.halls[0];
-  const kw = f.kWPerRack * racks;
-  const used = g.halls.flatMap((x) => x.racks).length;
-  const cls = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
-  return [
-    { ok: kw <= (h?.itPowerKW ?? 0), label: `Power: ${kw.toFixed(0)} kW IT load`, detail: `Hall A has ${h?.itPowerKW ?? 0} kW of IT power. ${kw > (h?.itPowerKW ?? 0) ? "Buy transformers/UPS in the Parts bin and install them in Facility." : "Fits."}` },
-    {
-      ok: kw <= (h?.coolingKW ?? 0) && (cls[h?.coolingClass ?? "air"] ?? 0) >= (cls[t.rack.cooling] ?? 0),
-      label: `Cooling: ${t.rack.cooling.toUpperCase()}, ${kw.toFixed(0)} kW of heat`,
-      detail: (cls[h?.coolingClass ?? "air"] ?? 0) < (cls[t.rack.cooling] ?? 0) ? `Hall A is ${h?.coolingClass}-cooled; this needs a ${t.rack.cooling} hall with CDUs. Build a new hall in Facility.` : kw > (h?.coolingKW ?? 0) ? `Only ${h?.coolingKW ?? 0} kW of heat rejection installed - add CRAH/CDU units.` : "Fits."
-    },
-    { ok: used + racks <= (h?.rackSlots ?? 0), label: `Floor space: ${racks} rack slot${racks > 1 ? "s" : ""}`, detail: `${used}/${h?.rackSlots ?? 0} slots used.` }
-  ];
-}
 const catalogQueries = {
   offer: (itemId) => {
     const it2 = getItem(itemId);
@@ -11600,179 +11840,6 @@ const facilityQueries = {
     return { have: uplinkGbps(g), need: totalNeedGbps(g), carriers: carrierCount(g), mrc: uplinkMonthlyUSD(g) };
   }
 };
-const k = (n) => n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : `${Math.round(n)}`;
-function pipeline(g) {
-  const clustered = new Set(g.clusters.flatMap((c) => c.rackIds));
-  let online = 0, installing = 0;
-  for (const c of g.clusters) online += c.stats?.accelerators ?? 0;
-  const accelsIn = (designId) => {
-    const d = g.racks.find((r) => r.id === designId);
-    let n = 0;
-    for (const i of d?.items ?? []) if (i.type === "tray") {
-      for (const p of g.trays.find((t) => t.id === i.trayId)?.parts ?? []) if (getItem(p.itemId)?.kind === "accelerator") n += p.count * i.count;
-    }
-    return n;
-  };
-  let freeOnline = 0;
-  for (const h of g.halls) for (const p of h.racks) {
-    if (clustered.has(p.id)) continue;
-    if (p.status === "online") freeOnline += accelsIn(p.designId);
-    else installing += accelsIn(p.designId);
-  }
-  const isAccel2 = (id) => getItem(id)?.kind === "accelerator";
-  const warehouse = Object.entries(g.inventory).filter(([id]) => isAccel2(id)).reduce((n, [, q]) => n + q, 0);
-  const ordered = g.orders.filter((o2) => isAccel2(o2.itemId)).reduce((n, o2) => n + o2.qty, 0);
-  return { online, freeOnline, installing, warehouse, ordered };
-}
-function contractFit(g, c) {
-  const all = g.clusters.filter((cl) => cl.stats).map((cl) => {
-    const s2 = cl.stats;
-    const checks = [];
-    if (c.kind === "training") {
-      checks.push({ label: "Accelerators", need: `≥ ${k(c.minAccelerators)}`, have: k(s2.accelerators), ok: s2.accelerators >= c.minAccelerators });
-      checks.push({ label: "Scale-up domain", need: `≥ ${c.minScaleUpDomain}`, have: `${s2.scaleUpDomain}`, ok: s2.scaleUpDomain >= c.minScaleUpDomain });
-      checks.push({ label: "Scale-out / GPU", need: `≥ ${c.minScaleOutGBsPerAccel} GB/s`, have: `${s2.effScaleOutGBs.toFixed(1)} GB/s`, ok: s2.effScaleOutGBs >= c.minScaleOutGBsPerAccel });
-      checks.push({ label: "Total memory", need: `≥ ${k(c.minTotalMemGB / 1e3)} TB`, have: `${k(s2.totalMemGB / 1e3)} TB`, ok: s2.totalMemGB >= c.minTotalMemGB });
-    } else {
-      const a = getItem(s2.acceleratorId);
-      if (a?.kind === "accelerator") {
-        const cap = inferenceCapacity(s2, a, c.model, { contextTokens: c.contextTokens, tpotMs: c.tpotMs });
-        checks.push({ label: "Throughput", need: `${k(c.tokensPerSec)} tok/s`, have: `${k(cap.tokensPerSec)} tok/s`, ok: cap.tokensPerSec >= c.tokensPerSec });
-        checks.push({ label: "Model fits", need: `${c.model.paramsB}B weights`, have: cap.fitsWeights ? `fits (TP${cap.tpSize})` : "does not fit", ok: cap.fitsWeights });
-        checks.push({ label: "p95 TTFT", need: `≤ ${c.ttftMs} ms`, have: `${Math.round(cap.ttftMs)} ms`, ok: cap.ttftMs <= c.ttftMs });
-        checks.cap = cap.tokensPerSec;
-      } else checks.push({ label: "Accelerators", need: "any", have: "none", ok: false });
-    }
-    return { cluster: cl, checks, ok: checks.every((x) => x.ok), score: checks.filter((x) => x.ok).length / checks.length };
-  }).sort((a, b) => b.score - a.score);
-  const best = all[0];
-  const p = pipeline(g);
-  const pipelineAccels = p.freeOnline + p.installing + p.warehouse + p.ordered;
-  let shortfall = "";
-  let verdict = "none";
-  if (best?.ok) verdict = "ready";
-  else if (c.kind === "training") {
-    const have = best?.cluster.stats?.accelerators ?? 0;
-    const gap = Math.max(0, c.minAccelerators - have);
-    shortfall = gap > 0 ? `Short ${k(gap)} accelerators vs your best cluster (${k(have)}). ` : "";
-    const failing = (best?.checks ?? []).filter((x) => !x.ok && x.label !== "Accelerators").map((x) => x.label.toLowerCase());
-    if (failing.length) shortfall += `Also fails: ${failing.join(", ")} — needs a different platform/fabric, not just more of the same.`;
-    verdict = pipelineAccels + have >= c.minAccelerators && !failing.length ? "building" : "short";
-    if (!best) {
-      shortfall = `${p.freeOnline > 0 ? `You have ${k(p.freeOnline)} online accelerators not yet in a cluster — group them in Network. ` : ""}You have no cluster yet. Needs ${k(c.minAccelerators)} accelerators in one fabric with a ${c.minScaleUpDomain}-wide scale-up domain.`;
-      verdict = pipelineAccels >= c.minAccelerators ? "building" : "short";
-    }
-  } else {
-    const cap = best?.checks?.cap;
-    if (cap !== void 0 && cap > 0 && cap < c.tokensPerSec) {
-      shortfall = `Your best cluster serves ${k(cap)} tok/s; need ${k(c.tokensPerSec)} → about ${Math.ceil(c.tokensPerSec / cap)}× that capacity.`;
-      verdict = pipelineAccels > 0 ? "building" : "short";
-    } else if (best) {
-      shortfall = "A hard limit fails (weights/TTFT) — more of the same GPU will not help; pick more memory or faster prefill.";
-      verdict = "short";
-    } else {
-      shortfall = "You have no cluster yet.";
-      verdict = pipelineAccels > 0 ? "building" : "short";
-    }
-  }
-  const monthsToDeploy = verdict === "ready" ? 0 : p.ordered + p.warehouse + p.installing + p.freeOnline > 0 ? 3 : 7;
-  return { best, all, verdict, shortfall, pipelineAccels, monthsToDeploy };
-}
-const HOURS = 730;
-function buildOptions(g, c, signedAt) {
-  const year = 2020 + g.month / 12;
-  const hall = g.halls[0];
-  const cls = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
-  const ramp = c.rampMonths ?? 4;
-  const deployBy = signedAt != null ? signedAt : g.month + ramp;
-  const out = [];
-  for (const t of TEMPLATES) {
-    if (t.availableFrom > year || t.eolAfter && year > t.eolAfter || t.tier === "turnkey" && false) continue;
-    const f = templateFacts(t);
-    if (f.errors.length || f.accels <= 0) continue;
-    let racks = 0, why = "";
-    let capInfo;
-    const accelItem = (() => {
-      for (const p of t.tray.parts) {
-        const it2 = getItem(p.itemId);
-        if (it2?.kind === "accelerator") return it2;
-      }
-    })();
-    if (!accelItem) continue;
-    const trayAccels = t.tray.parts.filter((p) => getItem(p.itemId)?.kind === "accelerator").reduce((n, p) => n + p.count, 0) || 1;
-    const nicGBs = t.tray.parts.reduce((n, p) => {
-      const it2 = getItem(p.itemId);
-      return n + (it2?.kind === "nic" ? it2.gbps * p.count : 0);
-    }, 0) / 8 / trayAccels;
-    if (c.kind === "training") {
-      if (f.scaleUp < c.minScaleUpDomain) continue;
-      if (nicGBs < c.minScaleOutGBsPerAccel * 0.98) continue;
-      racks = Math.max(Math.ceil(c.minAccelerators / f.accels), Math.ceil(c.minTotalMemGB / Math.max(1, f.memGB)));
-      why = `${racks * f.accels} accelerators, ${f.scaleUp}-wide NVLink/scale-up domain, ${Math.round(racks * f.memGB / 1e3)} TB memory`;
-    } else {
-      for (let r = 1; r <= 96; r++) {
-        const stats = { accelerators: r * f.accels, acceleratorId: accelItem.id, scaleUpDomain: f.scaleUp };
-        const cap = inferenceCapacity(stats, accelItem, c.model, { contextTokens: c.contextTokens, tpotMs: c.tpotMs });
-        if (cap.fitsWeights && cap.ttftMs <= c.ttftMs && cap.tokensPerSec >= c.tokensPerSec) {
-          capInfo = cap;
-          racks = r;
-          why = `${Math.round(cap.tokensPerSec).toLocaleString()} tok/s, TTFT ${Math.round(cap.ttftMs)} ms, TP${cap.tpSize} × ${cap.replicas} replicas`;
-          break;
-        }
-        if (!cap.fitsWeights && r >= 8) break;
-      }
-      if (!racks) continue;
-    }
-    if (racks > 256) continue;
-    const q = quote(t, racks, g.month);
-    if (q.unavailable.length || !q.lines.length) continue;
-    const kw = f.kWPerRack * racks, accels = racks * f.accels;
-    const readyMonth = g.month + q.lead + 2 + 1;
-    const hallGaps = [];
-    const used = g.halls.flatMap((h) => h.racks).length;
-    if (kw > (hall?.itPowerKW ?? 0)) hallGaps.push(`Power: need ${kw.toFixed(0)} kW IT, hall has ${hall?.itPowerKW ?? 0} kW`);
-    if ((cls[hall?.coolingClass ?? "air"] ?? 0) < (cls[t.rack.cooling] ?? 0)) hallGaps.push(`Cooling type: needs a ${t.rack.cooling.toUpperCase()} hall — build one in Build`);
-    else if (kw > (hall?.coolingKW ?? 0)) hallGaps.push(`Cooling: need ${kw.toFixed(0)} kW heat rejection, hall has ${hall?.coolingKW ?? 0} kW`);
-    if (used + racks > (hall?.rackSlots ?? 0)) hallGaps.push(`Space: ${racks} racks but only ${(hall?.rackSlots ?? 0) - used} free slots`);
-    const revenueMo = c.kind === "training" ? accels * c.pricePerAccelHour * HOURS : Math.min(c.tokensPerSec, c.tokensPerSec) * HOURS * 3600 / 1e6 * c.pricePerMTok;
-    const powerMo = kw * 1.3 * HOURS * g.utilityUSDPerKWh;
-    const net = revenueMo - powerMo;
-    const cover = c.kind === "training" ? [
-      { label: "Accelerators", need: `≥ ${c.minAccelerators}`, have: `${accels}`, ok: accels >= c.minAccelerators },
-      { label: "Scale-up domain", need: `≥ ${c.minScaleUpDomain}`, have: `${f.scaleUp}`, ok: f.scaleUp >= c.minScaleUpDomain },
-      { label: "Scale-out per GPU", need: `≥ ${c.minScaleOutGBsPerAccel} GB/s`, have: `${nicGBs.toFixed(1)} GB/s (NICs)`, ok: nicGBs >= c.minScaleOutGBsPerAccel * 0.98 },
-      { label: "Memory", need: `≥ ${Math.round(c.minTotalMemGB / 1e3)} TB`, have: `${Math.round(racks * f.memGB / 1e3)} TB`, ok: racks * f.memGB >= c.minTotalMemGB }
-    ] : [
-      { label: "Throughput", need: `${Math.round(c.tokensPerSec).toLocaleString()} tok/s`, have: `${Math.round(capInfo?.tokensPerSec ?? 0).toLocaleString()} tok/s`, ok: (capInfo?.tokensPerSec ?? 0) >= c.tokensPerSec },
-      { label: "Model fits", need: `${c.model.paramsB}B`, have: capInfo?.fitsWeights ? `TP${capInfo.tpSize}` : "no", ok: !!capInfo?.fitsWeights },
-      { label: "p95 TTFT", need: `≤ ${c.ttftMs} ms`, have: `${Math.round(capInfo?.ttftMs ?? 0)} ms`, ok: (capInfo?.ttftMs ?? 1e9) <= c.ttftMs }
-    ];
-    const headroom = uplinkGbps(g) - totalNeedGbps(g), needNet = contractNeedGbps(c);
-    cover.push({ label: "Internet uplink", need: `${needNet.toFixed(1)} Gb/s`, have: g.uplinks ? `${Number.isFinite(headroom) ? Math.max(0, headroom).toFixed(0) : "∞"} Gb/s free${headroom >= needNet ? "" : " — buy transit (Easy path does)"}` : "unlimited", ok: headroom >= needNet });
-    if (c.slaAvailability >= 0.995 && hall) {
-      const r = hallResilience(hall);
-      cover.push({ label: "Outage protection", need: `${(c.slaAvailability * 100).toFixed(1)}% SLA → tier N or better`, have: `${r.tier}${r.gaps[0] ? " — " + r.gaps[0] : ""}`, ok: r.score >= 0.9 });
-    }
-    cover.push({ label: "Deploy window", need: `by ${Math.round(deployBy)}`, have: `ready ${readyMonth}`, ok: readyMonth <= deployBy });
-    cover.push({ label: "Hall power / cooling / space", need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? "needs plant" : "fits", ok: hallGaps.length === 0 });
-    out.push({ t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
-  }
-  const feasible = out.filter((o2) => o2.cost <= Math.max(g.cash * 4, 1));
-  const pool = feasible.length ? feasible : out;
-  pool.sort((a, b) => a.cost - b.cost);
-  const cheapest = pool.find((o2) => o2.fitsRamp) ?? pool[0];
-  const fastest = [...pool].sort((a, b) => a.readyMonth - b.readyMonth || a.cost - b.cost)[0];
-  const payback = [...pool].filter((o2) => isFinite(o2.paybackMo) && o2.fitsRamp).sort((a, b) => a.paybackMo - b.paybackMo)[0];
-  cheapest && cheapest.tags.push("💰 cheapest");
-  fastest && fastest.tags.push("⚡ fastest");
-  payback && payback.tags.push("📈 best payback");
-  const picked = [...new Set([cheapest, fastest, payback].filter(Boolean))];
-  for (const o2 of pool) {
-    if (picked.length >= 4) break;
-    if (!picked.includes(o2)) picked.push(o2);
-  }
-  return picked;
-}
 const contractsQueries = {
   contractNeed: (cid) => {
     const g = G$1();

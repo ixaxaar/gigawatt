@@ -5,7 +5,7 @@ import { maintenanceUSD } from './policy';
 
 export const HOURS_PER_MONTH = 730;
 export const STAFF_COST_PER_MONTH = 12000;
-export const SUPPORT_RATE_PER_YEAR = 0.05;
+export const SUPPORT_RATE_PER_YEAR = 0.035;
 export const DEPRECIATION_YEARS = 5;
 export const DEFAULT_APR = 0.07;
 const FALLBACK_PUE = 1.4;

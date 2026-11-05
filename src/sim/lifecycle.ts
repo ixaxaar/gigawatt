@@ -42,8 +42,8 @@ export function residualFactor(g: GameState, rack: PlacedRack): number {
   const ageYears = rackAgeMonths(rack, g.month) / 12;
   const accel = rackAccelItem(g, rack.designId);
   return accel
-    ? clamp(1 - 0.16 * ageYears - 0.12 * generationsBehind(accel, g.month), 0.08, 1)
-    : clamp(1 - 0.12 * ageYears, 0.2, 1);
+    ? clamp(1 - 0.12 * ageYears - 0.07 * generationsBehind(accel, g.month), 0.1, 1)
+    : clamp(1 - 0.1 * ageYears, 0.25, 1);
 }
 
 export const rackResidualUSD = (g: GameState, rack: PlacedRack): number => {
@@ -56,6 +56,8 @@ export function assetValue(g: GameState): number {
   let v = 0;
   for (const [id, n] of Object.entries(g.inventory)) v += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
   for (const [id, n] of Object.entries(g.spareStock ?? {})) v += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
+  // paid-for goods still in transit are an asset (otherwise net worth plunges at order time and snaps back on delivery)
+  for (const o of g.orders) v += 0.9 * o.unitPrice * o.qty;
   for (const hall of g.halls) {
     for (const [id, n] of Object.entries(hall.powerEquip)) v += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
     for (const [id, n] of Object.entries(hall.coolingEquip)) v += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;

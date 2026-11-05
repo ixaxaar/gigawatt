@@ -44,7 +44,7 @@ export function play(persona: string, seed: number, months: number, scenarioId?:
     if ((g.month - start) % 6 === 0) timeline.push(sample(g));
     // anomalies: unexplained net-worth cliffs, idle riches
     const nw = selectNetWorth(g);
-    if (prevNW > 20e6 && nw < prevNW * 0.6 && !(g.log.slice(-6).some((l) => /Ordered|Bought|Installed|commission|floor|expan|framework|loan/i.test(l.text)))) anomalies.push(`month ${g.month}: net worth fell ${Math.round((1 - nw / prevNW) * 100)}% ($${Math.round(prevNW / 1e6)}M → $${Math.round(nw / 1e6)}M) with no purchase in the log`);
+    if (prevNW > 20e6 && nw < prevNW * 0.6 && !(g.log.slice(-25).some((l) => /Ordered|Bought|Installed|commission|floor|expan|framework|loan/i.test(l.text)))) anomalies.push(`month ${g.month}: net worth fell ${Math.round((1 - nw / prevNW) * 100)}% ($${Math.round(prevNW / 1e6)}M → $${Math.round(nw / 1e6)}M) with no purchase in the log`);
     prevNW = nw;
     idleCashMonths = g.cash > 80e6 && g.orders.length === 0 && !(g.projects ?? []).some((p) => p.stage !== 'done' && p.stage !== 'failed') ? idleCashMonths + 1 : 0;
     if (idleCashMonths === 18) anomalies.push(`month ${g.month}: sitting on >$80M for 18 months with nothing to spend it on (no order or project in flight)`);

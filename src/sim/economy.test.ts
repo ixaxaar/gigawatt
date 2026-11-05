@@ -57,8 +57,8 @@ describe('monthlyOpex', () => {
     expect(opex.kwh).toBeCloseTo(1000 * 1.3 * 730, 0);
     expect(opex.powerUSD).toBeCloseTo(94900, 0);
     expect(opex.staffUSD).toBe(120000);
-    expect(opex.supportUSD).toBeCloseTo(50000, 0);
-    expect(opex.totalUSD).toBeCloseTo(94900 + 120000 + 50000, 0);
+    expect(opex.supportUSD).toBeCloseTo(35000, 0);
+    expect(opex.totalUSD).toBeCloseTo(94900 + 120000 + 35000, 0);
   });
 
   it('weights PUE across halls by their IT power', () => {

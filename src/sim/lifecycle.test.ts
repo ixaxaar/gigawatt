@@ -51,25 +51,25 @@ describe('generationsBehind', () => {
 });
 
 describe('residualFactor', () => {
-  it('falls with age and obsolescence, floored at 8%', () => {
+  it('falls with age and obsolescence, floored at 10%', () => {
     expect(residualFactor(makeState({ month: 0 }), rack('r-a100'))).toBe(1);
     let prev = 1, hitFloor = false;
     for (let m = 1; m <= 144; m++) {
       const f = residualFactor(makeState({ month: m }), rack('r-a100'));
       expect(f).toBeLessThanOrEqual(prev);
-      if (f === 0.08) hitFloor = true;
+      if (f === 0.1) hitFloor = true;
       prev = f;
     }
     expect(hitFloor).toBe(true);
   });
   it('values a newer generation above an older one at the same age', () => {
     const g = makeState({ month: monthOf(2024) });
-    expect(residualFactor(g, rack('r-a100', { installedMonth: monthOf(2024) }))).toBeCloseTo(1 - 0.12 * 3, 6);
-    expect(residualFactor(g, rack('r-h100', { installedMonth: monthOf(2024) }))).toBeCloseTo(1 - 0.12 * 2, 6);
+    expect(residualFactor(g, rack('r-a100', { installedMonth: monthOf(2024) }))).toBeCloseTo(1 - 0.07 * 3, 6);
+    expect(residualFactor(g, rack('r-h100', { installedMonth: monthOf(2024) }))).toBeCloseTo(1 - 0.07 * 2, 6);
   });
-  it('accelerator-less racks wear slower and floor at 20%', () => {
-    expect(residualFactor(makeState({ month: 60 }), rack('r-net', { installedMonth: 0 }))).toBeCloseTo(1 - 0.12 * 5, 6);
-    expect(residualFactor(makeState({ month: 120 }), rack('r-net', { installedMonth: 0 }))).toBe(0.2);
+  it('accelerator-less racks wear slower and floor at 25%', () => {
+    expect(residualFactor(makeState({ month: 60 }), rack('r-net', { installedMonth: 0 }))).toBeCloseTo(1 - 0.1 * 5, 6);
+    expect(residualFactor(makeState({ month: 120 }), rack('r-net', { installedMonth: 0 }))).toBe(0.25);
   });
 });
 

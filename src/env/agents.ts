@@ -34,6 +34,10 @@ export const operatorAgent: Agent = (o) => {
       if (live.size >= 2) break;
     }
   }
+  // idle online racks earn spot money rather than sit dark
+  const g = E.state();
+  for (const h of g.halls) for (const r of h.racks) if (r.status === 'online' && !r.clusterId && !(g.spotRacks ?? []).includes(r.id)) out.push({ name: 'setSpotRack', args: [r.id, true] });
+  for (const cl of g.clusters) if (!g.activeContracts.some(a => a.clusterIds.includes(cl.id)) && !(g.spotClusters ?? []).includes(cl.id)) out.push({ name: 'setSpot', args: [cl.id, true] });
   out.push({ name: 'nextMonth' });
   return out;
 };

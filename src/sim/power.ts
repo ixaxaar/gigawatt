@@ -90,7 +90,7 @@ export const SPOT_HISTORY_LEN = 24;
 export const spotAnchor = (month: number) => gpuHourAnchor(2020 + month / 12) * 0.85;
 
 export function spotUtilization(price: number, month: number): number {
-  return clamp(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
+  return clamp(1.45 - 1.0 * (price / gpuHourAnchor(2020 + month / 12)), 0.15, 0.95);
 }
 
 /** Advance the spot price (mean-reverting with shocks; spikes when many people want GPUs). */

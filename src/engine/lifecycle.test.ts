@@ -100,7 +100,7 @@ describe('lifecycle query', () => {
     expect(rows).toHaveLength(1);
     const row = rows[0];
     expect(row.accelerator).toContain('H100');
-    expect(row.residualPct).toBe(8);
+    expect(row.residualPct).toBe(19);
     expect(row.advice).toBe('replace');
     expect(row.saleUSD).toBe(Math.round(rackResidualUSD(g(), g().halls[0].racks[0]) * 0.85));
     expect(totals.racks).toBe(1);
