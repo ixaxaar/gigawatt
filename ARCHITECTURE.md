@@ -26,3 +26,9 @@
 - Nothing in `src/` may import React, a DOM API or `localStorage` directly (persistence goes through `engine/persistence.ts`; headless entry points import `engine/headless-shim`).
 - **Safety net:** `src/trajectory.golden.test.ts` replays full games (operator/random/idle agents + scenarios) and compares per-month state hashes. A refactor must keep it green untouched. Intentional rule changes: `GOLDEN_UPDATE=1 vitest run src/trajectory.golden.test.ts`, and say so in the commit.
 - Sidecar rebuild: `vite build -c vite.bridge.config.ts` → `godot/sidecar/bridge.mjs`.
+
+## Testing layers
+1. `vitest` unit/integration tests per rule module and per engine domain.
+2. `trajectory.golden.test.ts`: bit-exact full games (regenerate with `GOLDEN_UPDATE=1` only for intended rule changes).
+3. `src/playtest`: strategy personas + invariants + report (see README). New mechanics should be exercised by at least one persona.
+4. `GW_SMOKE` (Godot, headless): every screen builds, optionally across years of autoplay. Runs in CI.

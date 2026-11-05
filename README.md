@@ -76,6 +76,10 @@ cd godot
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the engine is organised and where to add actions, queries and monthly systems.
 
+## Playtesting
+
+`PLAYTEST=1 ./node_modules/.bin/vitest run src/playtest` plays full 97-month campaigns with six scripted players (idle, random, operator, tycoon, cautious, spot-only), checks whole-state invariants every month, verifies determinism and save/load round-trips, and writes `docs/playtest/report.md`. `GW_SMOKE=1 GW_SMOKE_YEARS=8 godot --headless --path godot` soak-tests the UI: a scripted player runs year by year and every screen must still build.
+
 ## Train agents on it
 
 The simulation core is deterministic and headless, so it doubles as an environment for agents (RL, LLM tool-use, scripted bots).
