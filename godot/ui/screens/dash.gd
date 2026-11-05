@@ -13,6 +13,31 @@ func _plaque(parent: Control, label: String, value: String, col: Color, trend: A
 	v.add_child(Kit.label(label, 11, Kit.DIM)); v.add_child(Kit.label(value, 26, col))
 	var sp := Spark.new(); sp.values = trend; sp.color = col; v.add_child(sp); v.add_child(Kit.label(sub, 11, Kit.DIM, true))
 
+
+## "What happens when I press Next Month": cash outlook, runway, arrivals and deadlines.
+func _preview(col: Control, pv: Dictionary) -> void:
+	if pv.is_empty(): return
+	var pp := Kit.panel("Next month · %s" % Kit.date_of(int(pv.nextMonth)), false, col)
+	var delta := float(pv.cashDelta)
+	pp[1].add_child(Kit.rich("Cash after: [b]%s[/b]  [color=%s]%s%s[/color]" % [Kit.usd(float(pv.cashAfter)), "#4be3a1" if delta >= 0 else "#ff6b6b", "+" if delta >= 0 else "", Kit.usd(delta)], 14))
+	pp[1].add_child(Kit.label("Revenue %s · running costs %s · interest %s" % [Kit.usd(float(pv.revenue)), Kit.usd(float(pv.opex)), Kit.usd(float(pv.interest))], 11, Kit.DIM, true))
+	if pv.runwayMonths != null:
+		var rm := int(pv.runwayMonths)
+		pp[1].add_child(Kit.label("Runway: %d month%s at this burn" % [rm, "" if rm == 1 else "s"], 13, Kit.RD if rm <= 6 else Color("#ffb454")))
+	var bits := []
+	if pv.deliveries.size() > 0:
+		var n := 0; for d in pv.deliveries: n += int(d.qty)
+		bits.append("%d part%s arriving" % [n, "" if n == 1 else "s"])
+	if int(pv.racks.commissioning) > 0: bits.append("%d rack(s) start burn-in" % int(pv.racks.commissioning))
+	if int(pv.racks.online) > 0: bits.append("%d rack(s) go online" % int(pv.racks.online))
+	if int(pv.racks.repaired) > 0: bits.append("%d rack(s) repaired" % int(pv.racks.repaired))
+	for f in pv.floor: bits.append("+%d slots in %s" % [int(f.slots), f.hall])
+	if pv.completing.size() > 0: bits.append("completing: " + ", ".join(pv.completing))
+	if pv.expiring.size() > 0: bits.append("offers expiring: " + ", ".join(pv.expiring))
+	if bits.is_empty(): pp[1].add_child(Kit.label("Nothing scheduled.", 12, Kit.DIM))
+	for t in bits: pp[1].add_child(Kit.label("• " + t, 12, Kit.TX, true))
+	for w in pv.warnings: pp[1].add_child(Kit.label("⚠ " + str(w), 12, Kit.RD, true))
+
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
 func _rebuild() -> void:
@@ -28,6 +53,7 @@ func _rebuild() -> void:
 	_plaque(pl, "NET WORTH", Kit.usd(float(b.q("netWorth"))), Color("#c792ea"), hist.map(func(h): return h.cash), "capex %s · %s GPUs clustered" % [Kit.usd(float(b.q("capexBasis"))), Kit.num(accels)])
 	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -500; rp.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var col := Kit.column(rp, 0, true)
+	_preview(col, b.q("preview"))
 	var projs: Array = g.get("projects", []).filter(func(x): return x.stage != "done" or g.month - x.startMonth < 24)
 	if g.get("projects", []).size() > 0:
 		var pp := Kit.panel("Easy-path projects", true, col)

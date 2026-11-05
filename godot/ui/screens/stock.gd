@@ -6,12 +6,51 @@ var msg := ""
 var hall_id := ""
 var n := 1
 var sp_state := {"sp": true}
+var design_q := ""
+var open_missing := {}
+var folds := {}
 const KIND_ORDER := ["accelerator", "cpu", "memory", "nvme", "nic", "switch", "cable", "chassis", "rack", "storage", "power", "cooling"]
 
 func _serial(rack_id: String) -> String:
 	for m in app.b.q("machineLedger"):
 		if m.id == rack_id: return m.serial
 	return rack_id
+
+
+## A design is "in use" when something is placed, reserved, buildable now, or any of its parts are owned / on order.
+func _in_use(b: Bridge, g: Dictionary, d: Dictionary) -> bool:
+	for h in g.halls:
+		for p in h.racks:
+			if p.designId == d.id: return true
+	if int(g.get("rackReserve", {}).get(d.id, 0)) > 0: return true
+	var r: Dictionary = b.q("rackReadiness", [d.id, 1])
+	if r.is_empty(): return false
+	if r.buildableNow > 0: return true
+	for l in r.lines:
+		if l.have > 0 or l.onOrder > 0: return true
+	return false
+
+func _design_row(parent: Control, d: Dictionary) -> void:
+	var b: Bridge = app.b; var g: Dictionary = b.g
+	var r: Dictionary = b.q("rackReadiness", [d.id, n]); var placed_n := 0
+	for h in g.halls:
+		for p in h.racks:
+			if p.designId == d.id: placed_n += 1
+	var box := VBoxContainer.new(); box.add_theme_constant_override("separation", 6); parent.add_child(box); parent.add_child(Kit.hsep())
+	var h1 := HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1)
+	h1.add_child(Kit.label(d.name, 15)); h1.add_child(Kit.tag("%d ready to deploy" % int(r.buildableNow), Kit.GR)); h1.add_child(Kit.tag("%d deployed" % placed_n))
+	if int(g.get("rackReserve", {}).get(d.id, 0)) > 0: h1.add_child(Kit.tag("%d reserved" % int(g.rackReserve[d.id]), Kit.CY))
+	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h1.add_child(sp)
+	if r.buildableNow > 0:
+		var opts := []; for h in g.halls: opts.append([h.id, "%s (%d/%d)" % [h.name, h.racks.size(), int(h.rackSlots)]])
+		h1.add_child(Kit.option(opts, hall_id, func(v): hall_id = v))
+		h1.add_child(Kit.btn("DEPLOY 1", func(): msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("buy"); refresh(), "go", 14))
+	var active := int(g.get("rackReserve", {}).get(d.id, 0)) > 0 or r.buildableNow > 0 or open_missing.has(d.id)
+	for l in r.lines:
+		if l.have > 0 or l.onOrder > 0: active = true
+	if active: MissingParts.build(app, box, d.id, maxi(1, n), func(m): msg = m; refresh(), sp_state)
+	else: box.add_child(Kit.btn("Order more of this design…", func(): open_missing[d.id] = true; refresh(), "", 12))
+
 
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
@@ -29,21 +68,16 @@ func _rebuild() -> void:
 	left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
 	var ra := Kit.panel("Rack assembly — your designs", true, left)
 	if g.racks.is_empty(): ra[1].add_child(Kit.label("No rack designs yet. Buy a system in Procure (it saves its design automatically) or build one in the Design Lab.", 14, Kit.DIM, true))
+	var le := LineEdit.new(); le.placeholder_text = "Filter designs by name (Enter)"; le.text = design_q; le.custom_minimum_size = Vector2(300, 0); le.text_submitted.connect(func(t): design_q = t; refresh()); ra[1].add_child(le)
+	var used := []; var unused := []
 	for d in g.racks:
-		var r = b.q("rackReadiness", [d.id, n]); var placed_n := 0
-		for h in g.halls:
-			for p in h.racks:
-				if p.designId == d.id: placed_n += 1
-		var box := VBoxContainer.new(); box.add_theme_constant_override("separation", 6); ra[1].add_child(box); ra[1].add_child(Kit.hsep())
-		var h1 := HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1)
-		h1.add_child(Kit.label(d.name, 15)); h1.add_child(Kit.tag("%d ready to deploy" % int(r.buildableNow), Kit.GR)); h1.add_child(Kit.tag("%d deployed" % placed_n))
-		if int(g.get("rackReserve", {}).get(d.id, 0)) > 0: h1.add_child(Kit.tag("%d reserved" % int(g.rackReserve[d.id]), Kit.CY))
-		var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h1.add_child(sp)
-		if r.buildableNow > 0:
-			var opts := []; for h in g.halls: opts.append([h.id, "%s (%d/%d)" % [h.name, h.racks.size(), int(h.rackSlots)]])
-			h1.add_child(Kit.option(opts, hall_id, func(v): hall_id = v))
-			h1.add_child(Kit.btn("DEPLOY 1", func(): msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("buy"); refresh(), "go", 14))
-		MissingParts.build(app, box, d.id, maxi(1, n), func(m): msg = m; refresh(), sp_state)
+		if design_q != "" and not d.name.to_lower().contains(design_q.to_lower()): continue
+		(used if _in_use(b, g, d) else unused).append(d)
+	for d in used: _design_row(ra[1], d)
+	if used.is_empty() and not unused.is_empty(): ra[1].add_child(Kit.label("Nothing in progress — all designs below are unused.", 13, Kit.DIM))
+	if not unused.is_empty():
+		var up := Kit.fold_panel("Unused designs (%d)" % unused.size(), "unused", folds, refresh, false, ra[1], true)
+		for d in unused: _design_row(up[1], d)
 	if not g.racks.is_empty():
 		var h2 := HBoxContainer.new(); h2.add_theme_constant_override("separation", 8); ra[1].add_child(h2)
 		h2.add_child(Kit.label("Plan for", 13, Kit.DIM)); h2.add_child(Kit.spin(n, 1, 500, 1, func(v): n = int(v); refresh())); h2.add_child(Kit.label("rack(s) of each design.", 13, Kit.DIM))
