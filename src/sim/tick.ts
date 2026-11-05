@@ -14,6 +14,8 @@ import { commissioning, clusterStats, failures, pue } from './systems/racks';
 import { serveContracts, contractMarket } from './systems/contracts';
 import { worldEvents, spotAndPower } from './systems/markets';
 import { finances, history } from './systems/finance';
+import { staffingCheck } from './systems/staffing';
+import { endgame } from './systems/endgame';
 
 export type { TickOptions } from './systems/types';
 
@@ -37,11 +39,12 @@ export const rackFailureProb = (
 
 /** The month, in order. Add new dynamics by inserting a System here. */
 export const PIPELINE: readonly System[] = [
-  deliveries, floorSpace, commissioning, clusterStats, failures, pue,
-  serveContracts, contractMarket, worldEvents, spotAndPower, finances, history,
+  deliveries, floorSpace, commissioning, clusterStats, staffingCheck, failures, pue,
+  serveContracts, contractMarket, worldEvents, spotAndPower, finances, history, endgame,
 ];
 
 export function advanceMonth(state: GameState, opts: TickOptions = {}): GameState {
+  if (state.status && state.status !== 'playing') return state; // game over: the world stops
   const s: GameState = JSON.parse(JSON.stringify(state)) as GameState;
   const rng = mulberry32((s.seed ^ Math.imul(s.month + 1, 0x9e3779b9)) >>> 0);
   s.month += 1;

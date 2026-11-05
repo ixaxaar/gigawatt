@@ -81,6 +81,7 @@ export const serveContracts: System = {
       c.revenue += res.netUSD;
       if (!res.slaMet) {
         ac.slaMisses += 1;
+        if (s.stats) s.stats.slaMisses += 1;
         log('bad', `SLA miss for ${k.customer} (${k.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(k.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
       }
       ac.monthsServed += 1;
@@ -99,6 +100,7 @@ export const serveContracts: System = {
       const sloppy = ac.slaMisses > Math.ceil(k.durationMonths / 3);
       const gain = 2 + ARCH_BONUS[k.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
       s.reputation = clamp(s.reputation + gain, 0, 100);
+      if (s.stats) s.stats.contractsCompleted += 1;
       log('good', `${k.customer} contract complete: ${k.model.name}, ${k.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? '+' : ''}${gain}.`);
       return false;
     });

@@ -1,3 +1,4 @@
+import { SAVE_VERSION } from './persistence';
 import { getItem } from '../data';
 import { generateContracts } from '../sim/market';
 import { generatePowerOffers } from '../sim/power';
@@ -46,6 +47,10 @@ export function newGameState(seed: number): GameState {
     powerContracts: [],
     spotClusters: [],
     spotReserve: 0,
+    status: 'playing',
+    negCashMonths: 0,
+    saveVersion: SAVE_VERSION,
+    stats: { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 },
   };
   g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
   g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));

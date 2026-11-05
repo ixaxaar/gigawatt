@@ -1,10 +1,9 @@
 // GIGAWATT engine — session actions. Generated from the former store.ts monolith.
 import { stepAllProjects } from '../../autopilot';
 import type { GameStore } from '../api';
-import { getItem } from '../../data';
 import { advanceMonth } from '../../sim/tick';
-import { GameState } from '../../types';
-import { POWER_FEED_TYPES, SAVE_KEY, fail, ok } from './consts';
+import { fail, ok } from './consts';
+import { DEFAULT_SLOT, readSlot, writeSlot } from '../persistence';
 import { newGameState } from '../state';
 import type { Ctx } from './ctx';
 
@@ -25,42 +24,20 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
 
     addProject: (p) => set(s => ({ game: { ...s.game, projects: [...(s.game.projects ?? []), p] } })),
 
-    nextMonth: () => { set({ game: advanceMonth(get().game) }); stepAllProjects(get); },
-
-    save: () => {
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(get().game));
-      } catch {
-        // storage unavailable (private mode / SSR) — nothing to do
-      }
+    nextMonth: () => {
+      if (get().game.status && get().game.status !== 'playing') return; // game over
+      set({ game: advanceMonth(get().game) });
+      stepAllProjects(get);
+      writeSlot('auto', get().game); // autosave every month (best-effort)
     },
 
-    load: () => {
-      try {
-        const raw = localStorage.getItem(SAVE_KEY);
-        if (!raw) return fail('No save found.');
-        const g = JSON.parse(raw) as GameState;
-        if (
-          typeof g.month !== 'number' ||
-          typeof g.cash !== 'number' ||
-          !Array.isArray(g.halls) ||
-          !Array.isArray(g.clusters)
-        ) {
-          return fail('Save file corrupted.');
-        }
-        // migration: rack-level PDUs/power shelves wrongly installed into halls go back to the warehouse
-        for (const h of g.halls) for (const [id, n] of Object.entries(h.powerEquip ?? {})) {
-          const it = getItem(id);
-          if (it?.kind === 'power' && (it.powerType === 'pdu' || it.powerType === 'power-shelf')) {
-            g.inventory[id] = (g.inventory[id] ?? 0) + n; delete h.powerEquip[id];
-            if (POWER_FEED_TYPES.includes(it.powerType)) h.itPowerKW = Math.max(0, h.itPowerKW - n * it.capacityKW);
-          }
-        }
-        set({ game: g });
-        return ok(`Loaded month ${g.month}.`);
-      } catch {
-        return fail('Save file unreadable.');
-      }
+    save: (slot = DEFAULT_SLOT) => (writeSlot(slot, get().game) ? ok(`Saved to slot '${slot}'.`) : fail('Could not write the save (storage unavailable).')),
+
+    load: (slot = DEFAULT_SLOT) => {
+      const r = readSlot(slot);
+      if (!r.game) return fail(r.error ?? 'No save found.');
+      set({ game: r.game });
+      return ok(`Loaded month ${r.game.month}.`);
     },
 
   };

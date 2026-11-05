@@ -77,6 +77,7 @@ export const deployActions = (c: Ctx): Partial<GameStore> => {
           slot: hall.racks.length,
           status: 'installing',
           readyMonth: g.month + RACK_READY_LEAD,
+          installedMonth: g.month,
         };
         hall.racks.push(rack);
 

@@ -23,5 +23,17 @@ export const financeActions = (c: Ctx): Partial<GameStore> => {
         return ok(`$${usd(amt)} borrowed.`);
       }),
 
+    repayLoan: (amountUSD) =>
+      commit((g) => {
+        const amt = Math.floor(amountUSD);
+        if (!Number.isFinite(amt) || amt <= 0) return fail('Repayment amount must be positive.');
+        if (amt > g.debt) return fail(`You only owe $${usd(g.debt)} — repay less.`);
+        if (amt > g.cash) return fail(`Repaying $${usd(amt)} needs cash — you only have $${usd(g.cash)}.`);
+        g.debt -= amt;
+        g.cash -= amt;
+        logln(g, 'good', `Repaid $${usd(amt)} of principal; $${usd(g.debt)} of debt remains.`);
+        return ok(`$${usd(amt)} repaid.`);
+      }),
+
   };
 };

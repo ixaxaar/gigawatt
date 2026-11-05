@@ -1,11 +1,12 @@
 import { ALL_ITEMS } from '../data';
 import { HOURS_PER_MONTH, estimateCapexBasis, monthlyDepreciation, monthlyInterest, monthlyOpex } from '../sim/economy';
+import { assetValue } from '../sim/lifecycle';
 import { CatalogItem, GameState, monthToYear } from '../types';
 
 // ---------- derived selectors (pure, take GameState) ----------
 
 export const selectCapexBasis = estimateCapexBasis;
-export const selectNetWorth = (g: GameState): number => g.cash - g.debt + estimateCapexBasis(g) * 0.5;
+export const selectNetWorth = (g: GameState): number => g.cash - g.debt + assetValue(g);
 
 export interface MonthlyPnL {
   revenue: number;

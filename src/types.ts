@@ -342,6 +342,8 @@ export interface PlacedRack {
   serial?: number;
   /** Part id that broke (needs a spare, otherwise a slow RMA). */
   failedPart?: string;
+  /** Month the rack was placed on the floor (drives age / residual value). */
+  installedMonth?: number;
 }
 
 export type Topology = 'fat-tree-rail-optimized' | 'fat-tree' | 'dragonfly' | 'torus-ish' | 'single-domain';
@@ -493,7 +495,19 @@ export interface GameState {
   mode?: GameMode;
   /** "Easy path" projects: the game executes the build steps for a signed contract. */
   projects?: Project[];
+  /** 'playing' until bankruptcy or the 2028 horizon; then the game is over and `endReport` is set. */
+  status?: GameStatus;
+  endReport?: EndReport;
+  /** Consecutive months with negative cash (bankruptcy at 3). */
+  negCashMonths?: number;
+  /** Save schema version, bumped by engine/persistence migrations. */
+  saveVersion?: number;
+  /** Lifetime counters for objectives and the final score. */
+  stats?: GameStats;
 }
+export type GameStatus = 'playing' | 'bankrupt' | 'finished';
+export interface GameStats { contractsCompleted: number; peakAccels: number; slaMisses: number; revenueTotal: number; decommissioned: number }
+export interface EndReport { reason: 'bankrupt' | 'horizon'; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
 export type GameMode = 'learner' | 'operator' | 'tycoon';
 export interface Project {
   id: string; contractId: string; templateId: string; racks: number; hallId: string; name: string;

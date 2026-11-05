@@ -277,7 +277,7 @@ describe('advanceMonth: failures & MTBF scaling', () => {
   });
 
   it('takes racks down, misses SLA, then repairs them and revenue resumes', () => {
-    const g = baseGame({ activeContracts: [active(trainContract())] });
+    const g = baseGame({ staff: 50, activeContracts: [active(trainContract())] });
     const t1 = advanceMonth(g, { accelFailureProbPerMonth: 1, commissionFailProb: 0, repairMonths: 2 });
     expect(t1.halls[0].racks.every((r) => r.status === 'failed')).toBe(true);
     expect(t1.history[0].revenue).toBe(0);
@@ -341,7 +341,7 @@ describe('advanceMonth: finances', () => {
 describe('advanceMonth: spare parts', () => {
   const failing = { accelFailureProbPerMonth: 1, commissionFailProb: 0 };
   it('a spare shortens repair to 1 month and is consumed; no spare means a 4-month RMA', () => {
-    const g = baseGame({ activeContracts: [] });
+    const g = baseGame({ staff: 50, activeContracts: [] });
     const online = (x: GameState) => { x.halls[0].racks.forEach((r) => { r.status = 'online'; }); return x; };
     const noSpare = advanceMonth(online(JSON.parse(JSON.stringify(g))), failing);
     const r0 = noSpare.halls[0].racks[0];

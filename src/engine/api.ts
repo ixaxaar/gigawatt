@@ -32,8 +32,8 @@ export interface GameStore {
   disbandCluster: (clusterId: string) => ActionResult;
   takeLoan: (amountUSD: number) => ActionResult;
   nextMonth: () => void;
-  save: () => void;
-  load: () => ActionResult;
+  save: (slot?: string) => ActionResult;
+  load: (slot?: string) => ActionResult;
   signPower: (offerId: string, mw?: number) => ActionResult;
   buyUplink: (itemId: string) => ActionResult;
   dropUplink: (itemId: string) => ActionResult;
@@ -46,5 +46,12 @@ export interface GameStore {
   startEasy: (contractId: string, templateId: string, racks: number) => ActionResult;
   stepEasy: () => void;
   setMode: (m: GameMode) => void;
+  /** Sell a placed rack (must be unclustered) for its residual value; frees the slot. */
+  decommissionRack: (rackId: string) => ActionResult;
+  /** Sell warehouse stock at a discount (clear obsolete parts). */
+  sellInventory: (itemId: string, qty: number) => ActionResult;
+  hireStaff: (n: number) => ActionResult;
+  fireStaff: (n: number) => ActionResult;
+  repayLoan: (amountUSD: number) => ActionResult;
 }
 

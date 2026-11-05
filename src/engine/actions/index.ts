@@ -9,11 +9,14 @@ import { contractsActions } from './contracts';
 import { financeActions } from './finance';
 import { energyActions } from './energy';
 import { sessionActions } from './session';
+import { lifecycleActions } from './lifecycle';
+import { staffActions } from './staff';
 
 /** Every player action, grouped by domain. Add a domain here and the bridge/env pick it up. */
 export const DOMAINS = {
   procure: procureActions, design: designActions, facility: facilityActions, deploy: deployActions,
   clusters: clustersActions, contracts: contractsActions, finance: financeActions, energy: energyActions, session: sessionActions,
+  lifecycle: lifecycleActions, staff: staffActions,
 } as const;
 
 export const composeActions = (c: Ctx): Omit<GameStore, 'game'> =>

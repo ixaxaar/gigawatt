@@ -82,9 +82,9 @@ export function step(a: Action): StepResult {
     broke = g.cash < 0 ? broke + 1 : 0;
   }
   const g = G(); const horizon = scenario?.horizonMonths ?? 120;
-  const bankrupt = broke >= 2; const truncated = g.month - t0 >= horizon;
+  const bankrupt = broke >= 2 || g.status === 'bankrupt'; const truncated = g.month - t0 >= horizon;
   if (bankrupt) reward -= 10;
-  return { obs: observe(), reward, done: bankrupt, truncated, info: { ok: !!res.ok, message: res.message ?? '', issues: res.issues ?? [], ...(bankrupt ? { terminalReason: 'bankrupt (cash<0 for 2 months)' } : {}) } };
+  return { obs: observe(), reward, done: bankrupt, truncated: truncated || g.status === 'finished', info: { ok: !!res.ok, message: res.message ?? '', issues: res.issues ?? [], ...(bankrupt ? { terminalReason: 'bankrupt (cash<0 for 2 months)' } : {}) } };
 }
 
 /** Dry-run: apply, read ok, restore. Exact legality without duplicating the rule set. */
