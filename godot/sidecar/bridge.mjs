@@ -2,14 +2,14 @@ import { createInterface } from "node:readline";
 const mem$2 = /* @__PURE__ */ new Map();
 globalThis.localStorage = { getItem: (k2) => mem$2.get(k2) ?? null, setItem: (k2, v2) => void mem$2.set(k2, v2), removeItem: (k2) => void mem$2.delete(k2) };
 function createStore(init2) {
-  let state;
+  let state2;
   const subs = /* @__PURE__ */ new Set();
-  const get = () => state;
+  const get = () => state2;
   const set = (patch2) => {
-    state = { ...state, ...typeof patch2 === "function" ? patch2(state) : patch2 };
-    subs.forEach((f) => f(state));
+    state2 = { ...state2, ...typeof patch2 === "function" ? patch2(state2) : patch2 };
+    subs.forEach((f) => f(state2));
   };
-  state = init2(set, get);
+  state2 = init2(set, get);
   return { getState: get, setState: set, subscribe: (fn) => (subs.add(fn), () => subs.delete(fn)) };
 }
 const NVIDIA_ACCELERATORS = [
@@ -7277,7 +7277,7 @@ function rollArchetype(rng, reputation) {
   }
   return eligible[0].a;
 }
-function generateContracts(state, month, rng) {
+function generateContracts(state2, month, rng) {
   const year = monthToYear(month);
   const eligible = MODELS.filter((m) => m.era <= year + 0.01);
   if (eligible.length === 0) return [];
@@ -7287,7 +7287,7 @@ function generateContracts(state, month, rng) {
     const tail = eligible.filter((m) => m.activeParamsB <= 80 && m.paramsB <= 700);
     const model = rng() < 0.5 && tail.length ? pick(rng, tail) : pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
     const trainP = model.paramsB > 200 ? 0.7 : model.paramsB < 15 ? 0.12 : 0.4;
-    const archetype = rollArchetype(rng, state.reputation);
+    const archetype = rollArchetype(rng, state2.reputation);
     const t = ARCHETYPE_TABLE[archetype];
     const suffix = String(1e3 + Math.floor(rng() * 9e3));
     const common = {
@@ -7321,7 +7321,7 @@ function generateContracts(state, month, rng) {
         minScaleOutGBsPerAccel: round2$2(model.paramsB < 15 ? tier * 0.75 : tier),
         minTotalMemGB: Math.ceil(stateGB),
         pricePerAccelHour: round2$2(
-          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15) * (state.marketPriceIndex ?? 1)
+          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15) * (state2.marketPriceIndex ?? 1)
           // rival competition reprices fresh offers
         )
       };
@@ -7346,7 +7346,7 @@ function generateContracts(state, month, rng) {
         pricePerMTok: Math.max(
           0.01,
           round3$1(
-            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2) * (state.marketPriceIndex ?? 1)
+            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2) * (state2.marketPriceIndex ?? 1)
             // rival competition reprices fresh offers
           )
         )
@@ -7392,24 +7392,24 @@ const SUPPORT_RATE_PER_YEAR = 0.035;
 const DEPRECIATION_YEARS = 5;
 const DEFAULT_APR = 0.07;
 const FALLBACK_PUE = 1.4;
-const clusterPowerKW = (state) => state.clusters.reduce((s2, c) => s2 + (c.stats?.powerKW ?? 0), 0);
-const weightedPue = (state) => {
-  const total = state.halls.reduce((s2, h) => s2 + h.itPowerKW, 0);
+const clusterPowerKW = (state2) => state2.clusters.reduce((s2, c) => s2 + (c.stats?.powerKW ?? 0), 0);
+const weightedPue = (state2) => {
+  const total = state2.halls.reduce((s2, h) => s2 + h.itPowerKW, 0);
   if (total <= 0) {
-    const ps = state.halls.map((h) => h.pue);
+    const ps = state2.halls.map((h) => h.pue);
     return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : FALLBACK_PUE;
   }
-  return state.halls.reduce((s2, h) => s2 + h.pue * h.itPowerKW, 0) / total;
+  return state2.halls.reduce((s2, h) => s2 + h.pue * h.itPowerKW, 0) / total;
 };
-function monthlyOpex(state, opts = {}) {
-  const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state));
-  const pue2 = opts.pue ?? weightedPue(state);
+function monthlyOpex(state2, opts = {}) {
+  const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state2));
+  const pue2 = opts.pue ?? weightedPue(state2);
   const kwh = itPowerKW * pue2 * HOURS_PER_MONTH;
-  const powerUSD = kwh * state.utilityUSDPerKWh;
-  const staffUSD = state.staff * (opts.staffCostPerMonth ?? STAFF_COST_PER_MONTH);
-  const supportUSD = (opts.capexUSD ?? estimateCapexBasis(state)) * SUPPORT_RATE_PER_YEAR / 12;
-  const networkUSD = uplinkMonthlyUSD(state);
-  const maintenance = maintenanceUSD(state);
+  const powerUSD = kwh * state2.utilityUSDPerKWh;
+  const staffUSD = state2.staff * (opts.staffCostPerMonth ?? STAFF_COST_PER_MONTH);
+  const supportUSD = (opts.capexUSD ?? estimateCapexBasis(state2)) * SUPPORT_RATE_PER_YEAR / 12;
+  const networkUSD = uplinkMonthlyUSD(state2);
+  const maintenance = maintenanceUSD(state2);
   return {
     itPowerKW,
     pue: pue2,
@@ -7428,11 +7428,11 @@ function trayBomValue(design) {
   let v2 = getItem(design.chassisId)?.priceUSD ?? 0;
   return v2 + design.parts.reduce((s2, p) => s2 + (getItem(p.itemId)?.priceUSD ?? 0) * p.count, 0);
 }
-function rackBomValue(state, design) {
+function rackBomValue(state2, design) {
   let v2 = getItem(design.rackId)?.priceUSD ?? 0;
   for (const item of design.items) {
     if (item.type === "tray") {
-      const tray = state.trays.find((t) => t.id === item.trayId);
+      const tray = state2.trays.find((t) => t.id === item.trayId);
       v2 += (tray ? trayBomValue(tray) : 0) * item.count;
     } else {
       const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
@@ -7441,15 +7441,15 @@ function rackBomValue(state, design) {
   }
   return v2;
 }
-function estimateCapexBasis(state) {
+function estimateCapexBasis(state2) {
   let v2 = 0;
-  for (const [id, count] of Object.entries(state.inventory)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
-  for (const hall of state.halls) {
+  for (const [id, count] of Object.entries(state2.inventory)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
+  for (const hall of state2.halls) {
     for (const [id, count] of Object.entries(hall.powerEquip)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
     for (const [id, count] of Object.entries(hall.coolingEquip)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
     for (const rack of hall.racks) {
-      const design = state.racks.find((r) => r.id === rack.designId);
-      if (design) v2 += rackBomValue(state, design);
+      const design = state2.racks.find((r) => r.id === rack.designId);
+      if (design) v2 += rackBomValue(state2, design);
     }
   }
   return v2;
@@ -7645,21 +7645,21 @@ function readSlot(slot) {
 }
 const listSaves = () => Object.values(readIndex()).sort((a, b) => (a.slot === "auto" ? 1 : 0) - (b.slot === "auto" ? 1 : 0) || b.month - a.month);
 const round2$1 = (x) => Math.round(x * 100) / 100;
-const clusterContextOf = (state) => ({
+const clusterContextOf = (state2) => ({
   getRack: (id) => {
-    const pid = state.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
-    return state.racks.find((r) => r.id === pid);
+    const pid = state2.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
+    return state2.racks.find((r) => r.id === pid);
   },
-  getTray: (id) => state.trays.find((t) => t.id === id),
+  getTray: (id) => state2.trays.find((t) => t.id === id),
   getItem
 });
-const rackAccels = (state, designId) => {
-  const design = state.racks.find((r) => r.id === designId);
+const rackAccels = (state2, designId) => {
+  const design = state2.racks.find((r) => r.id === designId);
   if (!design) return 0;
   let n = 0;
   for (const item of design.items) {
     if (item.type !== "tray") continue;
-    const tray = state.trays.find((t) => t.id === item.trayId);
+    const tray = state2.trays.find((t) => t.id === item.trayId);
     if (!tray) continue;
     for (const p of tray.parts) if (getItem(p.itemId)?.kind === "accelerator") n += p.count * item.count;
   }
@@ -8210,13 +8210,13 @@ const volumeDiscount = (item, qty, unitPrice) => {
   if (doublings <= 0) return 0;
   return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
 };
-const rackBom = (state, designId) => {
-  const design = state.racks.find((r) => r.id === designId);
+const rackBom = (state2, designId) => {
+  const design = state2.racks.find((r) => r.id === designId);
   if (!design) return void 0;
   const need = { [design.rackId]: 1 };
   for (const item of design.items) {
     if (item.type === "tray") {
-      const tray = state.trays.find((t) => t.id === item.trayId);
+      const tray = state2.trays.find((t) => t.id === item.trayId);
       if (!tray) return void 0;
       for (const p of tray.parts) need[p.itemId] = (need[p.itemId] ?? 0) + p.count * item.count;
     } else {
@@ -8244,7 +8244,7 @@ const reserve = (g, designId, n) => {
 const FLOOR_UNIT_SLOTS = 10;
 const FLOOR_UNIT_COST = 25e4 * FLOOR_UNIT_SLOTS;
 const floorCommissionMonths = (units) => 2 + Math.ceil(units / 5);
-const creditLimit = (state) => 5e6 + estimateCapexBasis(state) * 0.6;
+const creditLimit = (state2) => 5e6 + estimateCapexBasis(state2) * 0.6;
 function newGameState(seed) {
   const hall = {
     id: "hall-1",
@@ -8639,15 +8639,15 @@ const PART_LABEL = {
   cpu: "CPU",
   switch: "ToR switch"
 };
-function rackParts(state, designId) {
+function rackParts(state2, designId) {
   const out = {};
-  const d = state.racks.find((r) => r.id === designId);
+  const d = state2.racks.find((r) => r.id === designId);
   const add = (id, n) => {
     out[id] = (out[id] ?? 0) + n;
   };
   for (const it2 of d?.items ?? []) {
     if (it2.type === "tray") {
-      const t = state.trays.find((x) => x.id === it2.trayId);
+      const t = state2.trays.find((x) => x.id === it2.trayId);
       for (const p of t?.parts ?? []) add(p.itemId, p.count * it2.count);
     } else if (it2.type === "switch") add(it2.switchId, it2.count);
   }
@@ -8657,15 +8657,15 @@ const partClass = (id) => {
   const k2 = getItem(id)?.kind;
   return k2 && PART_RATE[k2] !== void 0 ? k2 : void 0;
 };
-function rackRates(state, designId) {
-  return Object.entries(rackParts(state, designId)).flatMap(([id, n]) => {
+function rackRates(state2, designId) {
+  return Object.entries(rackParts(state2, designId)).flatMap(([id, n]) => {
     const c = partClass(id);
     return c ? [{ id, rate: n * PART_RATE[c] }] : [];
   });
 }
-function recommendedSpares(state, id) {
+function recommendedSpares(state2, id) {
   let total = 0;
-  for (const h of state.halls) for (const p of h.racks) total += rackParts(state, p.designId)[id] ?? 0;
+  for (const h of state2.halls) for (const p of h.racks) total += rackParts(state2, p.designId)[id] ?? 0;
   const c = partClass(id);
   if (!c || total === 0) return 0;
   return Math.max(1, Math.ceil(total * PART_RATE[c] * 3));
@@ -9993,9 +9993,11 @@ const staffingCheck = {
   run: ({ s: s2, log }) => {
     const { needed } = staffNeeded(s2);
     if (s2.staff < needed) {
-      log("bad", `Understaffed: ${s2.staff} of ${needed} needed. Failures x1.8, repairs slower. Hire on Dashboard/Facility.`);
+      if (s2.month % 3 !== 0) return;
+      const fx = staffEffect(s2);
+      log("bad", `Understaffed: ${s2.staff} of ${needed} needed. Failures x${fx.failureMult.toFixed(1)}${fx.repairExtraMonths ? ", repairs a month slower" : ""}. Hire on the Operations screen.`);
     } else if (s2.staff > needed + 2 && s2.month % 6 === 0) {
-      log("info", `Overstaffed: ${s2.staff} on the payroll, only ${needed} needed — each extra costs $${STAFF_COST_PER_MONTH.toLocaleString("en-US")}/month. Let a few go on the Dashboard.`);
+      log("info", `Overstaffed: ${s2.staff} on the payroll, only ${needed} needed — each extra costs $${STAFF_COST_PER_MONTH.toLocaleString("en-US")}/month. Let a few go on the Operations screen.`);
     }
   }
 };
@@ -10156,9 +10158,9 @@ const PIPELINE = [
   history,
   endgame
 ];
-function advanceMonth(state, opts = {}) {
-  if (state.status && state.status !== "playing") return state;
-  const s2 = JSON.parse(JSON.stringify(state));
+function advanceMonth(state2, opts = {}) {
+  if (state2.status && state2.status !== "playing") return state2;
+  const s2 = JSON.parse(JSON.stringify(state2));
   const rng = mulberry32((s2.seed ^ Math.imul(s2.month + 1, 2654435769)) >>> 0);
   s2.month += 1;
   const logs = [];
@@ -11318,6 +11320,7 @@ function legalActions(opts = {}) {
   return out;
 }
 const hash = () => hashState(G$2());
+const state = () => JSON.parse(JSON.stringify(G$2()));
 const st$2 = () => useGame.getState();
 const patch = (f) => useGame.setState((s2) => {
   const g = JSON.parse(JSON.stringify(s2.game));
@@ -11613,6 +11616,139 @@ const CONCEPTS = [
     }
   }
 ];
+const randomAgent = (rng) => (_o, legal) => {
+  const acts = legal().filter((a) => a.name !== "nextMonth");
+  return acts.length ? [acts[Math.floor(rng() * acts.length)], { name: "nextMonth" }] : [{ name: "nextMonth" }];
+};
+const idleAgent = () => [{ name: "nextMonth" }];
+function qualifyingBuilds(contractId) {
+  const g = state();
+  const c = g.availableContracts.find((x) => x.id === contractId) ?? g.activeContracts.find((a) => a.contract.id === contractId)?.contract;
+  if (!c) return [];
+  return buildOptions(g, c).filter((o2) => o2.fitsRamp && o2.hallGaps.every((x) => !x.startsWith("Cooling type"))).map((o2) => ({ templateId: o2.t.id, racks: o2.racks, cost: o2.cost })).sort((a, b) => a.cost - b.cost);
+}
+const operatorAgent = (o2) => {
+  const out = [];
+  const live = /* @__PURE__ */ new Set([...o2.active.map((a) => a.id), ...o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").map((p) => p.contractId)]);
+  if (live.size < 2 && o2.cash > 12e6) {
+    for (const c of o2.offers) {
+      for (const b of qualifyingBuilds(c.id).slice(0, 4)) {
+        const a = { name: "startEasy", args: [c.id, b.templateId, b.racks] };
+        if (b.cost < o2.cash * 0.6 && probe(a)) {
+          out.push(a);
+          live.add(c.id);
+          break;
+        }
+      }
+      if (live.size >= 2) break;
+    }
+  }
+  const g = state();
+  for (const h of g.halls) for (const r of h.racks) if (r.status === "online" && !r.clusterId && !(g.spotRacks ?? []).includes(r.id)) out.push({ name: "setSpotRack", args: [r.id, true] });
+  for (const cl of g.clusters) if (!g.activeContracts.some((a) => a.clusterIds.includes(cl.id)) && !(g.spotClusters ?? []).includes(cl.id)) out.push({ name: "setSpot", args: [cl.id, true] });
+  out.push({ name: "nextMonth" });
+  return out;
+};
+const buyable = (month) => TEMPLATES.filter((t) => t.availableFrom * 12 - 2020 * 12 <= month && !(t.eolAfter && t.eolAfter * 12 - 2020 * 12 < month) && getItem(t.tray.chassisId) && offerAt(getItem(t.tray.chassisId), month).available);
+function housekeeping(out, opts) {
+  const g = state();
+  const need = staffNeeded(g).needed;
+  if (g.staff < need) {
+    const a = { name: "hireStaff", args: [need - g.staff] };
+    if (probe(a)) out.push(a);
+  }
+  if (opts.repay && g.debt > 0 && g.cash > g.debt * 2 + 5e6) out.push({ name: "repayLoan", args: [Math.min(g.debt, g.cash - 5e6)] });
+  if (opts.sell) for (const h of g.halls) for (const r of h.racks) {
+    if (!r.clusterId && r.status === "online" && residualFactor(g, r) < 0.3 && rackResidualUSD(g, r) > 0) {
+      out.push({ name: "decommissionRack", args: [r.id] });
+      break;
+    }
+  }
+}
+const tycoonAgent = (o2) => {
+  const out = [];
+  const g = state();
+  if (o2.month % 3 === 0 && g.debt < 2e7) {
+    const a = { name: "takeLoan", args: [2e7] };
+    if (probe(a)) out.push(a);
+  }
+  const live = /* @__PURE__ */ new Set([...o2.active.map((a) => a.id), ...o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").map((p) => p.contractId)]);
+  if (live.size < 6 && o2.cash > 8e6) {
+    for (const c of o2.offers) {
+      if (live.size >= 6) break;
+      for (const b of qualifyingBuilds(c.id).slice(0, 6)) {
+        const a = { name: "startEasy", args: [c.id, b.templateId, b.racks] };
+        if (probe(a)) {
+          out.push(a);
+          live.add(c.id);
+          break;
+        }
+      }
+    }
+  }
+  if (g.cash > 6e7 && !(g.frameworks ?? []).length) {
+    const a = { name: "signFramework", args: ["nvidia", 1e7, 24] };
+    if (probe(a)) out.push(a);
+  }
+  if (g.cash > 4e7 && g.policy?.maintenance !== 1) out.push({ name: "setPolicy", args: [2, 1] });
+  housekeeping(out, { repay: true, sell: true });
+  out.push({ name: "nextMonth" });
+  return out;
+};
+const cautiousAgent = (o2) => {
+  const out = [];
+  const g = state();
+  if (!g.policy || g.policy.maintenance !== 2) out.push({ name: "setPolicy", args: [3, 2] });
+  const busy = o2.projects.some((p) => p.stage !== "done" && p.stage !== "failed") || o2.active.length >= 1;
+  if (!busy && o2.cash > 15e6) {
+    for (const c of o2.offers) {
+      let done = false;
+      for (const b of qualifyingBuilds(c.id).slice(0, 6)) {
+        const a = { name: "startEasy", args: [c.id, b.templateId, b.racks] };
+        if (probe(a)) {
+          out.push(a);
+          done = true;
+          break;
+        }
+      }
+      if (done) break;
+    }
+  }
+  for (const h of g.halls) for (const r of h.racks) if (r.status === "online" && !r.clusterId && !(g.spotRacks ?? []).includes(r.id)) {
+    out.push({ name: "setSpotRack", args: [r.id, true] });
+    break;
+  }
+  housekeeping(out, { repay: true, sell: false });
+  out.push({ name: "nextMonth" });
+  return out;
+};
+const spotterAgent = (o2) => {
+  const out = [];
+  const g = state();
+  if (o2.cash > 1e7 && g.orders.length < 3) {
+    const t = buyable(o2.month).find((x) => probe({ name: "buyTemplate", args: [x.id, 1] }));
+    if (t) out.push({ name: "buyTemplate", args: [t.id, 1] });
+  }
+  for (const h of g.halls) for (const r of h.racks) if (r.status === "online" && !(g.spotRacks ?? []).includes(r.id)) out.push({ name: "setSpotRack", args: [r.id, true] });
+  for (const d of g.racks) {
+    const a = { name: "placeRack", args: [g.halls[0].id, d.id] };
+    if (probe(a)) {
+      out.push(a);
+      break;
+    }
+  }
+  housekeeping(out, { repay: true, sell: true });
+  out.push({ name: "nextMonth" });
+  return out;
+};
+const PERSONAS = {
+  idle: () => idleAgent,
+  random: (seed) => randomAgent(mulberry32(seed)),
+  operator: () => operatorAgent,
+  tycoon: () => tycoonAgent,
+  cautious: () => cautiousAgent,
+  spotter: () => spotterAgent
+};
 function ledger(g) {
   const rows = /* @__PURE__ */ new Map();
   const row = (id) => {
@@ -12107,6 +12243,14 @@ function env(name, a) {
       return legalActions(a[0] ?? {});
     case "hash":
       return hash();
+    case "autoplay": {
+      const agent = (PERSONAS[a[0] ?? "operator"] ?? PERSONAS.operator)(G().seed);
+      for (let m = 0; m < (a[1] ?? 12); m++) {
+        if (G().status && G().status !== "playing") break;
+        for (const act of agent(observe(), () => legalActions())) step(act);
+      }
+      return observe();
+    }
     case "scenarios":
       return SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed }));
     default:

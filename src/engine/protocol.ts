@@ -11,6 +11,7 @@ import { MODELS } from '../sim/market';
 import { MISSIONS } from '../missions';
 import { CONCEPTS } from '../concepts';
 import { useGame } from '../store';
+import { PERSONAS } from '../playtest/personas';
 import { QUERIES } from './queries';
 
 const st = () => useGame.getState();
@@ -57,6 +58,11 @@ function env(name: string | undefined, a: any[]) {
     case 'text': return ENV.describe();
     case 'actions': return ENV.legalActions(a[0] ?? {});
     case 'hash': return ENV.hash();
+    case 'autoplay': { // [persona, months]: let a scripted player run the game forward (UI soak tests, demos)
+      const agent = (PERSONAS[a[0] ?? 'operator'] ?? PERSONAS.operator)(G().seed);
+      for (let m = 0; m < (a[1] ?? 12); m++) { if (G().status && G().status !== 'playing') break; for (const act of agent(ENV.observe(), () => ENV.legalActions())) ENV.step(act); }
+      return ENV.observe();
+    }
     case 'scenarios': return SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed }));
     default: return undefined;
   }

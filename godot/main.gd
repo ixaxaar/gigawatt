@@ -45,6 +45,7 @@ func _ready() -> void:
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
 	if OS.get_environment("GW_SMOKE") != "": _smoke(); return
 	if OS.get_environment("GW_SETTINGS") != "": _settings()
+	if OS.get_environment("GW_AUTOPLAY") != "": var ap := OS.get_environment("GW_AUTOPLAY").split(":"); b.env("autoplay", [ap[0], int(ap[1])]); b.refresh_game() if b.has_method("refresh_game") else null   # screenshots: "tycoon:48"
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
@@ -159,12 +160,14 @@ func _on_changed() -> void:
 var quiet := false
 func toast(text: String, level := "info") -> void:
 	if quiet: return
+	for t in toasts.get_children():   # identical toast already on screen: don't stack it
+		if t.has_meta("txt") and t.get_meta("txt") == text: return
 	var cue := "good" if level == "good" else ("bad" if level == "bad" else "click")
 	var low := text.to_lower()
 	if level == "bad" and ("fire" in low or "outage" in low or "cut" in low or "went down" in low or "failed" in low): cue = "alarm"
 	elif level == "good" and ("online" in low or "commissioned" in low): cue = "online"
 	audio.play(cue)
-	var p := PanelContainer.new(); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
+	var p := PanelContainer.new(); p.set_meta("txt", text); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
 	p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.12, 0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
 	while toasts.get_child_count() > 5: toasts.get_child(0).queue_free(); toasts.remove_child(toasts.get_child(0))
 	var tw := create_tween(); tw.tween_interval(6.0); tw.tween_property(p, "modulate:a", 0.0, 1.0); tw.tween_callback(p.queue_free)
@@ -260,6 +263,15 @@ func _smoke() -> void:
 		show_screen(sc[0]); await get_tree().process_frame; await get_tree().process_frame
 	b.act("nextMonth"); b.act("hireStaff", [1]); b.q("lifecycle"); b.q("staffing"); b.q("endReport")
 	_settings(); await get_tree().process_frame; _settings()
+	var years := int(OS.get_environment("GW_SMOKE_YEARS")) if OS.get_environment("GW_SMOKE_YEARS") != "" else 0
+	if years > 0:   # long-horizon soak: a scripted tycoon plays year by year; every screen must still build
+		b.act("newGame", [11, "operator"]); b.act("setMode", ["operator"])
+		for y in years:
+			b.env("autoplay", ["tycoon" if y % 2 == 0 else "operator", 12])
+			for sc in SCREENS: show_screen(sc[0]); await get_tree().process_frame
+			hall.hall_i = 0; hall.rebuild(); await get_tree().process_frame
+			print("SOAK year=%d month=%d status=%s racks=%d clusters=%d" % [y + 1, int(b.g.month), str(b.g.get("status", "")), b.g.halls.reduce(func(n, h): return n + h.racks.size(), 0), b.g.clusters.size()])
+			if b.g.get("status", "playing") != "playing": break
 	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
 	b.stop(); get_tree().quit()
 
