@@ -151,7 +151,7 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
       const minAccelerators = Math.min(32768, Math.max(32, bucket(Math.ceil(raw))));
       const isMoe = model.activeParamsB < model.paramsB * 0.8;
       // units are the game's accelerator count: an NVL72 rack-scale domain is 36 of them
-      const moeDomain = year >= 2025.5 ? 32 : year >= 2024 ? 16 : 8;
+      const moeDomain = year >= 2025.5 ? 32 : year >= 2024.9 ? 16 : 8;
       const minScaleUpDomain = Math.min(
         minAccelerators,
         isMoe ? moeDomain : year >= 2025 ? 16 : 8,

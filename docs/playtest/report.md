@@ -2,27 +2,27 @@
 
 | persona | seed | scenario | end | status | net worth | score | contracts done | peak GPUs | SLA misses | tick avg/max ms | state KB | violations | anomalies |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| idle | 21 | classic | 108 | finished / Struggling operator | $47.3M | 523 | 0 | 0 | 0 | 0.4/11 | 34 | 0 | 0 |
+| idle | 21 | classic | 108 | finished / Struggling operator | $47.3M | 523 | 0 | 0 | 0 | 0.3/11 | 34 | 0 | 0 |
 | idle | 22 | classic | 108 | finished / Struggling operator | $47.5M | 525 | 0 | 0 | 0 | 0.2/0 | 33 | 0 | 0 |
 | idle | 23 | classic | 108 | finished / Struggling operator | $47.3M | 523 | 0 | 0 | 0 | 0.2/0 | 35 | 0 | 0 |
 | random | 21 | classic | 80 | bankrupt / Bankrupt | $29.1M | 291 | 0 | 0 | 0 | 0.6/2 | 106 | 0 | 0 |
-| random | 22 | classic | 85 | bankrupt / Bankrupt | $28.5M | 285 | 0 | 0 | 0 | 0.6/1 | 102 | 0 | 0 |
+| random | 22 | classic | 85 | bankrupt / Bankrupt | $28.5M | 285 | 0 | 0 | 0 | 0.5/1 | 102 | 0 | 0 |
 | random | 23 | classic | 84 | bankrupt / Bankrupt | $28.0M | 280 | 0 | 0 | 0 | 0.6/2 | 101 | 0 | 0 |
 | operator | 21 | classic | 108 | finished / Stalled operator | $117.4M | 1528 | 10 | 712 | 2 | 1.7/24 | 77 | 0 | 0 |
-| operator | 22 | classic | 108 | finished / Stalled operator | $87.7M | 1089 | 9 | 96 | 0 | 0.9/14 | 71 | 0 | 0 |
-| operator | 23 | classic | 108 | finished / Stalled operator | $106.7M | 1459 | 12 | 576 | 1 | 1.1/20 | 71 | 0 | 0 |
-| tycoon | 21 | classic | 64 | bankrupt / Bankrupt | $14.4M | 477 | 14 | 672 | 0 | 1.5/15 | 77 | 0 | 0 |
-| tycoon | 22 | classic | 56 | bankrupt / Bankrupt | $39.8M | 1487 | 32 | 792 | 2 | 1.7/13 | 83 | 0 | 0 |
-| tycoon | 23 | classic | 108 | finished / Struggling operator | $8.8M | 742 | 21 | 440 | 8 | 1.4/17 | 79 | 0 | 0 |
-| cautious | 21 | classic | 108 | finished / Stalled operator | $75.9M | 769 | 0 | 0 | 0 | 0.5/4 | 63 | 0 | 0 |
+| operator | 22 | classic | 108 | finished / Stalled operator | $87.7M | 1089 | 9 | 96 | 0 | 0.9/13 | 71 | 0 | 0 |
+| operator | 23 | classic | 108 | finished / Stalled operator | $102.9M | 1499 | 13 | 752 | 1 | 1.6/51 | 75 | 0 | 0 |
+| tycoon | 21 | classic | 64 | bankrupt / Bankrupt | $14.4M | 477 | 14 | 672 | 0 | 1.5/16 | 77 | 0 | 0 |
+| tycoon | 22 | classic | 56 | bankrupt / Bankrupt | $39.8M | 1487 | 32 | 792 | 2 | 1.8/13 | 83 | 0 | 0 |
+| tycoon | 23 | classic | 108 | finished / Struggling operator | $8.8M | 742 | 21 | 440 | 8 | 1.4/16 | 79 | 0 | 0 |
+| cautious | 21 | classic | 108 | finished / Stalled operator | $73.9M | 739 | 0 | 0 | 0 | 0.6/5 | 66 | 0 | 0 |
 | cautious | 22 | classic | 108 | finished / Struggling operator | $48.7M | 532 | 2 | 264 | 0 | 0.7/9 | 68 | 0 | 0 |
-| cautious | 23 | classic | 108 | finished / Stalled operator | $74.6M | 786 | 2 | 24 | 0 | 0.7/10 | 69 | 0 | 0 |
+| cautious | 23 | classic | 108 | finished / Stalled operator | $74.6M | 786 | 2 | 24 | 0 | 0.7/11 | 69 | 0 | 0 |
 | spotter | 21 | classic | 108 | finished / Stalled operator | $69.0M | 695 | 0 | 0 | 0 | 0.4/1 | 60 | 0 | 0 |
 | spotter | 22 | classic | 108 | finished / Stalled operator | $66.6M | 676 | 0 | 0 | 0 | 0.4/1 | 59 | 0 | 0 |
 | spotter | 23 | classic | 108 | finished / Stalled operator | $61.4M | 614 | 0 | 0 | 0 | 0.4/1 | 61 | 0 | 0 |
 | tycoon | 7 | gold-rush-2025 | 108 | finished / Solid operator | $246.4M | 2514 | 0 | 0 | 0 | 0.2/0 | 20 | 0 | 1 |
 | operator | 8 | lean | 108 | finished / Struggling operator | $5.3M | 103 | 0 | 0 | 0 | 0.1/0 | 34 | 0 | 0 |
-| cautious | 9 | lean | 108 | finished / Struggling operator | $5.3M | 103 | 0 | 0 | 0 | 0.1/0 | 35 | 0 | 0 |
+| cautious | 9 | lean | 108 | finished / Struggling operator | $5.3M | 103 | 0 | 0 | 0 | 0.1/1 | 35 | 0 | 0 |
 
 ## tycoon seed 21 (classic)
 - most-failed actions: startEasy×1
@@ -213,15 +213,15 @@
 | 41 | 47.7 | 0.0 | 53.6 | 240 | 10 | 2 | 10 | 2 | 33 | 0.60 | 0.96 |
 | 47 | 37.3 | 0.0 | 55.4 | 216 | 10 | 2 | 9 | 2 | 41 | 0.63 | 0.96 |
 | 53 | 40.6 | 0.0 | 57.6 | 240 | 10 | 1 | 10 | 2 | 45 | 0.68 | 0.97 |
-| 59 | 34.8 | 0.0 | 61.2 | 240 | 40 | 1 | 10 | 2 | 35 | 0.63 | 0.97 |
-| 65 | 37.3 | 0.0 | 61.1 | 576 | 40 | 0 | 10 | 2 | 34 | 1.18 | 0.98 |
-| 71 | 42.5 | 0.0 | 64.5 | 528 | 40 | 1 | 8 | 2 | 31 | 0.84 | 0.97 |
-| 77 | 49.7 | 0.0 | 69.9 | 552 | 40 | 0 | 9 | 2 | 35 | 1.55 | 0.97 |
-| 83 | 60.3 | 0.0 | 78.7 | 552 | 40 | 0 | 10 | 2 | 35 | 1.70 | 0.97 |
-| 89 | 68.3 | 0.0 | 85.1 | 528 | 40 | 0 | 9 | 2 | 33 | 1.63 | 0.97 |
-| 95 | 78.4 | 0.0 | 93.8 | 528 | 40 | 0 | 10 | 2 | 33 | 1.57 | 0.97 |
-| 101 | 84.8 | 0.0 | 98.8 | 528 | 40 | 0 | 7 | 2 | 33 | 1.40 | 0.97 |
-| 107 | 92.9 | 0.0 | 105.5 | 576 | 40 | 0 | 10 | 2 | 28 | 1.62 | 0.97 |
+| 59 | 15.1 | 0.0 | 46.2 | 240 | 26 | 1 | 10 | 2 | 37 | 0.32 | 0.97 |
+| 65 | 18.4 | 0.0 | 49.0 | 752 | 58 | 1 | 10 | 2 | 37 | 1.44 | 0.99 |
+| 71 | 27.1 | 0.0 | 55.6 | 736 | 58 | 1 | 10 | 2 | 41 | 1.47 | 0.98 |
+| 77 | 35.8 | 0.0 | 62.1 | 736 | 58 | 0 | 7 | 2 | 45 | 1.91 | 0.98 |
+| 83 | 45.7 | 0.0 | 68.8 | 704 | 58 | 0 | 6 | 2 | 43 | 2.02 | 0.97 |
+| 89 | 55.3 | 0.0 | 76.4 | 736 | 58 | 0 | 10 | 2 | 43 | 1.67 | 0.97 |
+| 95 | 65.6 | 0.0 | 84.8 | 696 | 58 | 0 | 8 | 2 | 44 | 1.83 | 0.97 |
+| 101 | 77.7 | 0.0 | 95.2 | 728 | 58 | 0 | 10 | 2 | 42 | 1.73 | 0.97 |
+| 107 | 85.8 | 0.0 | 101.5 | 752 | 58 | 0 | 7 | 2 | 39 | 1.84 | 0.97 |
 
 ### tycoon seed 21 (classic)
 | month | cash $M | debt $M | net worth $M | GPUs | racks | contracts | offers | staff | rep | rev $M | price idx |
@@ -276,15 +276,15 @@
 | 41 | 30.7 | 0.0 | 47.5 | 0 | 5 | 1 | 8 | 2 | 1 | 0.13 | 0.96 |
 | 47 | 31.1 | 0.0 | 46.7 | 0 | 5 | 1 | 10 | 2 | 1 | 0.12 | 0.96 |
 | 53 | 31.1 | 0.0 | 46.0 | 0 | 21 | 0 | 10 | 2 | 0 | 0.09 | 0.97 |
-| 59 | 29.4 | 0.0 | 46.4 | 0 | 21 | 1 | 10 | 3 | 0 | 0.28 | 0.97 |
-| 65 | 32.1 | 0.0 | 46.9 | 0 | 24 | 1 | 9 | 3 | 0 | 0.47 | 0.97 |
-| 71 | 37.2 | 0.0 | 50.8 | 0 | 24 | 0 | 9 | 3 | 0 | 0.70 | 0.97 |
-| 77 | 41.8 | 0.0 | 54.3 | 0 | 24 | 0 | 10 | 3 | 1 | 0.81 | 0.97 |
-| 83 | 48.7 | 0.0 | 60.0 | 0 | 24 | 0 | 10 | 3 | 0 | 0.88 | 0.97 |
-| 89 | 54.8 | 0.0 | 65.1 | 0 | 24 | 0 | 10 | 3 | 0 | 0.71 | 0.97 |
-| 95 | 57.9 | 0.0 | 67.0 | 0 | 24 | 0 | 10 | 3 | 0 | 0.72 | 0.97 |
-| 101 | 62.9 | 0.0 | 71.1 | 0 | 24 | 0 | 10 | 3 | 1 | 0.82 | 0.97 |
-| 107 | 68.1 | 0.0 | 75.3 | 0 | 24 | 0 | 10 | 3 | 2 | 0.81 | 0.97 |
+| 59 | 28.4 | 0.0 | 46.1 | 0 | 21 | 1 | 10 | 3 | 0 | 0.28 | 0.97 |
+| 65 | 31.0 | 0.0 | 46.6 | 0 | 25 | 0 | 10 | 3 | 0 | 0.47 | 0.97 |
+| 71 | 23.4 | 0.0 | 47.2 | 0 | 25 | 1 | 7 | 3 | 0 | 0.69 | 0.97 |
+| 77 | 27.3 | 0.0 | 50.6 | 0 | 37 | 0 | 8 | 4 | 0 | 0.88 | 0.97 |
+| 83 | 31.7 | 0.0 | 52.4 | 0 | 37 | 0 | 8 | 4 | 0 | 1.15 | 0.97 |
+| 89 | 38.3 | 0.0 | 57.3 | 0 | 37 | 0 | 10 | 4 | 0 | 1.29 | 0.97 |
+| 95 | 44.4 | 0.0 | 60.9 | 0 | 37 | 0 | 9 | 4 | 0 | 1.20 | 0.97 |
+| 101 | 53.3 | 0.0 | 68.3 | 0 | 37 | 0 | 10 | 4 | 0 | 1.19 | 0.97 |
+| 107 | 59.7 | 0.0 | 73.1 | 0 | 37 | 0 | 8 | 4 | 0 | 1.26 | 0.97 |
 
 ### cautious seed 22 (classic)
 | month | cash $M | debt $M | net worth $M | GPUs | racks | contracts | offers | staff | rep | rev $M | price idx |

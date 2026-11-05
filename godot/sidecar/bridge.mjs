@@ -7305,7 +7305,7 @@ function generateContracts(state2, month, rng) {
       const raw = stateGB / memPerAccel * randRange(rng, 2, 4.5) * t.accelMult;
       const minAccelerators = Math.min(32768, Math.max(32, bucket(Math.ceil(raw))));
       const isMoe = model.activeParamsB < model.paramsB * 0.8;
-      const moeDomain = year >= 2025.5 ? 32 : year >= 2024 ? 16 : 8;
+      const moeDomain = year >= 2025.5 ? 32 : year >= 2024.9 ? 16 : 8;
       const minScaleUpDomain = Math.min(
         minAccelerators,
         isMoe ? moeDomain : year >= 2025 ? 16 : 8
@@ -10054,8 +10054,8 @@ const netWorthOf = (g) => g.cash - g.debt + assetValue(g);
 const RATINGS = [
   [1e9, "AI Datacenter Tycoon"],
   [3e8, "Hyperscale contender"],
-  [12e7, "Solid operator"],
-  [5e7, "Stalled operator"],
+  [1e8, "Solid operator"],
+  [5e7, "Steady operator"],
   [0, "Struggling operator"]
 ];
 const ratingFor = (netWorth) => (RATINGS.find(([min]) => netWorth >= min) ?? [0, "Bankrupt"])[1];
