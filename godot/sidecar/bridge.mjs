@@ -7259,8 +7259,8 @@ const CONTEXT_OPTIONS = [
   [2026, [8192, 32768, 65536]],
   [2029, [32768, 131072, 262144]]
 ];
-const round2$1 = (x) => Math.round(x * 100) / 100;
-const round3 = (x) => Math.round(x * 1e3) / 1e3;
+const round2$2 = (x) => Math.round(x * 100) / 100;
+const round3$1 = (x) => Math.round(x * 1e3) / 1e3;
 const ARCHETYPE_TABLE = {
   startup: { minRep: 0, weight: 0.38, accelMult: 1, tokenMult: 0.25, priceMult: 0.9, trainDur: [2, 6], inferDur: [3, 9], sla: 0.95, penalty: [4e-3, 8e-3] },
   lab: { minRep: 20, weight: 0.3, accelMult: 1, tokenMult: 0.6, priceMult: 1, trainDur: [4, 10], inferDur: [6, 12], sla: 0.97, penalty: [5e-3, 0.01] },
@@ -7294,7 +7294,7 @@ function generateContracts(state, month, rng) {
       archetype,
       model,
       durationMonths: 0,
-      penaltyRate: round3(randRange(rng, t.penalty[0], t.penalty[1])),
+      penaltyRate: round3$1(randRange(rng, t.penalty[0], t.penalty[1])),
       deadlineMonth: month + randInt(rng, 2, 6),
       slaAvailability: Math.min(0.999, Math.max(0.9, t.sla + randRange(rng, -5e-3, 5e-3)))
     };
@@ -7317,10 +7317,11 @@ function generateContracts(state, month, rng) {
         durationMonths: randInt(rng, t.trainDur[0], t.trainDur[1]),
         minAccelerators,
         minScaleUpDomain,
-        minScaleOutGBsPerAccel: round2$1(model.paramsB < 15 ? tier * 0.75 : tier),
+        minScaleOutGBsPerAccel: round2$2(model.paramsB < 15 ? tier * 0.75 : tier),
         minTotalMemGB: Math.ceil(stateGB),
-        pricePerAccelHour: round2$1(
-          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15)
+        pricePerAccelHour: round2$2(
+          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15) * (state.marketPriceIndex ?? 1)
+          // rival competition reprices fresh offers
         )
       };
       contract.rampMonths = Math.min(20, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0));
@@ -7343,8 +7344,9 @@ function generateContracts(state, month, rng) {
         contextTokens: pick(rng, ctxOpts),
         pricePerMTok: Math.max(
           0.01,
-          round3(
-            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2)
+          round3$1(
+            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2) * (state.marketPriceIndex ?? 1)
+            // rival competition reprices fresh offers
           )
         )
       };
@@ -7371,6 +7373,18 @@ function contractNeedGbps(c) {
 function totalNeedGbps(s2) {
   return s2.activeContracts.filter((a) => a.clusterIds.length > 0).reduce((n, a) => n + contractNeedGbps(a.contract), 0);
 }
+const DEFAULT_POLICY = { burnInMonths: 1, maintenance: 0 };
+const policyOf = (g) => g.policy ?? DEFAULT_POLICY;
+const burnInLeadDelta = (g) => policyOf(g).burnInMonths - 1;
+const BURN_IN_FAIL_MULT = [3, 1, 0.5, 0.25];
+const commissionFailMult = (g) => BURN_IN_FAIL_MULT[policyOf(g).burnInMonths] ?? 1;
+const MAINT_FAIL_MULT = [1, 0.75, 0.55];
+const maintenanceFailMult = (g) => MAINT_FAIL_MULT[policyOf(g).maintenance] ?? 1;
+const MAINT_COST_PER_RACK = [0, 150, 400];
+const maintenanceUSD = (g) => {
+  const racks = g.halls.reduce((n, h) => n + h.racks.filter((r) => r.status === "online").length, 0);
+  return racks * (MAINT_COST_PER_RACK[policyOf(g).maintenance] ?? 0);
+};
 const HOURS_PER_MONTH = 730;
 const STAFF_COST_PER_MONTH = 12e3;
 const SUPPORT_RATE_PER_YEAR = 0.05;
@@ -7394,6 +7408,7 @@ function monthlyOpex(state, opts = {}) {
   const staffUSD = state.staff * (opts.staffCostPerMonth ?? STAFF_COST_PER_MONTH);
   const supportUSD = (opts.capexUSD ?? estimateCapexBasis(state)) * SUPPORT_RATE_PER_YEAR / 12;
   const networkUSD = uplinkMonthlyUSD(state);
+  const maintenance = maintenanceUSD(state);
   return {
     itPowerKW,
     pue: pue2,
@@ -7402,7 +7417,8 @@ function monthlyOpex(state, opts = {}) {
     staffUSD,
     supportUSD,
     networkUSD,
-    totalUSD: powerUSD + staffUSD + supportUSD + networkUSD
+    maintenanceUSD: maintenance,
+    totalUSD: powerUSD + staffUSD + supportUSD + networkUSD + maintenance
   };
 }
 const monthlyDepreciation = (capexUSD, years = DEPRECIATION_YEARS) => years > 0 ? capexUSD / (years * 12) : 0;
@@ -7448,7 +7464,7 @@ function contractRevenue(ac, opts) {
   const penalty = Math.min(rawPenalty, gross * 0.25);
   return { grossUSD: gross, billableUSD: billable, penaltyUSD: penalty, netUSD: billable - penalty, slaMet };
 }
-const clamp$3 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp$5 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const r2 = (x) => Math.round(x * 100) / 100;
 const SOURCES = {
   grid: { names: ["Metro Utility", "Regional Grid Co-op", "StateWide Electric"], priceMWh: [58, 74], term: [12, 36], overdraw: [0.15, 0.3], overage: 1.4, firmness: [0.9, 0.97], lesson: "Utility firm service: reliable and flexible, priced near spot. Overdraw is tolerated until the interconnect trips." },
@@ -7522,13 +7538,13 @@ function powerMarketTick(s2, rng, log) {
 }
 const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
 function spotUtilization(price, month) {
-  return clamp$3(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
+  return clamp$5(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
 }
 function stepSpotPrice(s2, rng) {
   const anchor = spotAnchor(s2.month);
   const cur = s2.spotPrice ?? anchor;
   const shock = (rng() - 0.5) * 0.22 + (rng() < 0.06 ? rng() < 0.5 ? 0.35 : -0.3 : 0);
-  const next = clamp$3(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
+  const next = clamp$5(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
   s2.spotPrice = r2(next);
   s2.spotHistory = [...s2.spotHistory ?? [], s2.spotPrice].slice(-24);
 }
@@ -7627,6 +7643,64 @@ function readSlot(slot) {
   }
 }
 const listSaves = () => Object.values(readIndex()).sort((a, b) => (a.slot === "auto" ? 1 : 0) - (b.slot === "auto" ? 1 : 0) || b.month - a.month);
+const round2$1 = (x) => Math.round(x * 100) / 100;
+const clusterContextOf = (state) => ({
+  getRack: (id) => {
+    const pid = state.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
+    return state.racks.find((r) => r.id === pid);
+  },
+  getTray: (id) => state.trays.find((t) => t.id === id),
+  getItem
+});
+const rackAccels = (state, designId) => {
+  const design = state.racks.find((r) => r.id === designId);
+  if (!design) return 0;
+  let n = 0;
+  for (const item of design.items) {
+    if (item.type !== "tray") continue;
+    const tray = state.trays.find((t) => t.id === item.trayId);
+    if (!tray) continue;
+    for (const p of tray.parts) if (getItem(p.itemId)?.kind === "accelerator") n += p.count * item.count;
+  }
+  return n;
+};
+const clamp$4 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const RIVAL_ARCHETYPES = [
+  { id: "hyperion", name: "Hyperion Cloud", style: "hyperscaler", accels: 4e3, priceMult: 1, aggression: 0.5 },
+  { id: "nimbus", name: "Nimbus Compute", style: "neocloud", accels: 800, priceMult: 0.85, aggression: 0.8 },
+  { id: "atlas", name: "Atlas Sovereign AI", style: "sovereign", accels: 300, priceMult: 1.05, aggression: 0.3 }
+];
+function initialRivals(seed) {
+  const rng = mulberry32((seed ^ 5315091) >>> 0);
+  return RIVAL_ARCHETYPES.map((a) => ({ ...a, accels: Math.round(a.accels * randRange(rng, 0.9, 1.1)), cash: 0 }));
+}
+function onlineAccels(s2) {
+  let n = 0;
+  for (const h of s2.halls) for (const r of h.racks) if (r.status === "online") n += rackAccels(s2, r.designId);
+  return n;
+}
+function stepRivals(s2, rng) {
+  const rivals = s2.rivals ?? (s2.rivals = initialRivals(s2.seed));
+  const mine = onlineAccels(s2);
+  const rivalTotal = rivals.reduce((n, r) => n + r.accels, 0);
+  const supplyShare = mine / Math.max(1, mine + rivalTotal);
+  const demandFactor = clamp$4(gpuHourAnchor(monthToYear(s2.month)) / 2.5, 0.5, 1.5);
+  for (const r of rivals) {
+    const growth = r.aggression * randRange(rng, 5e-3, 0.015) * demandFactor;
+    r.accels = Math.round(r.accels * (1 + growth));
+    r.cash += r.accels * 0.3;
+    const target = 0.7 + (1 - supplyShare) * 0.4;
+    r.priceMult += (target - r.priceMult) * 0.1;
+  }
+}
+function priceIndexOf(s2, playerAccels = onlineAccels(s2)) {
+  const rivals = s2.rivals ?? [];
+  const rivalAccels = rivals.reduce((n, r) => n + r.accels, 0);
+  if (rivalAccels <= 0) return 1;
+  const rivalMean = rivals.reduce((n, r) => n + r.accels * r.priceMult, 0) / rivalAccels;
+  const playerShare = playerAccels / (playerAccels + rivalAccels);
+  return clamp$4(0.5 + 0.42 * rivalMean + 0.28 * playerShare, 0.7, 1.15);
+}
 const NVME_LANES_PER_DRIVE = 4;
 const GPUS_PER_SPINE_TRAY = 8;
 const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
@@ -8030,6 +8104,35 @@ function computePUE(hall, get) {
   const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
   return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
 }
+const REL_MAX = 100;
+const FRAMEWORK_MIN_COMMIT_USD = 2e6;
+const FRAMEWORK_MIN_MONTHS = 6;
+const FRAMEWORK_MAX_MONTHS = 36;
+const FRAMEWORK_DEPOSIT_PCT = 0.05;
+const FRAMEWORK_CANCEL_PENALTY_PCT = 0.2;
+const FRAMEWORK_CANCEL_REL_HIT = -15;
+const FRAMEWORK_EXPIRY_PENALTY_PCT = 0.15;
+const FRAMEWORK_EXPIRY_REL_HIT = -10;
+const FRAMEWORK_EXPIRY_REL_BONUS = 5;
+const REL_DECAY_PER_MONTH = 0.5;
+const REL_GAIN_PER_ORDER_MAX = 8;
+const REL_GAIN_PER_USD = 1 / 1e6;
+const clamp$3 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const logT = (x, lo, hi) => clamp$3((Math.log(x) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)), 0, 1);
+const relBonus = (rel) => clamp$3(rel, 0, REL_MAX) / REL_MAX;
+const capMultiplier = (g, vendorId) => Math.min(2, 1 + 0.5 * relBonus(g.vendorRel?.[vendorId] ?? 0) + 3e-3 * clamp$3(g.reputation, 0, 100));
+const relDiscount = (g, vendorId) => 0.06 * relBonus(g.vendorRel?.[vendorId] ?? 0);
+const frameworkFor = (g, vendorId) => (g.frameworks ?? []).find((f) => f.vendorId === vendorId && f.startMonth <= g.month && g.month <= f.endMonth && f.spentUSD < f.commitUSD);
+const frameworkDiscount = (fw) => fw.discountPct / 100;
+const discountPctFor = (commitUSD, months) => Math.round((3 + 9 * ((logT(Math.max(1, commitUSD), 2e6, 5e7) + logT(Math.max(1, months), 12, 36)) / 2)) * 10) / 10;
+const adjustRel = (g, vendorId, delta) => {
+  g.vendorRel = { ...g.vendorRel ?? {}, [vendorId]: clamp$3((g.vendorRel?.[vendorId] ?? 0) + delta, 0, REL_MAX) };
+};
+function recordSpend(g, vendorId, usd2) {
+  const fw = frameworkFor(g, vendorId);
+  if (fw) fw.spentUSD += usd2;
+  adjustRel(g, vendorId, Math.min(REL_GAIN_PER_ORDER_MAX, usd2 * REL_GAIN_PER_USD));
+}
 const DEMAND_CURVE = [
   [2020, 0.2],
   [2022.4, 0.4],
@@ -8086,6 +8189,17 @@ const offerAt = (item, month) => {
     unitPrice: Math.round(item.priceUSD * hype * decay * boom),
     leadMonths: lead,
     qtyCap: item.allocationPerQuarter
+  };
+};
+const offerFor = (g, item) => {
+  const o2 = offerAt(item, g.month);
+  if (!o2.available) return o2;
+  const fw = frameworkFor(g, item.vendor);
+  const disc = relDiscount(g, item.vendor) + (fw ? frameworkDiscount(fw) : 0);
+  return {
+    ...o2,
+    unitPrice: Math.max(0, Math.round(o2.unitPrice * (1 - disc))),
+    qtyCap: o2.qtyCap !== void 0 ? Math.floor(o2.qtyCap * capMultiplier(g, item.vendor)) : void 0
   };
 };
 const volumeDiscount = (item, qty, unitPrice) => {
@@ -8173,7 +8287,9 @@ function newGameState(seed) {
     status: "playing",
     negCashMonths: 0,
     saveVersion: SAVE_VERSION,
-    stats: { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 }
+    stats: { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 },
+    rivals: initialRivals(seed),
+    marketPriceIndex: 1
   };
   g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
   g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));
@@ -8538,7 +8654,7 @@ const procureActions = (c) => {
       if (!item) return fail(`Unknown item '${itemId}'.`);
       if (item.kind === "uplink") return fail("Internet circuits are added on Build → Internet.");
       if (!Number.isFinite(qty) || qty <= 0) return fail("Order quantity must be positive.");
-      const offer = offerAt(item, g.month);
+      const offer = offerFor(g, item);
       if (!offer.available) {
         return fail(offer.reason ?? "Not purchasable this month.", [
           { severity: "error", code: "unavailable", message: offer.reason ?? "", learn: item.id }
@@ -8555,6 +8671,9 @@ const procureActions = (c) => {
       if (cost > g.cash) {
         return fail(`Insufficient funds: $${usd(cost)} needed, $${usd(g.cash)} in the bank.`);
       }
+      const fw = frameworkFor(g, item.vendor);
+      const rel = relDiscount(g, item.vendor);
+      const vendorNote = `${fw ? ` (framework -${Math.round(fw.discountPct)}%)` : ""}${rel > 0 ? ` (relationship -${Math.round(rel * 100)}%)` : ""}`;
       g.cash -= cost;
       g.orders.push({
         id: `ord-${g.month}-${g.orders.length + 1}-${itemId}`,
@@ -8564,12 +8683,13 @@ const procureActions = (c) => {
         arriveMonth: g.month + offer.leadMonths,
         ...spare ? { spare: true } : {}
       });
+      recordSpend(g, item.vendor, cost);
       logln(
         g,
         "info",
-        `Ordered ${n} ${spare ? "spare " : ""}× ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ""}; arriving month ${g.month + offer.leadMonths}.${note}`
+        `Ordered ${n} ${spare ? "spare " : ""}× ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ""}${vendorNote}; arriving month ${g.month + offer.leadMonths}.${note}`
       );
-      return ok(`Ordered ${n} × ${item.name}; arrives month ${g.month + offer.leadMonths}.${note}`);
+      return ok(`Ordered ${n} × ${item.name}; arrives month ${g.month + offer.leadMonths}.${vendorNote}${note}`);
     }),
     adoptTemplate: (templateId) => {
       const t = getTemplate(templateId);
@@ -8602,13 +8722,20 @@ const procureActions = (c) => {
         let cost = 0, lead = 1;
         const lines = [];
         const wanted = [...Object.entries(bom).map(([i, n]) => [i, n, false]), ...Object.entries(spareBom).map(([i, n]) => [i, n, true])];
+        const vendorSpend = /* @__PURE__ */ new Map();
+        let relNote = "", fwNote = "";
         for (const [itemId, n, isSpare] of wanted) {
           const item = getItem(itemId);
-          const offer = offerAt(item, g.month);
+          const offer = offerFor(g, item);
           if (!offer.available) return fail(`${item.name} is not purchasable yet: ${offer.reason}`);
           if (offer.qtyCap && n > offer.qtyCap) return fail(`Allocation: the vendor will only sell ${offer.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`);
           const unit = Math.round(offer.unitPrice * (1 - volumeDiscount(item, n, offer.unitPrice)) * (1 + t.premium));
           cost += unit * n;
+          vendorSpend.set(item.vendor, (vendorSpend.get(item.vendor) ?? 0) + unit * n);
+          const fw = frameworkFor(g, item.vendor);
+          if (fw) fwNote = ` (framework -${Math.round(fw.discountPct)}%)`;
+          const rel = relDiscount(g, item.vendor);
+          if (rel > 0) relNote = ` (relationship -${Math.round(rel * 100)}%)`;
           const l = Math.max(1, Math.round(offer.leadMonths * t.leadFactor));
           lead = Math.max(lead, l);
           lines.push({ itemId, n, unit, lead: l, spare: isSpare });
@@ -8617,8 +8744,10 @@ const procureActions = (c) => {
         g.cash -= cost;
         reserve(g, rackIdOf(t), nRacks);
         for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
-        logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium). Full bill of materials arrives by month ${g.month + lead}.`);
-        return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.`);
+        for (const [vendorId, usdSpent] of vendorSpend) recordSpend(g, vendorId, usdSpent);
+        const vendorNote = `${fwNote}${relNote}`;
+        logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium)${vendorNote}. Full bill of materials arrives by month ${g.month + lead}.`);
+        return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.${vendorNote}`);
       });
     }
   };
@@ -9224,27 +9353,6 @@ const defaultClusterContext = () => ({
   getTray: () => void 0,
   getItem
 });
-const round2 = (x) => Math.round(x * 100) / 100;
-const clusterContextOf = (state) => ({
-  getRack: (id) => {
-    const pid = state.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
-    return state.racks.find((r) => r.id === pid);
-  },
-  getTray: (id) => state.trays.find((t) => t.id === id),
-  getItem
-});
-const rackAccels = (state, designId) => {
-  const design = state.racks.find((r) => r.id === designId);
-  if (!design) return 0;
-  let n = 0;
-  for (const item of design.items) {
-    if (item.type !== "tray") continue;
-    const tray = state.trays.find((t) => t.id === item.trayId);
-    if (!tray) continue;
-    for (const p of tray.parts) if (getItem(p.itemId)?.kind === "accelerator") n += p.count * item.count;
-  }
-  return n;
-};
 const deliveries = {
   id: "deliveries",
   run: ({ s: s2, log }) => {
@@ -9314,7 +9422,7 @@ const commissioning = {
       if (rack.status === "installing" && s2.month >= rack.readyMonth - 1) {
         rack.status = "commissioning";
       } else if (rack.status === "commissioning" && s2.month >= rack.readyMonth) {
-        if (rng() < o2.commissionFailProb) {
+        if (rng() < o2.commissionFailProb * commissionFailMult(s2)) {
           rack.status = "failed";
           rack.readyMonth = s2.month + o2.repairMonths;
           log("bad", `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
@@ -9344,7 +9452,7 @@ const failures = {
       if (rack.status !== "online") continue;
       const rates = rackRates(s2, rack.designId);
       const total = rates.reduce((n, r) => n + r.rate, 0) * (o2.accelFailureProbPerMonth * 8e3);
-      const p = Math.min(0.95, (1 - Math.exp(-total * (stressed ? 3 : 1))) * staff.failureMult);
+      const p = Math.min(0.95, (1 - Math.exp(-total * (stressed ? 3 : 1))) * staff.failureMult * maintenanceFailMult(s2));
       if (p > 0 && rng() < p) {
         let pick2 = rng() * rates.reduce((n, r) => n + r.rate, 0);
         const part = (rates.find((r) => (pick2 -= r.rate) <= 0) ?? rates[0]).id;
@@ -9527,6 +9635,22 @@ function inferenceCapacity(stats, accel, model, opts = {}) {
 }
 const ARCH_BONUS = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
 const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const round2 = (x) => Math.round(x * 100) / 100;
+const round3 = (x) => Math.round(x * 1e3) / 1e3;
+function queueRenewal(s2, k2) {
+  const renewed = { ...k2 };
+  renewed.id = `${k2.id}-r${s2.month}`;
+  renewed.deadlineMonth = s2.month + 6;
+  renewed.renewalOf = k2.customer;
+  if (renewed.kind === "training") {
+    renewed.minAccelerators = Math.round(renewed.minAccelerators * 1.5);
+    renewed.pricePerAccelHour = round2(renewed.pricePerAccelHour * 1.05);
+  } else {
+    renewed.tokensPerSec = Math.round(renewed.tokensPerSec * 1.5);
+    renewed.pricePerMTok = round3(renewed.pricePerMTok * 1.05);
+  }
+  s2.availableContracts.push(renewed);
+}
 const serveContracts = {
   id: "serve-contracts",
   run: (c) => {
@@ -9611,6 +9735,10 @@ const serveContracts = {
       s2.reputation = clamp$1(s2.reputation + gain, 0, 100);
       if (s2.stats) s2.stats.contractsCompleted += 1;
       log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
+      if (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20) {
+        queueRenewal(s2, k2);
+        log("good", `${k2.customer} wants to renew — a larger contract is on the board for 6 months.`);
+      }
       return false;
     });
   }
@@ -9618,9 +9746,14 @@ const serveContracts = {
 const contractMarket = {
   id: "contract-market",
   run: ({ s: s2, o: o2, rng, log }) => {
+    const isRenewal = (k2) => k2.renewalOf !== void 0;
     const expired = s2.availableContracts.filter((k2) => k2.deadlineMonth < s2.month);
+    const alive = s2.availableContracts.filter((k2) => k2.deadlineMonth >= s2.month);
+    const renewals = alive.filter(isRenewal);
     const fresh = generateContracts(s2, s2.month, rng);
-    s2.availableContracts = [...s2.availableContracts.filter((k2) => k2.deadlineMonth >= s2.month), ...fresh].slice(-o2.maxAvailableContracts);
+    const regular = [...alive.filter((k2) => !isRenewal(k2)), ...fresh];
+    const room = Math.max(0, o2.maxAvailableContracts - renewals.length);
+    s2.availableContracts = [...regular.slice(-room), ...renewals];
     if (expired.length) log("info", `${expired.length} contract offer(s) expired unserved.`);
     if (fresh.length) log("info", `${fresh.length} new contract offer(s) on the market.`);
   }
@@ -9813,7 +9946,7 @@ const finances = {
     c.depreciation = monthlyDepreciation(estimateCapexBasis(s2));
     c.interest = monthlyInterest(s2.debt);
     const prevCash = s2.cash;
-    s2.cash = round2(s2.cash + c.revenue - c.opexUSD - c.interest);
+    s2.cash = round2$1(s2.cash + c.revenue - c.opexUSD - c.interest);
     if (s2.cash < 0 && prevCash >= 0) log("bad", "Bankruptcy warning: cash is negative. Raise a loan, land contracts, or cut opex before creditors close you down.");
   }
 };
@@ -9821,10 +9954,10 @@ const history = {
   id: "history",
   run: (c) => {
     const { s: s2 } = c;
-    const onlineAccels = s2.clusters.reduce((n, cl) => n + (cl.stats?.accelerators ?? 0), 0);
+    const onlineAccels2 = s2.clusters.reduce((n, cl) => n + (cl.stats?.accelerators ?? 0), 0);
     const servingAccels = [...c.served].reduce((n, id) => n + (s2.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0), 0);
-    const utilization = onlineAccels > 0 ? Math.min(1, servingAccels / onlineAccels) : 0;
-    s2.history.push({ month: s2.month, revenue: round2(c.revenue), opex: round2(c.opexUSD + c.depreciation + c.interest), cash: s2.cash, utilization: round2(utilization) });
+    const utilization = onlineAccels2 > 0 ? Math.min(1, servingAccels / onlineAccels2) : 0;
+    s2.history.push({ month: s2.month, revenue: round2$1(c.revenue), opex: round2$1(c.opexUSD + c.depreciation + c.interest), cash: s2.cash, utilization: round2$1(utilization) });
   }
 };
 const staffingCheck = {
@@ -9924,6 +10057,50 @@ const endgame = {
     if (s2.month >= HORIZON_MONTH) finish(c, "horizon");
   }
 };
+const rivalsSystem = {
+  id: "rivals",
+  run: ({ s: s2, rng, log }) => {
+    if (!s2.rivals) s2.rivals = initialRivals(s2.seed);
+    const before = s2.rivals.map((r) => ({ r, accels: r.accels, priceMult: r.priceMult }));
+    stepRivals(s2, rng);
+    s2.marketPriceIndex = priceIndexOf(s2);
+    if (s2.month % 6 === 0) {
+      let top = before[0];
+      let added = 0;
+      for (const b of before) {
+        const d = b.r.accels - b.accels;
+        if (d > added) {
+          added = d;
+          top = b;
+        }
+      }
+      const cut = (top.priceMult - top.r.priceMult) * 100;
+      const move = cut >= 0.05 ? `cut prices ${cut.toFixed(0)}%` : cut <= -0.05 ? `raised prices ${(-cut).toFixed(0)}%` : "held prices flat";
+      log("info", `${top.r.name} added ${Math.round(added).toLocaleString("en-US")} accelerators and ${move} — competition sets the market: your share of supply moves the price index.`);
+    }
+  }
+};
+const vendorsSystem = {
+  id: "vendors",
+  run: ({ s: s2, log }) => {
+    const expired = (s2.frameworks ?? []).filter((f) => f.endMonth < s2.month);
+    s2.frameworks = (s2.frameworks ?? []).filter((f) => f.endMonth >= s2.month);
+    for (const fw of expired) {
+      const unmet = fw.commitUSD - fw.spentUSD;
+      if (unmet > 0) {
+        const penalty = Math.round(unmet * FRAMEWORK_EXPIRY_PENALTY_PCT);
+        s2.cash -= penalty;
+        adjustRel(s2, fw.vendorId, FRAMEWORK_EXPIRY_REL_HIT);
+        log("bad", `${fw.vendorId} framework expired with $${Math.round(unmet).toLocaleString("en-US")} of the commitment unmet: $${penalty.toLocaleString("en-US")} take-or-pay penalty and the relationship soured. Size commitments to what you will actually buy.`);
+      } else {
+        adjustRel(s2, fw.vendorId, FRAMEWORK_EXPIRY_REL_BONUS);
+        log("good", `${fw.vendorId} framework closed out in full — the account team now takes your calls first.`);
+      }
+    }
+    for (const [vendorId, rel] of Object.entries(s2.vendorRel ?? {}))
+      s2.vendorRel[vendorId] = Math.max(0, rel - REL_DECAY_PER_MONTH);
+  }
+};
 const DEFAULT_TICK = {
   accelFailureProbPerMonth: 1 / 8e3,
   commissionFailProb: 0.04,
@@ -9934,6 +10111,7 @@ const DEFAULT_TICK = {
 const RACK_READY_LEAD = 2;
 const PIPELINE = [
   deliveries,
+  vendorsSystem,
   floorSpace,
   commissioning,
   clusterStats,
@@ -9941,6 +10119,7 @@ const PIPELINE = [
   failures,
   pue,
   serveContracts,
+  rivalsSystem,
   contractMarket,
   worldEvents,
   spotAndPower,
@@ -10039,7 +10218,7 @@ const deployActions = (c) => {
         designId,
         slot: hall.racks.length,
         status: "installing",
-        readyMonth: g.month + RACK_READY_LEAD,
+        readyMonth: g.month + RACK_READY_LEAD + burnInLeadDelta(g),
         installedMonth: g.month
       };
       hall.racks.push(rack);
@@ -10633,6 +10812,68 @@ const staffActions = (c) => {
     })
   };
 };
+const vendorsActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    signFramework: (vendorId, commitUSD, months) => commit((g) => {
+      const vendor = VENDORS.find((v2) => v2.id === vendorId);
+      if (!vendor) return fail(`Unknown vendor '${vendorId}'.`);
+      if (!Number.isFinite(commitUSD) || commitUSD < FRAMEWORK_MIN_COMMIT_USD)
+        return fail(`Commit at least $${usd(FRAMEWORK_MIN_COMMIT_USD)} of spend (you asked for $${usd(Number.isFinite(commitUSD) ? commitUSD : 0)}).`);
+      if (!Number.isInteger(months) || months < FRAMEWORK_MIN_MONTHS || months > FRAMEWORK_MAX_MONTHS)
+        return fail(`Term must be ${FRAMEWORK_MIN_MONTHS}-${FRAMEWORK_MAX_MONTHS} whole months.`);
+      if (frameworkFor(g, vendorId)) return fail(`${vendor.name} already has an active framework — one at a time per vendor.`);
+      const deposit = Math.round(commitUSD * FRAMEWORK_DEPOSIT_PCT);
+      if (g.cash < deposit) return fail(`The signing deposit is $${usd(deposit)} (5% of commit); you have $${usd(g.cash)}.`);
+      g.cash -= deposit;
+      const fw = {
+        id: `fw-${g.month}-${(g.frameworks?.length ?? 0) + 1}`,
+        vendorId,
+        commitUSD: Math.round(commitUSD),
+        spentUSD: deposit,
+        // the deposit counts toward the commitment
+        discountPct: discountPctFor(commitUSD, months),
+        startMonth: g.month,
+        endMonth: g.month + months
+      };
+      (g.frameworks ??= []).push(fw);
+      logln(g, "good", `Signed a ${months}-mo framework with ${vendor.name}: $${usd(fw.commitUSD)} committed for ${fw.discountPct}% off their parts (deposit $${usd(deposit)} credited toward the commit, runs to month ${fw.endMonth}).`);
+      return ok(`Framework with ${vendor.name} signed: ${fw.discountPct}% off, $${usd(fw.commitUSD)} over ${months} months.`);
+    }),
+    cancelFramework: (frameworkId) => commit((g) => {
+      const fws = g.frameworks ?? [];
+      const i = fws.findIndex((f) => f.id === frameworkId);
+      if (i < 0) return fail("Framework not found.");
+      const fw = fws[i];
+      const name = VENDORS.find((v2) => v2.id === fw.vendorId)?.name ?? fw.vendorId;
+      const unmet = fw.commitUSD - fw.spentUSD;
+      if (unmet > 0) {
+        const penalty = Math.round(unmet * FRAMEWORK_CANCEL_PENALTY_PCT);
+        if (g.cash < penalty) return fail(`Walking away costs $${usd(penalty)} (20% of the $${usd(unmet)} unmet commitment) but you only have $${usd(g.cash)}.`);
+        g.cash -= penalty;
+        adjustRel(g, fw.vendorId, FRAMEWORK_CANCEL_REL_HIT);
+        fws.splice(i, 1);
+        logln(g, "bad", `Cancelled the ${name} framework with $${usd(unmet)} of the commitment unmet: $${usd(penalty)} penalty paid and the relationship soured.`);
+        return ok(`Cancelled ${name} framework for a $${usd(penalty)} penalty.`);
+      }
+      fws.splice(i, 1);
+      logln(g, "info", `Closed out the ${name} framework — commitment fully spent, no penalty.`);
+      return ok(`Cancelled ${name} framework: commitment met, nothing owed.`);
+    })
+  };
+};
+const policyActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    setPolicy: (burnInMonths, maintenance) => commit((g) => {
+      if (!Number.isInteger(burnInMonths) || burnInMonths < 0 || burnInMonths > 3) return fail("Burn-in must be 0–3 months.");
+      if (!Number.isInteger(maintenance) || maintenance < 0 || maintenance > 2) return fail("Maintenance level must be 0, 1 or 2.");
+      g.policy = { burnInMonths, maintenance };
+      logln(g, "info", `Policy: ${burnInMonths}-month burn-in, ${["reactive", "preventive", "premium"][maintenance]} maintenance ($${MAINT_COST_PER_RACK[maintenance]}/rack/mo). Applies to racks placed from now on and to future failures.`);
+      return ok("Policy updated.");
+    })
+  };
+};
 const DOMAINS = {
   procure: procureActions,
   design: designActions,
@@ -10644,7 +10885,9 @@ const DOMAINS = {
   energy: energyActions,
   session: sessionActions,
   lifecycle: lifecycleActions,
-  staff: staffActions
+  staff: staffActions,
+  vendors: vendorsActions,
+  policy: policyActions
 };
 const composeActions = (c) => Object.assign({}, ...Object.values(DOMAINS).map((f) => f(c)));
 const selectCapexBasis = estimateCapexBasis;
@@ -11645,7 +11888,102 @@ const sessionQueries = {
   saves: () => listSaves(),
   endReport: () => ({ status: G$1().status ?? "playing", report: G$1().endReport ?? null })
 };
-const PARTS = { design: designQueries, catalog: catalogQueries, facility: facilityQueries, contracts: contractsQueries, economy: economyQueries, knowledge: knowledgeQueries, lifecycle: lifecycleQueries, staffing: staffingQueries, session: sessionQueries };
+const rivalsQueries = {
+  rivals: () => {
+    const g = G$1();
+    const rivals = g.rivals ?? [];
+    const rivalAccels = rivals.reduce((n, r) => n + r.accels, 0);
+    const mine = onlineAccels(g);
+    const shareOf = (accels) => mine + rivalAccels > 0 ? accels / (mine + rivalAccels) * 100 : 0;
+    const top = [...rivals].sort((a, b) => b.accels - a.accels)[0];
+    return {
+      rivals: rivals.map((r) => ({
+        id: r.id,
+        name: r.name,
+        style: r.style,
+        accels: Math.round(r.accels),
+        priceMult: Math.round(r.priceMult * 100) / 100,
+        sharePct: Math.round(shareOf(r.accels) * 10) / 10
+      })),
+      priceIndex: g.marketPriceIndex ?? 1,
+      playerAccels: mine,
+      playerSharePct: Math.round(shareOf(mine) * 10) / 10,
+      headline: top ? `${top.name} runs ${Math.round(top.accels).toLocaleString("en-US")} accelerators at ${Math.round(top.priceMult * 100)}% of list pricing.` : "No rival operators tracked yet."
+    };
+  }
+};
+const vendorsQueries = {
+  vendors: () => {
+    const g = G$1();
+    return VENDORS.filter((v2) => (g.vendorRel?.[v2.id] ?? 0) > 0 || (g.frameworks ?? []).some((f) => f.vendorId === v2.id)).map((v2) => {
+      const fw = frameworkFor(g, v2.id);
+      return {
+        id: v2.id,
+        name: v2.name,
+        rel: g.vendorRel?.[v2.id] ?? 0,
+        capMult: Math.round(capMultiplier(g, v2.id) * 100) / 100,
+        relDiscountPct: Math.round(relDiscount(g, v2.id) * 1e3) / 10,
+        framework: fw ? { id: fw.id, commitUSD: fw.commitUSD, spentUSD: fw.spentUSD, discountPct: fw.discountPct, endMonth: fw.endMonth } : null
+      };
+    });
+  },
+  frameworkQuote: (vendorId, commitUSD, months) => {
+    const g = G$1();
+    const invalid = (reason) => ({ discountPct: 0, depositUSD: 0, valid: false, reason });
+    if (!VENDORS.some((v2) => v2.id === vendorId)) return invalid(`Unknown vendor '${vendorId}'.`);
+    if (!Number.isFinite(commitUSD) || commitUSD < FRAMEWORK_MIN_COMMIT_USD) return invalid(`Commit at least $${FRAMEWORK_MIN_COMMIT_USD.toLocaleString("en-US")}.`);
+    if (!Number.isInteger(months) || months < FRAMEWORK_MIN_MONTHS || months > FRAMEWORK_MAX_MONTHS)
+      return invalid(`Term must be ${FRAMEWORK_MIN_MONTHS}-${FRAMEWORK_MAX_MONTHS} whole months.`);
+    if (frameworkFor(g, vendorId)) return invalid("A framework with this vendor is already active.");
+    const depositUSD = Math.round(commitUSD * FRAMEWORK_DEPOSIT_PCT);
+    if (g.cash < depositUSD) return invalid(`Signing deposit $${depositUSD.toLocaleString("en-US")} exceeds cash on hand.`);
+    return { discountPct: discountPctFor(commitUSD, months), depositUSD, valid: true, reason: "" };
+  }
+};
+const previewQueries = {
+  preview: () => {
+    const g = G$1();
+    const next = g.month + 1;
+    const deliveries2 = g.orders.filter((o2) => o2.arriveMonth <= next).map((o2) => ({ item: getItem(o2.itemId)?.name ?? o2.itemId, qty: o2.qty, spare: !!o2.spare }));
+    const racks = g.halls.flatMap((h) => h.racks);
+    const commissioning2 = racks.filter((r) => r.status === "installing" && next >= r.readyMonth - 1).length;
+    const online = racks.filter((r) => r.status === "commissioning" && next >= r.readyMonth).length;
+    const repaired = racks.filter((r) => r.status === "failed" && next >= r.readyMonth).length;
+    const floor = g.halls.flatMap((h) => (h.expansions ?? []).filter((e) => e.readyMonth <= next).map((e) => ({ hall: h.name, slots: e.units * 10 })));
+    const walkAway = g.activeContracts.filter((a) => a.clusterIds.length === 0 && (a.deployBy ?? a.startMonth + 4) <= next).map((a) => a.contract.customer);
+    const expiring = g.availableContracts.filter((c) => c.deadlineMonth <= g.month).map((c) => c.customer);
+    const completing = g.activeContracts.filter((a) => a.clusterIds.length > 0 && a.monthsServed + 1 >= a.contract.durationMonths).map((a) => a.contract.customer);
+    const pnl = selectMonthlyPnL(g);
+    const cashDelta = pnl.revenue - pnl.opex - pnl.interest;
+    const need = staffNeeded(g);
+    const warnings = [];
+    if (g.cash + cashDelta < 0) warnings.push(`Cash would go negative (${Math.round(g.cash + cashDelta).toLocaleString("en-US")}).`);
+    if (walkAway.length) warnings.push(`${walkAway.join(", ")}: last month to bring capacity online or they walk.`);
+    if (g.staff < need.needed) warnings.push(`Understaffed: ${g.staff}/${need.needed} operators.`);
+    if (g.status && g.status !== "playing") warnings.push("Game over.");
+    return {
+      month: g.month,
+      nextMonth: next,
+      deliveries: deliveries2,
+      racks: { commissioning: commissioning2, online, repaired },
+      floor,
+      walkAway,
+      expiring,
+      completing,
+      revenue: Math.round(pnl.revenue),
+      opex: Math.round(pnl.opex),
+      interest: Math.round(pnl.interest),
+      cashDelta: Math.round(cashDelta),
+      cashAfter: Math.round(g.cash + cashDelta),
+      runwayMonths: cashDelta < 0 ? Math.floor(g.cash / -cashDelta) : null,
+      policy: policyOf(g),
+      maintenanceUSD: Math.round(maintenanceUSD(g)),
+      staff: { have: g.staff, needed: need.needed },
+      warnings
+    };
+  }
+};
+const PARTS = { design: designQueries, catalog: catalogQueries, facility: facilityQueries, contracts: contractsQueries, economy: economyQueries, knowledge: knowledgeQueries, lifecycle: lifecycleQueries, staffing: staffingQueries, session: sessionQueries, rivals: rivalsQueries, vendors: vendorsQueries, preview: previewQueries };
 const QUERIES = {};
 for (const [domain, qs] of Object.entries(PARTS)) for (const [name, fn] of Object.entries(qs)) {
   if (name in QUERIES) throw new Error(`duplicate query '${name}' (domain ${domain})`);

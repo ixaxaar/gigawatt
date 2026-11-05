@@ -29,6 +29,7 @@ var guide: GuideOverlay
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
+	Settings.load_all(); Settings.apply(get_window())
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
@@ -42,6 +43,8 @@ func _ready() -> void:
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
+	if OS.get_environment("GW_SMOKE") != "": _smoke(); return
+	if OS.get_environment("GW_SETTINGS") != "": _settings()
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
@@ -96,6 +99,7 @@ func _title() -> void:
 		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): h.queue_free(); _new_game(m[0]), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	b.act("newGame", [7, "operator"]); _demo_hall()
 	vb.add_child(Kit.btn("CONTINUE SAVED GAME", func(): _slots("load", func(): h.queue_free(); _begin()), "", 18))
+	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
 	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
 	vb.add_child(Kit.label("Right-drag orbit · wheel zoom · WASD pan · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
@@ -106,6 +110,15 @@ func _demo_hall() -> void: pass
 func _load_scenario(id: String) -> void:
 	b.env("reset", [{"scenario": id}]); b.act("setMode", ["operator"]); _begin()
 	hall.hall_i = clampi(int(OS.get_environment("GW_HALL")) if OS.get_environment("GW_HALL") != "" else 0, 0, b.g.halls.size() - 1); hall.rebuild()
+	if OS.get_environment("GW_CLUSTERS") != "":   # screenshots: group online racks of the shown hall into 6-rack clusters
+		var ids := []; for r in b.g.halls[hall.hall_i].racks:
+			if r.status == "online" and (r.get("clusterId") == null or r.clusterId == ""): ids.append(r.id)
+		var made := 0
+		for k in range(0, mini(ids.size(), 6 * int(OS.get_environment("GW_CLUSTERS"))), 6):
+			var sel := ids.slice(k, k + 6); var fab = b.q("autoFabric", [sel, 1.0])
+			if fab != null and b.act("createCluster", ["C%d" % made, sel, fab.fabric]).get("ok", false): made += 1
+		print("CLUSTERS made=", made, " halls=", b.g.halls.map(func(h): return h.racks.size()))
+		hall.rebuild()
 	if OS.get_environment("GW_THERMAL") != "": hall.thermal = true; hall.rebuild()
 	var cam := OS.get_environment("GW_CAM")
 	if cam == "auto":
@@ -146,7 +159,11 @@ func _on_changed() -> void:
 var quiet := false
 func toast(text: String, level := "info") -> void:
 	if quiet: return
-	audio.play("good" if level == "good" else ("bad" if level == "bad" else "click"))
+	var cue := "good" if level == "good" else ("bad" if level == "bad" else "click")
+	var low := text.to_lower()
+	if level == "bad" and ("fire" in low or "outage" in low or "cut" in low or "went down" in low or "failed" in low): cue = "alarm"
+	elif level == "good" and ("online" in low or "commissioned" in low): cue = "online"
+	audio.play(cue)
 	var p := PanelContainer.new(); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
 	p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.12, 0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
 	while toasts.get_child_count() > 5: toasts.get_child(0).queue_free(); toasts.remove_child(toasts.get_child(0))
@@ -228,18 +245,55 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if not started:
 		if e.keycode == KEY_ESCAPE: get_tree().quit()
 		return
+	if e.keycode == KEY_F1: _settings(); return
 	if e.keycode == KEY_SPACE: next_month(); return
 	if e.keycode >= KEY_1 and e.keycode <= KEY_9: show_screen(SCREENS[e.keycode - KEY_1][0])
 	elif e.keycode == KEY_0: show_screen("codex")
 	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
 
 
+
+## CI smoke test (GW_SMOKE=1): load the campus scenario, open every screen, act a little, quit. Prints SMOKE OK.
+func _smoke() -> void:
+	quiet = true; _load_scenario("stress-campus")
+	for sc in SCREENS:
+		show_screen(sc[0]); await get_tree().process_frame; await get_tree().process_frame
+	b.act("nextMonth"); b.act("hireStaff", [1]); b.q("lifecycle"); b.q("staffing"); b.q("endReport")
+	_settings(); await get_tree().process_frame; _settings()
+	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
+	b.stop(); get_tree().quit()
+
+# ---------- settings + controls ----------
+var settings_ui: Control
+const CONTROLS := "[b]Space[/b] next month   [b]1-9, 0[/b] screens   [b]T[/b] thermal view   [b]Esc[/b] menu   [b]F1[/b] this panel\n[b]Right-drag[/b] orbit   [b]Wheel[/b] zoom   [b]WASD[/b] pan   [b]Q/E[/b] rotate   [b]Ctrl+Q[/b] quit\n[b]Speed buttons[/b] pause / 1x / 2x / 3x auto-advance"
+func _settings() -> void:
+	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; return
+	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -360; pn.offset_right = 360; pn.offset_top = -215; pn.offset_bottom = 215
+	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 24)); h.add_child(pn)
+	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
+	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
+	var vol := _slider_row(vb, "Volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
+	var scl := _slider_row(vb, "UI scale", 0.8, 1.5, Settings.ui_scale, func(v): Settings.ui_scale = snappedf(v, 0.05); Settings.apply(get_window()); Settings.save_all())
+	var cb := CheckBox.new(); cb.text = "Colour-blind-safe cluster palette"; cb.button_pressed = Settings.colorblind; cb.toggled.connect(func(on): Settings.colorblind = on; Settings.save_all(); hall.rebuild()); vb.add_child(cb)
+	var rm := CheckBox.new(); rm.text = "Reduced motion (no auto-orbit camera)"; rm.button_pressed = Settings.reduced_motion; rm.toggled.connect(func(on): Settings.reduced_motion = on; Settings.save_all()); vb.add_child(rm)
+	vb.add_child(Kit.label("CONTROLS", 14, Kit.DIM)); vb.add_child(Kit.rich(CONTROLS, 15))
+	vb.add_child(Kit.btn("Close", func(): settings_ui.queue_free(); settings_ui = null, "pri", 18))
+	vol.grab_focus()
+
+func _slider_row(parent: Control, title: String, lo: float, hi: float, val: float, on_change: Callable) -> HSlider:
+	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); parent.add_child(r)
+	var l := Kit.label(title, 16, Kit.TX); l.custom_minimum_size = Vector2(130, 0); r.add_child(l)
+	var s := HSlider.new(); s.min_value = lo; s.max_value = hi; s.step = 0.05; s.value = val; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.custom_minimum_size = Vector2(320, 24); s.value_changed.connect(on_change); r.add_child(s)
+	return s
+
 # ---------- game over + save slots ----------
 var end_ui: Control
 func _check_end() -> void:
 	var st: String = b.g.get("status", "playing")
 	if st == "playing" or end_ui != null or end_seen: return
-	speed = 0; clock = 0.0
+	speed = 0; clock = 0.0; audio.play("gameover")
 	var rep: Dictionary = b.q("endReport").get("report", {})
 	if rep.is_empty(): return
 	var won: bool = rep.reason == "horizon"; var col: Color = Kit.GR if won else Kit.RD
@@ -292,13 +346,14 @@ func _menu() -> void:
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -190; vb.offset_bottom = 190; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
-	for a in [["Resume", "resume"], ["Save game", "save"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Settings", "settings"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
 		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
 
 func _menu_do(a: String) -> void:
 	match a:
 		"resume": _menu()
 		"save": _menu(); _slots("save")
+		"settings": _menu(); _settings()
 		"mute": audio.muted = not audio.muted
 		"title": b.act("save"); b.stop(); get_tree().reload_current_scene()
 		"quit":

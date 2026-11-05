@@ -2,6 +2,7 @@
 import { getItem } from '../../data';
 import type { GameStore } from '../api';
 import { RACK_READY_LEAD } from '../../sim/tick';
+import { burnInLeadDelta } from '../../sim/policy';
 import { validateRack } from '../../sim/validate';
 import { PlacedRack, ValidationIssue } from '../../types';
 import { COOL_LEVEL, fail, ok, usd } from './consts';
@@ -76,7 +77,7 @@ export const deployActions = (c: Ctx): Partial<GameStore> => {
           designId,
           slot: hall.racks.length,
           status: 'installing',
-          readyMonth: g.month + RACK_READY_LEAD,
+          readyMonth: g.month + RACK_READY_LEAD + burnInLeadDelta(g),
           installedMonth: g.month,
         };
         hall.racks.push(rack);

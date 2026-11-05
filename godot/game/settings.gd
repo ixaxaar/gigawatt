@@ -1,0 +1,27 @@
+class_name Settings
+extends RefCounted
+## User preferences (user://settings.cfg): volume, UI scale, colour-blind palette, reduced motion.
+static var volume := 0.8
+static var ui_scale := 1.0
+static var colorblind := false
+static var reduced_motion := false
+const PATH := "user://settings.cfg"
+
+static func load_all() -> void:
+	var c := ConfigFile.new()
+	if c.load(PATH) != OK: return
+	volume = clampf(float(c.get_value("a", "volume", 0.8)), 0.0, 1.0)
+	ui_scale = clampf(float(c.get_value("a", "ui_scale", 1.0)), 0.8, 1.5)
+	colorblind = bool(c.get_value("a", "colorblind", false))
+	reduced_motion = bool(c.get_value("a", "reduced_motion", false))
+
+static func save_all() -> void:
+	var c := ConfigFile.new()
+	c.set_value("a", "volume", volume); c.set_value("a", "ui_scale", ui_scale)
+	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion)
+	c.save(PATH)
+
+## Push the current values into the engine (call after load and after every change).
+static func apply(window: Window) -> void:
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
+	window.content_scale_factor = ui_scale

@@ -23,8 +23,27 @@ jobs:
       - run: ./node_modules/.bin/tsc --noEmit
       - run: ./node_modules/.bin/vitest run
 
-  export:
+  smoke:
     needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Godot
+        run: |
+          base=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
+          curl -fsSL -o godot.zip $base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q godot.zip && sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+      - name: UI smoke test (every screen, campus scenario)
+        run: |
+          godot --headless --path godot --import || true
+          GW_SMOKE=1 timeout 180 godot --headless --path godot 2>&1 | tee smoke.log
+          grep -q "SMOKE OK" smoke.log
+          ! grep -E "SCRIPT ERROR|Parse Error" smoke.log
+
+  export:
+    needs: [test, smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

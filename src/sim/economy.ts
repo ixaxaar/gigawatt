@@ -1,6 +1,7 @@
 import type { ActiveContract, GameState, RackDesign, TrayDesign } from '../types';
 import { getItem } from '../data';
 import { uplinkMonthlyUSD } from './internet';
+import { maintenanceUSD } from './policy';
 
 export const HOURS_PER_MONTH = 730;
 export const STAFF_COST_PER_MONTH = 12000;
@@ -24,6 +25,7 @@ export interface OpexBreakdown {
   staffUSD: number;
   supportUSD: number;
   networkUSD: number;
+  maintenanceUSD: number;
   totalUSD: number;
 }
 
@@ -47,6 +49,7 @@ export function monthlyOpex(state: GameState, opts: OpexOptions = {}): OpexBreak
   const staffUSD = state.staff * (opts.staffCostPerMonth ?? STAFF_COST_PER_MONTH);
   const supportUSD = ((opts.capexUSD ?? estimateCapexBasis(state)) * SUPPORT_RATE_PER_YEAR) / 12;
   const networkUSD = uplinkMonthlyUSD(state);
+  const maintenance = maintenanceUSD(state);
   return {
     itPowerKW,
     pue,
@@ -55,7 +58,8 @@ export function monthlyOpex(state: GameState, opts: OpexOptions = {}): OpexBreak
     staffUSD,
     supportUSD,
     networkUSD,
-    totalUSD: powerUSD + staffUSD + supportUSD + networkUSD,
+    maintenanceUSD: maintenance,
+    totalUSD: powerUSD + staffUSD + supportUSD + networkUSD + maintenance,
   };
 }
 

@@ -132,6 +132,7 @@ func rebuild() -> void:
 		else: _build_slot(i, p)
 	_build_plant(hall, sz, cx, cz)
 	_build_overhead(sz, cx)
+	_build_cables(hall)
 	if ratio > 1.0 and heat > 0.0:
 		_beacon = OmniLight3D.new(); _beacon.light_color = Color(1, 0.1, 0.05); _beacon.omni_range = 14.0; _beacon.position = Vector3(cx, 3.8, cz); dyn.add_child(_beacon)
 	_update_cam()
@@ -218,13 +219,13 @@ func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
 func _cluster_of(r: Dictionary) -> Dictionary:
 	var cid = r.get("clusterId")
 	if cid == null or cid == "": return {}
-	var idx := 0; var nm := str(cid)
+	var nm := str(cid)
 	for k in b.g.clusters.size():
-		if b.g.clusters[k].id == cid: idx = k; nm = b.g.clusters[k].name
+		if b.g.clusters[k].id == cid: nm = b.g.clusters[k].name
 	var cust := ""
 	for a in b.g.activeContracts:
 		if a.clusterIds.has(cid): cust = (cust + ", " if cust != "" else "") + str(a.contract.customer)
-	return {"id": cid, "name": nm, "customer": cust, "color": Color.from_hsv(fmod(idx * 0.137 + 0.02, 1.0), 0.75, 1.0)}
+	return {"id": cid, "name": nm, "customer": cust, "color": Kit.cluster_color(b.g, cid)}
 
 func cluster_info(r: Dictionary) -> Dictionary: return _cluster_of(r)
 
@@ -293,6 +294,30 @@ func _build_plant(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 	if plant.is_empty():
 		var l := OmniLight3D.new(); l.light_color = Color(1, 0.3, 0.2); l.light_energy = 1.0; l.omni_range = 8.0; l.position = Vector3(cx, 2.5, cz); dyn.add_child(l)
 
+## Overhead scale-out cabling: each cluster's racks are strung together by a coloured run above the cable trays.
+func _build_cables(hall: Dictionary) -> void:
+	if hall.racks.size() > 300 or hall.racks.size() < 2: return
+	var by := {}
+	for r in hall.racks:
+		var cid = r.get("clusterId")
+		if cid == null or cid == "" or r.status == "ordered": continue
+		if not by.has(cid): by[cid] = []
+		by[cid].append(int(r.slot))
+	var n := 0
+	for cid in by:
+		var slots: Array = by[cid]; slots.sort()
+		if slots.size() < 2: continue
+		var col: Color = Kit.cluster_color(b.g, cid); var mat := _emit(col, 1.8, false); var y := 2.8 + float(n % 3) * 0.07; n += 1
+		for k in slots.size():
+			var p := slot_pos(slots[k])
+			_cyl(dyn, Vector3(p.x, (RH + y) * 0.5, p.z), 0.03, y - RH, mat, "y")
+			if k == 0: continue
+			var q := slot_pos(slots[k - 1])
+			if absf(p.z - q.z) < 0.01: _cyl(dyn, Vector3((p.x + q.x) * 0.5, y, p.z), 0.03, absf(p.x - q.x), mat, "x")
+			else:
+				_cyl(dyn, Vector3(q.x, y, (p.z + q.z) * 0.5), 0.03, absf(p.z - q.z), mat, "z")
+				_cyl(dyn, Vector3((p.x + q.x) * 0.5, y, p.z), 0.03, absf(p.x - q.x), mat, "x")
+
 func _build_overhead(sz: Vector2, cx: float) -> void:
 	var tray := _solid(Color(0.32, 0.33, 0.36), 0.4, 0.85)
 	var bus := _solid(Color(0.62, 0.63, 0.65), 0.4, 0.7)
@@ -321,7 +346,7 @@ func _update_cam() -> void:
 
 func _process(dt: float) -> void:
 	_t += dt
-	if auto_orbit: yaw += dt * 0.04; _update_cam()
+	if auto_orbit and not Settings.reduced_motion: yaw += dt * 0.04; _update_cam()
 	if _beacon != null: _beacon.light_energy = 1.5 + 1.5 * sin(_t * 6.0)
 	var k := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): k.x -= 1

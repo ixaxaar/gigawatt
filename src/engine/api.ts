@@ -53,5 +53,10 @@ export interface GameStore {
   hireStaff: (n: number) => ActionResult;
   fireStaff: (n: number) => ActionResult;
   repayLoan: (amountUSD: number) => ActionResult;
+  /** Commit `commitUSD` of spend with a vendor for `months` months in exchange for a discount and priority. */
+  signFramework: (vendorId: string, commitUSD: number, months: number) => ActionResult;
+  cancelFramework: (frameworkId: string) => ActionResult;
+  /** Choose burn-in length (0..3 months) and maintenance level (0..2). */
+  setPolicy: (burnInMonths: number, maintenance: number) => ActionResult;
 }
 

@@ -2,6 +2,7 @@ import { getItem } from '../../data';
 import { computePUE } from '../validate';
 import { rackRates, PART_LABEL, partClass } from '../failures';
 import { staffEffect } from '../staffing';
+import { commissionFailMult, maintenanceFailMult } from '../policy';
 import type { System } from './types';
 
 /** installing → commissioning → online (or failed burn-in) → repaired. */
@@ -15,7 +16,7 @@ export const commissioning: System = {
       if (rack.status === 'installing' && s.month >= rack.readyMonth - 1) {
         rack.status = 'commissioning';
       } else if (rack.status === 'commissioning' && s.month >= rack.readyMonth) {
-        if (rng() < o.commissionFailProb) {
+        if (rng() < o.commissionFailProb * commissionFailMult(s)) {
           rack.status = 'failed';
           rack.readyMonth = s.month + o.repairMonths;
           log('bad', `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
@@ -50,7 +51,7 @@ export const failures: System = {
       if (rack.status !== 'online') continue;
       const rates = rackRates(s, rack.designId);
       const total = rates.reduce((n, r) => n + r.rate, 0) * (o.accelFailureProbPerMonth * 8000);
-      const p = Math.min(0.95, (1 - Math.exp(-total * (stressed ? 3 : 1))) * staff.failureMult);
+      const p = Math.min(0.95, (1 - Math.exp(-total * (stressed ? 3 : 1))) * staff.failureMult * maintenanceFailMult(s));
       if (p > 0 && rng() < p) {
         let pick = rng() * rates.reduce((n, r) => n + r.rate, 0);
         const part = (rates.find((r) => (pick -= r.rate) <= 0) ?? rates[0]).id;

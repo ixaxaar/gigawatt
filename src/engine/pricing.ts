@@ -1,5 +1,6 @@
 import { VENDORS } from '../data';
 import { estimateCapexBasis } from '../sim/economy';
+import { capMultiplier, frameworkDiscount, frameworkFor, relDiscount } from '../sim/vendors';
 import { CatalogItem, GameState, monthToYear } from '../types';
 
 // ---------- procurement model (deterministic: f(item, month)) ----------
@@ -70,6 +71,20 @@ export const offerAt = (item: CatalogItem, month: number): Offer => {
     unitPrice: Math.round(item.priceUSD * hype * decay * boom),
     leadMonths: lead,
     qtyCap: item.allocationPerQuarter,
+  };
+};
+
+/** offerAt for this month, adjusted for the player's vendor standing: relationship + framework
+ *  discounts off the unit price, allocation cap scaled by relationship/reputation. */
+export const offerFor = (g: GameState, item: CatalogItem): Offer => {
+  const o = offerAt(item, g.month);
+  if (!o.available) return o;
+  const fw = frameworkFor(g, item.vendor);
+  const disc = relDiscount(g, item.vendor) + (fw ? frameworkDiscount(fw) : 0);
+  return {
+    ...o,
+    unitPrice: Math.max(0, Math.round(o.unitPrice * (1 - disc))),
+    qtyCap: o.qtyCap !== undefined ? Math.floor(o.qtyCap * capMultiplier(g, item.vendor)) : undefined,
   };
 };
 

@@ -206,10 +206,28 @@ static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle:
 	if parent: parent.add_child(p)
 	return [p, body]
 
+## Okabe-Ito colour-blind-safe palette (used when Settings.colorblind).
+const CB_PALETTE := [Color("#E69F00"), Color("#56B4E9"), Color("#009E73"), Color("#F0E442"), Color("#0072B2"), Color("#D55E00"), Color("#CC79A7"), Color("#FFFFFF")]
+
 ## Stable per cluster: derived from the id itself, so disbanding another cluster never recolours this one.
 static func cluster_color(_g: Dictionary, id) -> Color:
 	var n := int(str(id).substr(3)) if str(id).length() > 3 else 0
+	if Settings.colorblind: return CB_PALETTE[n % CB_PALETTE.size()]
 	return Color.from_hsv(fmod(n * 0.137 + 0.02, 1.0), 0.75, 1.0)
+
+## Modal yes/no. `host` is any node inside the UI tree (it is parented to the top-level control).
+static func confirm(host: Node, text: String, on_yes: Callable, yes_label := "Confirm") -> void:
+	var layer: Node = host.get_tree().current_scene.get("root") if host.get_tree().current_scene != null else null
+	if layer == null: on_yes.call(); return
+	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); layer.add_child(h)
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.55); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -260; pn.offset_right = 260; pn.offset_top = -90; pn.offset_bottom = 90
+	pn.add_theme_stylebox_override("panel", sb(Color(0.03, 0.05, 0.08, 0.99), CY, 12, 2, 20)); h.add_child(pn)
+	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 14); pn.add_child(vb)
+	vb.add_child(label(text, 17, TX, true))
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); vb.add_child(row)
+	row.add_child(btn(yes_label, func(): h.queue_free(); on_yes.call(), "pri", 16))
+	row.add_child(btn("Cancel", func(): h.queue_free(), "", 16))
 
 ## Run `rebuild` (which frees and recreates the UI) without losing scroll positions.
 static func rebuild_keep(node: Control, rebuild: Callable) -> void:

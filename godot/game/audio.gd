@@ -14,6 +14,10 @@ func _ready() -> void:
 	_cues["bad"] = _tone([[300.0, 0.12], [220.0, 0.2]], 0.35)
 	_cues["incident"] = _tone([[440.0, 0.1], [0.0, 0.05], [440.0, 0.1], [330.0, 0.25]], 0.35)
 	_cues["month"] = _tone([[200.0, 0.04]], 0.12)
+	_cues["sell"] = _tone([[1040.0, 0.05], [1380.0, 0.05], [1760.0, 0.09]], 0.28)
+	_cues["online"] = _tone([[392.0, 0.08], [523.0, 0.08], [659.0, 0.08], [784.0, 0.16]], 0.3)
+	_cues["alarm"] = _tone([[880.0, 0.12], [660.0, 0.12], [880.0, 0.12], [660.0, 0.2]], 0.4)
+	_cues["gameover"] = _tone([[392.0, 0.25], [330.0, 0.25], [262.0, 0.5]], 0.4)
 	var hum := AudioStreamPlayer.new(); hum.stream = _hum(); hum.volume_db = -24.0; add_child(hum); hum.play()
 
 func play(kind: String) -> void:

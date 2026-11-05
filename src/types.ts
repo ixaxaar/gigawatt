@@ -504,7 +504,19 @@ export interface GameState {
   saveVersion?: number;
   /** Lifetime counters for objectives and the final score. */
   stats?: GameStats;
+  /** Competing operators; their capacity and pricing push the market price index. */
+  rivals?: Rival[];
+  /** Contract price multiplier from competition (1 = neutral, <1 = rivals undercut you). */
+  marketPriceIndex?: number;
+  /** Vendor framework agreements (commit spend, get discount) and relationship score 0..100 per vendor id. */
+  frameworks?: Framework[];
+  vendorRel?: Record<string, number>;
+  /** Operating policy: burn-in length and maintenance level. */
+  policy?: OpsPolicy;
 }
+export interface Rival { id: string; name: string; style: 'hyperscaler' | 'neocloud' | 'sovereign'; accels: number; priceMult: number; cash: number; aggression: number }
+export interface Framework { id: string; vendorId: string; commitUSD: number; spentUSD: number; discountPct: number; startMonth: number; endMonth: number }
+export interface OpsPolicy { /** months of burn-in before a rack goes online (0..3, default 1) */ burnInMonths: number; /** 0 reactive, 1 preventive, 2 premium */ maintenance: 0 | 1 | 2 }
 export type GameStatus = 'playing' | 'bankrupt' | 'finished';
 export interface GameStats { contractsCompleted: number; peakAccels: number; slaMisses: number; revenueTotal: number; decommissioned: number }
 export interface EndReport { reason: 'bankrupt' | 'horizon'; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
@@ -524,6 +536,8 @@ export interface PowerOffer {
 }
 export interface PowerContract extends PowerOffer { startMonth: number; endMonth: number }
 export interface Order { id: string; itemId: string; qty: number; unitPrice: number; arriveMonth: number; /** Delivered to the spares shelf instead of general stock. */ spare?: boolean; }
+/** Set on contracts offered by a returning customer after a clean run. */
+export interface RenewalTag { renewalOf?: string }
 export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number; }
 export interface LogEntry { month: number; level: 'info' | 'good' | 'bad'; text: string; }
 

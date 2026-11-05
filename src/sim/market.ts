@@ -166,7 +166,8 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
           gpuHourAnchor(year)
           * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1)
           * t.priceMult
-          * randRange(rng, 0.92, 1.15),
+          * randRange(rng, 0.92, 1.15)
+          * (state.marketPriceIndex ?? 1), // rival competition reprices fresh offers
         ),
       };
       contract.rampMonths = Math.min(20, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0));
@@ -193,7 +194,8 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
             mtokPrice(model.activeParamsB, year)
             * (tpotMs < 30 ? 1.25 : 1)
             * t.priceMult
-            * randRange(rng, 0.9, 1.2),
+            * randRange(rng, 0.9, 1.2)
+            * (state.marketPriceIndex ?? 1), // rival competition reprices fresh offers
           ),
         ),
       };
