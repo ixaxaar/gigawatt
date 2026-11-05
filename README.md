@@ -17,7 +17,10 @@ The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-mode
 | **Supercomputer** | Group racks into one machine; auto-design or hand-tune the fabric; see what it can train or serve (per-model tok/s, MFU, TTFT). Uncluster and re-cluster any time. |
 | **Customers** | Market offers with live fit verdicts and "what you need to buy"; an **Easy Path** that orders, installs, deploys and assigns for you; serve straight from racks. |
 | **Energy** | Power purchase agreements, the spot GPU market, offering idle capacity. |
+| **Operations** | Staffing (the crew you need scales with racks, liquid cooling and fabric size; understaffing raises failures and slows repairs), loans and repayment, a **hardware lifecycle** table (age, obsolescence, residual value, sell old racks), and clearing warehouse stock. |
 | **Codex** | "Datacenter 101": every concept with a live *do I need this right now?* verdict, plus the accelerator timeline. |
+
+The campaign runs Dec 2020 → Dec 2028 and ends with a scored report (net worth, reliability, scale); three months of negative cash is bankruptcy (Learner mode can't go bankrupt). Saves are versioned with three slots plus a monthly autosave.
 
 Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon** — and a mission track that teaches the stack as you go.
 
@@ -69,7 +72,7 @@ cd godot
 
 `run.sh` points Vulkan at the NVIDIA ICD and forces `forward_plus`; on hybrid AMD+NVIDIA laptops the default loader otherwise falls back to OpenGL compatibility. Edit it for your GPU, or just run `godot --path godot`.
 
-**Controls:** `1`–`9` switch screens · `Space` next month · right-drag orbit · wheel zoom · `WASD` pan · `Q/E` rotate · `T` thermal view · `Esc` menu · `Ctrl+Q` quit.
+**Controls:** `1`–`9`, `0` switch screens · `Space` next month · right-drag orbit · wheel zoom · `WASD` pan · `Q/E` rotate · `T` thermal view · `Esc` menu · `Ctrl+Q` quit.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the engine is organised and where to add actions, queries and monthly systems.
 

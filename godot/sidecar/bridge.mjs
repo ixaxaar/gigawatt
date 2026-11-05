@@ -7448,7 +7448,7 @@ function contractRevenue(ac, opts) {
   const penalty = Math.min(rawPenalty, gross * 0.25);
   return { grossUSD: gross, billableUSD: billable, penaltyUSD: penalty, netUSD: billable - penalty, slaMet };
 }
-const clamp$2 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp$3 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const r2 = (x) => Math.round(x * 100) / 100;
 const SOURCES = {
   grid: { names: ["Metro Utility", "Regional Grid Co-op", "StateWide Electric"], priceMWh: [58, 74], term: [12, 36], overdraw: [0.15, 0.3], overage: 1.4, firmness: [0.9, 0.97], lesson: "Utility firm service: reliable and flexible, priced near spot. Overdraw is tolerated until the interconnect trips." },
@@ -7522,13 +7522,13 @@ function powerMarketTick(s2, rng, log) {
 }
 const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
 function spotUtilization(price, month) {
-  return clamp$2(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
+  return clamp$3(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
 }
 function stepSpotPrice(s2, rng) {
   const anchor = spotAnchor(s2.month);
   const cur = s2.spotPrice ?? anchor;
   const shock = (rng() - 0.5) * 0.22 + (rng() < 0.06 ? rng() < 0.5 ? 0.35 : -0.3 : 0);
-  const next = clamp$2(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
+  const next = clamp$3(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
   s2.spotPrice = r2(next);
   s2.spotHistory = [...s2.spotHistory ?? [], s2.spotPrice].slice(-24);
 }
@@ -7550,9 +7550,86 @@ function spotRevenue(s2, servedClusterIds, accelsOfDesign = () => 0) {
   }
   return { revenue: accels * util * price * HOURS_PER_MONTH, accels, util };
 }
+const POWER_LESSON = Object.fromEntries(Object.entries(POWER_SOURCES).map(([k2, v2]) => [k2, v2.lesson]));
+const SAVE_KEY = "gigawatt-save-v1";
+const ok = (message = "", issues) => ({ ok: true, message, issues });
+const fail = (message, issues) => ({ ok: false, message, issues });
+const usd = (n) => Math.round(n).toLocaleString("en-US");
+const COOL_LEVEL$2 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+const POWER_FEED_TYPES = [
+  "transformer",
+  "ups",
+  "busway",
+  "power-shelf",
+  "solar-ppa",
+  "gas-turbine"
+];
+const SAVE_VERSION = 2;
+const DEFAULT_SLOT = "main";
+const INDEX_KEY = "gigawatt-saves";
+const slotKey = (slot) => slot === DEFAULT_SLOT ? SAVE_KEY : `gigawatt-save-${slot}`;
+const MIGRATIONS = {
+  // v1 -> v2: rack install dates + serials, lifetime stats, game status; PDUs wrongly installed into halls go back to the warehouse.
+  1: (g) => {
+    for (const h of g.halls) {
+      for (const [id, n] of Object.entries(h.powerEquip ?? {})) {
+        const it2 = getItem(id);
+        if (it2?.kind === "power" && (it2.powerType === "pdu" || it2.powerType === "power-shelf")) {
+          g.inventory[id] = (g.inventory[id] ?? 0) + n;
+          delete h.powerEquip[id];
+          if (POWER_FEED_TYPES.includes(it2.powerType)) h.itPowerKW = Math.max(0, h.itPowerKW - n * it2.capacityKW);
+        }
+      }
+      for (const r of h.racks) {
+        r.installedMonth ??= r.readyMonth - 2;
+        if (r.serial == null) r.serial = g.rackSeq = (g.rackSeq ?? 0) + 1;
+      }
+    }
+    g.stats ??= { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 };
+    g.status ??= "playing";
+  }
+};
+function migrate(g) {
+  if (typeof g?.month !== "number" || typeof g.cash !== "number" || !Array.isArray(g.halls) || !Array.isArray(g.clusters)) return "Save file corrupted.";
+  let v2 = g.saveVersion ?? 1;
+  if (v2 > SAVE_VERSION) return `Save is from a newer version (v${v2}); update the game.`;
+  for (; v2 < SAVE_VERSION; v2++) MIGRATIONS[v2]?.(g);
+  g.saveVersion = SAVE_VERSION;
+  return null;
+}
+const readIndex = () => {
+  try {
+    return JSON.parse(localStorage.getItem(INDEX_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+};
+function writeSlot(slot, g) {
+  try {
+    localStorage.setItem(slotKey(slot), JSON.stringify({ ...g, saveVersion: SAVE_VERSION }));
+    const idx = readIndex();
+    idx[slot] = { slot, month: g.month, cash: g.cash, debt: g.debt, racks: g.halls.reduce((n, h) => n + h.racks.length, 0), mode: g.mode ?? "operator", status: g.status ?? "playing" };
+    localStorage.setItem(INDEX_KEY, JSON.stringify(idx));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function readSlot(slot) {
+  try {
+    const raw = localStorage.getItem(slotKey(slot));
+    if (!raw) return { error: "No save found." };
+    const g = JSON.parse(raw);
+    const err2 = migrate(g);
+    return err2 ? { error: err2 } : { game: g };
+  } catch {
+    return { error: "Save file unreadable." };
+  }
+}
+const listSaves = () => Object.values(readIndex()).sort((a, b) => (a.slot === "auto" ? 1 : 0) - (b.slot === "auto" ? 1 : 0) || b.month - a.month);
 const NVME_LANES_PER_DRIVE = 4;
 const GPUS_PER_SPINE_TRAY = 8;
-const COOL_LEVEL$2 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 const err = (code, message, learn) => ({ severity: "error", code, message, learn });
 function partFitsSlot(slot, item) {
   switch (slot.kind) {
@@ -7771,7 +7848,7 @@ function validateRack(design, trays, get) {
             chassis.id
           ));
         }
-        if (COOL_LEVEL$2[chassis.cooling] > COOL_LEVEL$2[design.coolingInterface]) {
+        if (COOL_LEVEL$1[chassis.cooling] > COOL_LEVEL$1[design.coolingInterface]) {
           issues.push(err(
             "RACK_TRAY_COOLING",
             `${chassis.name} trays need ${chassis.cooling.toUpperCase()} cooling but this rack's interface is '${design.coolingInterface}' — liquid-cooled trays have cold plates plumbed to rack manifolds; without them the tray cooks.`,
@@ -7892,7 +7969,7 @@ function validateHall(hall, racks, get) {
     const rv = validateRack(ctx.design, ctx.trays, get);
     issues.push(...rv.issues);
     itKW += rv.stats.kW;
-    if (COOL_LEVEL$2[ctx.design.coolingInterface] > COOL_LEVEL$2[hall.coolingClass]) {
+    if (COOL_LEVEL$1[ctx.design.coolingInterface] > COOL_LEVEL$1[hall.coolingClass]) {
       issues.push(err(
         "HALL_COOLING_CLASS",
         `Rack design '${ctx.design.name}' needs a ${ctx.design.coolingInterface} row but the hall is ${hall.coolingClass}-class. A liquid rack without facility coolant (CDUs, chilled water) is a very expensive space heater — upgrade the hall's cooling class or use air trays.`,
@@ -8092,7 +8169,11 @@ function newGameState(seed) {
     powerOffers: [],
     powerContracts: [],
     spotClusters: [],
-    spotReserve: 0
+    spotReserve: 0,
+    status: "playing",
+    negCashMonths: 0,
+    saveVersion: SAVE_VERSION,
+    stats: { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 }
   };
   g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
   g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));
@@ -8108,20 +8189,6 @@ function newGameState(seed) {
   });
   return g;
 }
-const POWER_LESSON = Object.fromEntries(Object.entries(POWER_SOURCES).map(([k2, v2]) => [k2, v2.lesson]));
-const SAVE_KEY = "gigawatt-save-v1";
-const ok = (message = "", issues) => ({ ok: true, message, issues });
-const fail = (message, issues) => ({ ok: false, message, issues });
-const usd = (n) => Math.round(n).toLocaleString("en-US");
-const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
-const POWER_FEED_TYPES = [
-  "transformer",
-  "ups",
-  "busway",
-  "power-shelf",
-  "solar-ppa",
-  "gas-turbine"
-];
 function makeCtx(get, set) {
   return {
     get,
@@ -9215,6 +9282,28 @@ const floorSpace = {
     }
   }
 };
+const RECRUIT_COST_USD = 15e3;
+const SEVERANCE_USD = 2 * STAFF_COST_PER_MONTH;
+function staffNeeded(g) {
+  let onlineRacks2 = 0;
+  let liquidOnline = false;
+  for (const h of g.halls) {
+    const on = h.racks.filter((r) => r.status === "online").length;
+    onlineRacks2 += on;
+    if (on > 0 && (h.coolingClass === "dlc" || h.coolingClass === "immersion")) liquidOnline = true;
+  }
+  const accels = g.clusters.reduce((n, cl) => n + (cl.stats?.accelerators ?? 0), 0);
+  const breakdown = [];
+  if (onlineRacks2 > 0) breakdown.push({ label: "ops technicians", n: Math.ceil(onlineRacks2 / 10) });
+  if (liquidOnline) breakdown.push({ label: "liquid-cooling specialist", n: 1 });
+  if (accels > 0) breakdown.push({ label: "network engineers", n: Math.ceil(accels / 1024) });
+  return { needed: Math.max(1, breakdown.reduce((n, b) => n + b.n, 0)), breakdown };
+}
+function staffEffect(g) {
+  const { needed } = staffNeeded(g);
+  const shortfall = Math.max(0, needed - g.staff) / needed;
+  return { failureMult: 1 + 1.5 * shortfall, repairExtraMonths: shortfall >= 0.34 ? 1 : 0 };
+}
 const commissioning = {
   id: "commissioning",
   run: (c) => {
@@ -9246,6 +9335,7 @@ const failures = {
   id: "failures",
   run: (c) => {
     const { s: s2, o: o2, rng, log } = c;
+    const staff = staffEffect(s2);
     const onlineKW = s2.clusters.reduce((n, cl) => n + (cl.stats?.powerKW ?? 0), 0);
     const coolingKW = s2.halls.reduce((n, h) => n + h.coolingKW, 0);
     const stressed = coolingKW < onlineKW;
@@ -9254,7 +9344,7 @@ const failures = {
       if (rack.status !== "online") continue;
       const rates = rackRates(s2, rack.designId);
       const total = rates.reduce((n, r) => n + r.rate, 0) * (o2.accelFailureProbPerMonth * 8e3);
-      const p = 1 - Math.exp(-total * (stressed ? 3 : 1));
+      const p = Math.min(0.95, (1 - Math.exp(-total * (stressed ? 3 : 1))) * staff.failureMult);
       if (p > 0 && rng() < p) {
         let pick2 = rng() * rates.reduce((n, r) => n + r.rate, 0);
         const part = (rates.find((r) => (pick2 -= r.rate) <= 0) ?? rates[0]).id;
@@ -9266,7 +9356,7 @@ const failures = {
           rack.readyMonth = s2.month + 1;
           log("info", `${rack.id}: ${label} failed (${getItem(part)?.name}); swapping from your spares — back next month.`);
         } else {
-          rack.readyMonth = s2.month + o2.repairMonths;
+          rack.readyMonth = s2.month + o2.repairMonths + staff.repairExtraMonths;
           log("bad", `${rack.id}: ${label} failed (${getItem(part)?.name}) and you have NO SPARE. Waiting on RMA until month ${rack.readyMonth}. Keep spares in the warehouse.`);
         }
         failedNow++;
@@ -9289,12 +9379,12 @@ const STRAGGLER = 1.15;
 const PREFILL_MFU = 0.5;
 const FP8_UTIL = 0.75;
 const GB = 1e9;
-const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp$2 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const peakAt = (a, d) => {
   if (d && a.tflops[d]) return a.tflops[d];
   return a.tflops.bf16 ?? a.tflops.fp16 ?? a.tflops.tf32 ?? Math.max(0, ...Object.values(a.tflops));
 };
-const domainOf = (stats, n) => clamp$1(Math.round(stats.scaleUpDomain) || 1, 1, n);
+const domainOf = (stats, n) => clamp$2(Math.round(stats.scaleUpDomain) || 1, 1, n);
 function trainingTokensPerSec(stats, accel, model, opts = {}) {
   const issues = [];
   const N = Math.max(1, Math.round(stats.accelerators));
@@ -9343,9 +9433,9 @@ function trainingTokensPerSec(stats, accel, model, opts = {}) {
       learn: accel.id
     });
   }
-  const overlap = clamp$1(opts.commOverlap ?? 0.5, 0, 0.9);
+  const overlap = clamp$2(opts.commOverlap ?? 0.5, 0, 0.9);
   const stepSec = tC + (tSu + tSo) * (1 - overlap) * STRAGGLER;
-  const mfu = clamp$1(tC / stepSec * TRAIN_CEILING * accel.softwareMaturity * accel.trainingAffinity, 5e-3, 0.65);
+  const mfu = clamp$2(tC / stepSec * TRAIN_CEILING * accel.softwareMaturity * accel.trainingAffinity, 5e-3, 0.65);
   const tokensPerSec = N * peak * 1e12 * mfu / (6 * Pa * GB);
   return {
     mfu,
@@ -9436,7 +9526,7 @@ function inferenceCapacity(stats, accel, model, opts = {}) {
   };
 }
 const ARCH_BONUS = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
-const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const serveContracts = {
   id: "serve-contracts",
   run: (c) => {
@@ -9501,13 +9591,14 @@ const serveContracts = {
       c.revenue += res.netUSD;
       if (!res.slaMet) {
         ac.slaMisses += 1;
+        if (s2.stats) s2.stats.slaMisses += 1;
         log("bad", `SLA miss for ${k2.customer} (${k2.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(k2.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
       }
       ac.monthsServed += 1;
       if (ac.monthsServed >= k2.durationMonths) completed.push(ac);
     }
     for (const ac of defaulted) {
-      s2.reputation = clamp(s2.reputation - 8, 0, 100);
+      s2.reputation = clamp$1(s2.reputation - 8, 0, 100);
       log("bad", `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.`);
     }
     s2.activeContracts = s2.activeContracts.filter((ac) => {
@@ -9517,7 +9608,8 @@ const serveContracts = {
       const clean = ac.slaMisses === 0;
       const sloppy = ac.slaMisses > Math.ceil(k2.durationMonths / 3);
       const gain = 2 + ARCH_BONUS[k2.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
-      s2.reputation = clamp(s2.reputation + gain, 0, 100);
+      s2.reputation = clamp$1(s2.reputation + gain, 0, 100);
+      if (s2.stats) s2.stats.contractsCompleted += 1;
       log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
       return false;
     });
@@ -9569,10 +9661,68 @@ function hallResilience(hall) {
   const tier = score >= 1 ? "N+1" : score >= 0.9 ? "N" : score >= 0.5 ? "basic" : "none";
   return { score, tier, ups: ups2, backup, transfer, upsKW, gensetKW, batteryKW, gensetCount, feedB, gaps };
 }
+function scriptedEvents(s2, log) {
+  if (s2.month === 38) {
+    let units = 0;
+    for (const o2 of s2.orders) {
+      if (getItem(o2.itemId)?.kind === "accelerator" && o2.arriveMonth > s2.month) {
+        o2.arriveMonth += 2;
+        units += o2.qty;
+      }
+    }
+    log("bad", `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator(s) already in the pipeline slip 2 months. Lesson: lead times quoted in a soft market are fiction in a hot one — order ahead and hold spares.`);
+  } else if (s2.month === 52) {
+    log("info", "💧 Apr 2024 — the Blackwell generation makes liquid cooling mainstream: GB200 NVL72 racks (~120 kW) cannot be air-cooled at all. Lesson: plan the DLC transition early — CDUs, coolant quality and floor plumbing have lead times of their own.");
+  } else if (s2.month === 74) {
+    log("info", "🧲 Feb 2026 — NVIDIA opens Rubin allocation and existing AI-factory operators get first call. Lesson: vendors reward demonstrated deployments — a campus that ships on schedule is your ticket to the next generation.");
+  }
+}
+function disasterPool(s2, rng, log) {
+  const pool = [];
+  const live = s2.halls.filter((h) => h.racks.some((r) => r.status === "online"));
+  if (live.length) pool.push(() => {
+    const hall = live[Math.floor(rng() * live.length)];
+    const online = hall.racks.filter((r) => r.status === "online");
+    const rack = online[Math.floor(rng() * online.length)];
+    const contained = Object.keys(hall.coolingEquip).some((id) => id.includes("suppression")) || hallResilience(hall).score >= 0.9;
+    const down = contained ? 2 : 8;
+    rack.status = "failed";
+    rack.readyMonth = s2.month + down;
+    rack.failedPart = void 0;
+    if (!contained) s2.reputation = Math.max(0, s2.reputation - 3);
+    log(contained ? "info" : "bad", `🔥 Fire in ${hall.name}: rack ${rack.id} ${contained ? "saved by early smoke detection and clean-agent suppression" : "destroyed"} — ${down} months to rebuild${contained ? "." : " and −3 reputation."} Lesson: ${contained ? "detection plus suppression turns a total loss into a bad weekend." : "smoke detection and clean-agent suppression cost pennies next to a hall of GPUs."}`);
+  });
+  const assigned = s2.activeContracts.filter((a) => a.clusterIds.length > 0);
+  if (assigned.length) pool.push(() => {
+    const a = assigned[Math.floor(rng() * assigned.length)];
+    const c = a.contract;
+    const monthly = c.kind === "training" ? c.pricePerAccelHour * c.minAccelerators * 730 : c.pricePerMTok * c.tokensPerSec * 730 * 3600 / 1e6;
+    s2.activeContracts = s2.activeContracts.filter((x) => x !== a);
+    s2.cash -= Math.round(monthly);
+    s2.reputation = Math.max(0, s2.reputation - 1);
+    log("bad", `💸 ${c.customer} defaults on its ${c.kind} contract: the cluster goes idle and ~$${Math.round(monthly).toLocaleString("en-US")} of a month's expected revenue never lands (−1 reputation). Lesson: deposits, take-or-pay minimums and credit checks exist because customers go bankrupt mid-deal.`);
+  });
+  if (s2.orders.length) pool.push(() => {
+    const n = s2.orders.length;
+    for (const o2 of s2.orders) o2.arriveMonth += 2;
+    log("bad", `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: all ${n} in-transit order(s) slip 2 months. Lesson: dual-sourcing and safety stock are insurance, not waste.`);
+  });
+  if (live.length) pool.push(() => {
+    const hall = live[Math.floor(rng() * live.length)];
+    const racks = hall.racks.filter((r) => r.status === "online").length;
+    s2.activeContracts.forEach((a) => {
+      if (a.clusterIds.length) a.slaMisses += 1;
+    });
+    s2.cash -= 4e4 * racks;
+    log("bad", `❄ Chiller trip in ${hall.name}: a compressor fault drops the loop for hours and every serving contract takes an SLA miss; emergency pumping and overtime cost $${(4e4 * racks / 1e3).toFixed(0)}k. Lesson: N+1 chillers with automatic switchover keep the water cold while one unit is repaired.`);
+  });
+  return pool;
+}
 const BASE_POWER_PRICE = 0.07;
 const onlineRacks = (s2) => s2.halls.flatMap((h) => h.racks).filter((r) => r.status === "online").length;
 function rollEvents(s2, rng, log, graceMonths = 4) {
   s2.utilityUSDPerKWh = Math.round((s2.utilityUSDPerKWh + (BASE_POWER_PRICE - s2.utilityUSDPerKWh) * 0.05) * 1e4) / 1e4;
+  scriptedEvents(s2, log);
   if (s2.month < 11 + graceMonths) return;
   if (rng() > 0.28) return;
   const racks = onlineRacks(s2);
@@ -9636,6 +9786,7 @@ function rollEvents(s2, rng, log, graceMonths = 4) {
       log("good", `📣 A customer publishes a benchmark crediting your cluster's uptime: +${bonus ? "$" + (bonus / 1e3).toFixed(0) + "k" : ""} in spot demand and +1 reputation.`);
     });
   }
+  pool.push(...disasterPool(s2, rng, log));
   pool[Math.floor(rng() * pool.length)]();
 }
 const worldEvents = { id: "world-events", run: ({ s: s2, rng, log }) => rollEvents(s2, rng, log) };
@@ -9676,6 +9827,103 @@ const history = {
     s2.history.push({ month: s2.month, revenue: round2(c.revenue), opex: round2(c.opexUSD + c.depreciation + c.interest), cash: s2.cash, utilization: round2(utilization) });
   }
 };
+const staffingCheck = {
+  id: "staffing",
+  run: ({ s: s2, log }) => {
+    const { needed } = staffNeeded(s2);
+    if (s2.staff < needed) {
+      log("bad", `Understaffed: ${s2.staff} of ${needed} needed. Failures x1.8, repairs slower. Hire on Dashboard/Facility.`);
+    } else if (s2.staff > needed + 2 && s2.month % 6 === 0) {
+      log("info", `Overstaffed: ${s2.staff} on the payroll, only ${needed} needed — each extra costs $${STAFF_COST_PER_MONTH.toLocaleString("en-US")}/month. Let a few go on the Dashboard.`);
+    }
+  }
+};
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const ACCELERATORS = ALL_ITEMS.filter((i) => i.kind === "accelerator");
+const rackAgeMonths = (rack, month) => Math.max(0, month - (rack.installedMonth ?? rack.readyMonth - 2));
+function rackAccelItem(g, designId) {
+  const design = g.racks.find((r) => r.id === designId);
+  if (!design) return void 0;
+  for (const item of design.items) {
+    if (item.type !== "tray") continue;
+    const tray = g.trays.find((t) => t.id === item.trayId);
+    if (!tray) continue;
+    for (const p of tray.parts) {
+      const it2 = getItem(p.itemId);
+      if (it2?.kind === "accelerator") return it2;
+    }
+  }
+  return void 0;
+}
+function generationsBehind(accel, month) {
+  const mine = Math.floor(accel.availableFrom);
+  const now = monthToYear(month);
+  const newer = /* @__PURE__ */ new Set();
+  for (const a of ACCELERATORS) {
+    if (a.availableFrom <= now && Math.floor(a.availableFrom) > mine) newer.add(Math.floor(a.availableFrom));
+  }
+  return Math.min(3, newer.size);
+}
+function residualFactor(g, rack) {
+  const ageYears = rackAgeMonths(rack, g.month) / 12;
+  const accel = rackAccelItem(g, rack.designId);
+  return accel ? clamp(1 - 0.16 * ageYears - 0.12 * generationsBehind(accel, g.month), 0.08, 1) : clamp(1 - 0.12 * ageYears, 0.2, 1);
+}
+const rackResidualUSD = (g, rack) => {
+  const design = g.racks.find((r) => r.id === rack.designId);
+  return design ? rackBomValue(g, design) * residualFactor(g, rack) : 0;
+};
+function assetValue(g) {
+  let v2 = 0;
+  for (const [id, n] of Object.entries(g.inventory)) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
+  for (const [id, n] of Object.entries(g.spareStock ?? {})) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
+  for (const hall of g.halls) {
+    for (const [id, n] of Object.entries(hall.powerEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
+    for (const [id, n] of Object.entries(hall.coolingEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
+    for (const rack of hall.racks) v2 += rackResidualUSD(g, rack);
+  }
+  return v2;
+}
+const HORIZON_MONTH = 108;
+const BANKRUPT_AFTER_MONTHS = 3;
+const netWorthOf = (g) => g.cash - g.debt + assetValue(g);
+const RATINGS = [
+  [1e9, "AI Datacenter Tycoon"],
+  [3e8, "Hyperscale contender"],
+  [12e7, "Solid operator"],
+  [5e7, "Stalled operator"],
+  [0, "Struggling operator"]
+];
+const ratingFor = (netWorth) => (RATINGS.find(([min]) => netWorth >= min) ?? [0, "Bankrupt"])[1];
+const scoreOf = (g, netWorth) => Math.round(netWorth / 1e5 + (g.reputation ?? 0) * 5 + (g.stats?.contractsCompleted ?? 0) * 20 + (g.stats?.peakAccels ?? 0) / 50);
+function finish(c, reason) {
+  const { s: s2, log } = c;
+  const nw = netWorthOf(s2);
+  const stats = s2.stats;
+  const rating = reason === "bankrupt" ? "Bankrupt" : ratingFor(nw);
+  const summary = reason === "bankrupt" ? `Creditors closed you down in month ${s2.month}: cash stayed negative for ${BANKRUPT_AFTER_MONTHS} months.` : `You reached the end of 2028 with net worth $${Math.round(nw / 1e6)}M, ${stats.contractsCompleted} contracts completed and a peak of ${stats.peakAccels} accelerators.`;
+  s2.status = reason === "bankrupt" ? "bankrupt" : "finished";
+  s2.endReport = { reason, month: s2.month, score: scoreOf(s2, nw), netWorth: Math.round(nw), rating, revenueTotal: Math.round(stats.revenueTotal), peakAccels: stats.peakAccels, contractsCompleted: stats.contractsCompleted, reputation: s2.reputation, summary };
+  log(reason === "bankrupt" ? "bad" : "good", `${reason === "bankrupt" ? "GAME OVER" : "2028 COMPLETE"} - ${rating}. ${summary}`);
+}
+const endgame = {
+  id: "endgame",
+  run: (c) => {
+    const { s: s2, log } = c;
+    s2.stats ??= { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 };
+    s2.stats.revenueTotal += c.revenue;
+    const accels = s2.clusters.reduce((n, cl) => n + (cl.stats?.accelerators ?? 0), 0);
+    s2.stats.peakAccels = Math.max(s2.stats.peakAccels, accels);
+    if (s2.cash < 0) {
+      s2.negCashMonths = (s2.negCashMonths ?? 0) + 1;
+      if (s2.mode !== "learner") {
+        if (s2.negCashMonths >= BANKRUPT_AFTER_MONTHS) return finish(c, "bankrupt");
+        log("bad", `Cash is negative (${s2.negCashMonths}/${BANKRUPT_AFTER_MONTHS} months). Creditors close you down at ${BANKRUPT_AFTER_MONTHS}. Take a loan, land contracts, sell idle hardware.`);
+      }
+    } else s2.negCashMonths = 0;
+    if (s2.month >= HORIZON_MONTH) finish(c, "horizon");
+  }
+};
 const DEFAULT_TICK = {
   accelFailureProbPerMonth: 1 / 8e3,
   commissionFailProb: 0.04,
@@ -9689,6 +9937,7 @@ const PIPELINE = [
   floorSpace,
   commissioning,
   clusterStats,
+  staffingCheck,
   failures,
   pue,
   serveContracts,
@@ -9696,9 +9945,11 @@ const PIPELINE = [
   worldEvents,
   spotAndPower,
   finances,
-  history
+  history,
+  endgame
 ];
 function advanceMonth(state, opts = {}) {
+  if (state.status && state.status !== "playing") return state;
   const s2 = JSON.parse(JSON.stringify(state));
   const rng = mulberry32((s2.seed ^ Math.imul(s2.month + 1, 2654435769)) >>> 0);
   s2.month += 1;
@@ -9742,7 +9993,7 @@ const deployActions = (c) => {
       if (hall.racks.length >= hall.rackSlots) {
         return fail(`${hall.name} is full (${hall.rackSlots} slots). Build another hall.`);
       }
-      if (COOL_LEVEL$1[design.coolingInterface] > COOL_LEVEL$1[hall.coolingClass]) {
+      if (COOL_LEVEL$2[design.coolingInterface] > COOL_LEVEL$2[hall.coolingClass]) {
         return fail(
           `${design.name} needs ${design.coolingInterface.toUpperCase()} cooling; ${hall.name} is only ${hall.coolingClass.toUpperCase()}.`,
           [
@@ -9788,7 +10039,8 @@ const deployActions = (c) => {
         designId,
         slot: hall.racks.length,
         status: "installing",
-        readyMonth: g.month + RACK_READY_LEAD
+        readyMonth: g.month + RACK_READY_LEAD,
+        installedMonth: g.month
       };
       hall.racks.push(rack);
       const liveKW = hall.racks.filter((r) => r.status !== "failed").reduce((kw, r) => {
@@ -10230,6 +10482,16 @@ const financeActions = (c) => {
       g.cash += amt;
       logln(g, "info", `Drew a $${usd(amt)} loan at 7% APR — interest hits monthly. Principal due on refinancing.`);
       return ok(`$${usd(amt)} borrowed.`);
+    }),
+    repayLoan: (amountUSD) => commit((g) => {
+      const amt = Math.floor(amountUSD);
+      if (!Number.isFinite(amt) || amt <= 0) return fail("Repayment amount must be positive.");
+      if (amt > g.debt) return fail(`You only owe $${usd(g.debt)} — repay less.`);
+      if (amt > g.cash) return fail(`Repaying $${usd(amt)} needs cash — you only have $${usd(g.cash)}.`);
+      g.debt -= amt;
+      g.cash -= amt;
+      logln(g, "good", `Repaid $${usd(amt)} of principal; $${usd(g.debt)} of debt remains.`);
+      return ok(`$${usd(amt)} repaid.`);
     })
   };
 };
@@ -10288,37 +10550,87 @@ const sessionActions = (c) => {
     patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
     addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
     nextMonth: () => {
+      if (get().game.status && get().game.status !== "playing") return;
       set({ game: advanceMonth(get().game) });
       stepAllProjects(get);
+      writeSlot("auto", get().game);
     },
-    save: () => {
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(get().game));
-      } catch {
-      }
-    },
-    load: () => {
-      try {
-        const raw = localStorage.getItem(SAVE_KEY);
-        if (!raw) return fail("No save found.");
-        const g = JSON.parse(raw);
-        if (typeof g.month !== "number" || typeof g.cash !== "number" || !Array.isArray(g.halls) || !Array.isArray(g.clusters)) {
-          return fail("Save file corrupted.");
-        }
-        for (const h of g.halls) for (const [id, n] of Object.entries(h.powerEquip ?? {})) {
-          const it2 = getItem(id);
-          if (it2?.kind === "power" && (it2.powerType === "pdu" || it2.powerType === "power-shelf")) {
-            g.inventory[id] = (g.inventory[id] ?? 0) + n;
-            delete h.powerEquip[id];
-            if (POWER_FEED_TYPES.includes(it2.powerType)) h.itPowerKW = Math.max(0, h.itPowerKW - n * it2.capacityKW);
-          }
-        }
-        set({ game: g });
-        return ok(`Loaded month ${g.month}.`);
-      } catch {
-        return fail("Save file unreadable.");
-      }
+    save: (slot = DEFAULT_SLOT) => writeSlot(slot, get().game) ? ok(`Saved to slot '${slot}'.`) : fail("Could not write the save (storage unavailable)."),
+    load: (slot = DEFAULT_SLOT) => {
+      const r = readSlot(slot);
+      if (!r.game) return fail(r.error ?? "No save found.");
+      set({ game: r.game });
+      return ok(`Loaded month ${r.game.month}.`);
     }
+  };
+};
+const lifecycleActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    decommissionRack: (rackId) => commit((g) => {
+      let hall;
+      let rack;
+      for (const h of g.halls) {
+        rack = h.racks.find((r) => r.id === rackId);
+        if (rack) {
+          hall = h;
+          break;
+        }
+      }
+      if (!hall || !rack) return fail(`Rack '${rackId}' not found.`);
+      if (rack.status === "ordered") return fail("This rack is still on order — nothing to sell yet.");
+      if (rack.clusterId) return fail("Disband its cluster first.");
+      const age = rackAgeMonths(rack, g.month);
+      const pct = Math.round(residualFactor(g, rack) * 100);
+      const sale = Math.round(rackResidualUSD(g, rack) * 0.85);
+      g.cash += sale;
+      hall.racks = hall.racks.filter((r) => r.id !== rackId);
+      g.spotRacks = (g.spotRacks ?? []).filter((id) => id !== rackId);
+      g.stats ??= { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 };
+      g.stats.decommissioned++;
+      logln(g, "info", `Decommissioned ${rack.id} at age ${age} months: sold for $${usd(sale)} at ${pct}% residual.`);
+      return ok(`Rack sold for $${usd(sale)} (age ${age} months, ${pct}% residual).`);
+    }),
+    sellInventory: (itemId, qty) => commit((g) => {
+      const item = getItem(itemId);
+      if (!item) return fail(`Unknown item '${itemId}'.`);
+      if (!Number.isFinite(qty) || Math.floor(qty) < 1) return fail("Quantity must be a positive number.");
+      const n = Math.floor(qty);
+      const have = g.inventory[itemId] ?? 0;
+      if (have < n) return fail(`Only ${have} × ${item.name} in the warehouse.`);
+      const sale = Math.round(0.6 * item.priceUSD * n);
+      g.inventory[itemId] = have - n;
+      if (g.inventory[itemId] <= 0) delete g.inventory[itemId];
+      g.cash += sale;
+      logln(g, "info", `Sold ${n} × ${item.name} from the warehouse for $${usd(sale)} (60% of catalog price).`);
+      return ok(`Sold ${n} × ${item.name} for $${usd(sale)}.`);
+    })
+  };
+};
+const staffActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    hireStaff: (n) => commit((g) => {
+      const count = Math.floor(n);
+      if (!Number.isFinite(count) || count < 1 || count > 50) return fail("Hire between 1 and 50 staff at a time.");
+      const cost = RECRUIT_COST_USD * count;
+      if (g.cash < cost) return fail(`Recruiting ${count} costs $${usd(cost)} — you only have $${usd(g.cash)}.`);
+      g.cash -= cost;
+      g.staff += count;
+      logln(g, "good", `Hired ${count} at $${usd(RECRUIT_COST_USD)} recruiting each; payroll is now $${usd(g.staff * STAFF_COST_PER_MONTH)}/month.`);
+      return ok(`Hired ${count}.`);
+    }),
+    fireStaff: (n) => commit((g) => {
+      const count = Math.floor(n);
+      if (!Number.isFinite(count) || count < 1) return fail("Fire at least 1 staff member.");
+      if (g.staff - count < 1) return fail(`Cannot go below 1 staff member (you have ${g.staff}).`);
+      const severance = SEVERANCE_USD * count;
+      if (g.cash < severance) return fail(`Severance for ${count} is $${usd(severance)} (2 months each) — you only have $${usd(g.cash)}.`);
+      g.cash -= severance;
+      g.staff -= count;
+      logln(g, "info", `Let ${count} go with $${usd(severance)} severance; payroll is now $${usd(g.staff * STAFF_COST_PER_MONTH)}/month.`);
+      return ok(`Fired ${count}.`);
+    })
   };
 };
 const DOMAINS = {
@@ -10330,11 +10642,13 @@ const DOMAINS = {
   contracts: contractsActions,
   finance: financeActions,
   energy: energyActions,
-  session: sessionActions
+  session: sessionActions,
+  lifecycle: lifecycleActions,
+  staff: staffActions
 };
 const composeActions = (c) => Object.assign({}, ...Object.values(DOMAINS).map((f) => f(c)));
 const selectCapexBasis = estimateCapexBasis;
-const selectNetWorth = (g) => g.cash - g.debt + estimateCapexBasis(g) * 0.5;
+const selectNetWorth = (g) => g.cash - g.debt + assetValue(g);
 const selectMonthlyPnL = (g) => {
   const opex = monthlyOpex(g);
   const depreciation = monthlyDepreciation(estimateCapexBasis(g));
@@ -10444,10 +10758,10 @@ function step(a) {
   }
   const g = G$2();
   const horizon = scenario?.horizonMonths ?? 120;
-  const bankrupt = broke >= 2;
+  const bankrupt = broke >= 2 || g.status === "bankrupt";
   const truncated = g.month - t0 >= horizon;
   if (bankrupt) reward -= 10;
-  return { obs: observe(), reward, done: bankrupt, truncated, info: { ok: !!res.ok, message: res.message ?? "", issues: res.issues ?? [], ...bankrupt ? { terminalReason: "bankrupt (cash<0 for 2 months)" } : {} } };
+  return { obs: observe(), reward, done: bankrupt, truncated: truncated || g.status === "finished", info: { ok: !!res.ok, message: res.message ?? "", issues: res.issues ?? [], ...bankrupt ? { terminalReason: "bankrupt (cash<0 for 2 months)" } : {} } };
 }
 function probe(a) {
   const snap = G$2();
@@ -10604,6 +10918,8 @@ const SCENARIOS = [
   } }
 ];
 const placed = (g) => g.halls.flatMap((h) => h.racks);
+const onlineRackCount = (g) => g.halls.reduce((n, h) => n + h.racks.filter((r) => r.status === "online").length, 0);
+const itPower = (g) => g.halls.reduce((n, h) => n + h.itPowerKW, 0);
 const MISSIONS = [
   { id: "order", title: "Place your first order", go: "shop", reward: 25e4, hint: "Open Procurement and buy anything.", lesson: "Hardware has LEAD TIMES (and for GPUs, allocation). Order early — parts arrive months later.", done: (g) => g.orders.length > 0 || Object.keys(g.inventory).length > 0 },
   { id: "cool", title: "Expand your cooling plant", go: "facility", reward: 25e4, hint: "Buy another CRAH and install it in Hall A (Facility).", lesson: "Every watt of IT power becomes a watt of heat. Cooling capacity — not floor space — caps most AI halls.", done: (g) => g.halls.some((h) => h.coolingKW > 600) },
@@ -10617,7 +10933,22 @@ const MISSIONS = [
   { id: "rev", title: "Earn revenue", go: "finance", reward: 1e6, hint: "Advance a month with an active contract.", lesson: "Revenue minus power, staff, support, depreciation and interest = profit. Utilization is everything.", done: (g) => g.history.some((h) => h.revenue > 0) },
   { id: "liquid", title: "Go liquid-cooled", go: "facility", reward: 15e5, hint: "Build a DLC hall with CDUs and place a ≥100 kW rack.", lesson: "Beyond ~40 kW/rack air fails. GB200 NVL72 (~120 kW) needs direct-to-chip liquid cooling and CDUs.", done: (g) => g.halls.some((h) => h.coolingClass === "dlc" && h.racks.length > 0) },
   { id: "xl", title: "Run a 256-accelerator supercomputer", go: "network", reward: 3e6, hint: "Join racks into one cluster of 256+ accelerators.", lesson: "At scale the network IS the computer: bisection bandwidth and failure rates dominate training efficiency.", done: (g) => g.clusters.some((c) => (c.stats?.accelerators ?? 0) >= 256) },
-  { id: "nvl", title: "Deploy a 72-GPU NVLink domain", go: "design", reward: 5e6, hint: "Build a GB200 NVL72 rack.", lesson: "NVLink-5 makes 72 GPUs act like one — critical for MoE expert parallelism and huge-model inference.", done: (g) => g.clusters.some((c) => (c.stats?.scaleUpDomain ?? 0) >= 72) }
+  { id: "nvl", title: "Deploy a 72-GPU NVLink domain", go: "design", reward: 5e6, hint: "Build a GB200 NVL72 rack.", lesson: "NVLink-5 makes 72 GPUs act like one — critical for MoE expert parallelism and huge-model inference.", done: (g) => g.clusters.some((c) => (c.stats?.scaleUpDomain ?? 0) >= 72) },
+  // ---------- long-form campaign objectives ----------
+  { id: "kacc", title: "Field 1,000 accelerators", go: "network", reward: 2e6, hint: "Scale your clusters until a thousand accelerators have served at once.", lesson: "Past a thousand GPUs, fleet operations beat heroics: standardized racks, staged spares and disciplined commissioning keep utilization high.", done: (g) => (g.stats?.peakAccels ?? 0) >= 1e3 },
+  { id: "accels5k", title: "Operate 5,000 accelerators", go: "network", reward: 8e6, hint: "Keep building — five thousand accelerators online across your campus.", lesson: "At 5k GPUs something is always broken: maintenance windows, spare depth and staff rotation ARE the product.", done: (g) => (g.stats?.peakAccels ?? 0) >= 5e3 },
+  { id: "accels20k", title: "Run a 20,000-accelerator campus", go: "network", reward: 5e7, hint: "Twenty thousand accelerators at peak — a true AI factory.", lesson: "Campuses this big are limited by power and construction, not chips: substations, interconnects and build sequencing decide who ships first.", done: (g) => (g.stats?.peakAccels ?? 0) >= 2e4 },
+  { id: "contracts5", title: "Complete five contracts", go: "contracts", reward: 3e6, hint: "Deliver contracts to completion — satisfied customers come back.", lesson: "Renewals are cheaper than acquisitions: every delivered contract compounds reputation and brings follow-on offers.", done: (g) => (g.stats?.contractsCompleted ?? 0) >= 5 },
+  { id: "contracts15", title: "Complete fifteen contracts", go: "contracts", reward: 1e7, hint: "Build a book of repeat customers — fifteen delivered contracts.", lesson: "A contract book balanced across training and inference rides out demand cycles instead of chasing them.", done: (g) => (g.stats?.contractsCompleted ?? 0) >= 15 },
+  { id: "nw100", title: "Reach a $100M net worth", go: "finance", reward: 2e6, hint: "Grow cash minus debt plus asset value to nine figures.", lesson: "Net worth = cash − debt + assets at residual value: only profitable months compound, borrowed scale does not.", done: (g) => netWorthOf(g) >= 1e8 },
+  { id: "nw500", title: "Reach a $500M net worth", go: "finance", reward: 8e6, hint: "Compound profit until assets and cash pass half a billion.", lesson: "At this size cheap capital and cheap power dominate the P&L: refinance debt, hedge energy, keep PUE low.", done: (g) => netWorthOf(g) >= 5e8 },
+  { id: "nw1b", title: "Become an AI-factory billionaire", go: "finance", reward: 25e6, hint: "Push net worth past one billion dollars.", lesson: "A billion in net worth comes from asset velocity: racks bought, filled, refreshed and sold before they obsolesce.", done: (g) => netWorthOf(g) >= 1e9 },
+  { id: "hall2", title: "Build a second hall", go: "facility", reward: 2e6, hint: "Construct another hall — air and liquid fleets can be segmented.", lesson: "A second hall de-risks concentration and separates air from liquid cooling — but shells and utility queues take years, not months.", done: (g) => g.halls.length >= 2 },
+  { id: "mw100", title: "Energize 100 MW of IT power", go: "facility", reward: 15e6, hint: "Install transformers until your halls can feed 100 MW of IT load.", lesson: "A 100 MW campus starts with grid interconnection studies and transformers ordered years ahead — power, not GPUs, is the long pole.", done: (g) => itPower(g) >= 1e5 },
+  { id: "nplus1", title: "Reach N+1 power protection", go: "facility", reward: 3e6, hint: "One hall needs UPS + battery + transfer gear + two gensets that can parallel.", lesson: "N+1 means any single engine, battery string or chiller can fail with zero customer impact — that is what tier-III customers pay for.", done: (g) => g.halls.some((h) => hallResilience(h).tier === "N+1") },
+  { id: "carriers2", title: "Diversify to two carriers", go: "network", reward: 2e6, hint: "Buy a second uplink from a different carrier on a diverse path.", lesson: "Two carriers on physically diverse routes turn a backhoe into a non-event; one circuit is an outage waiting for a shovel.", done: (g) => carrierCount(g) >= 2 },
+  { id: "staffed", title: "Fully staff your operations", go: "finance", reward: 2e6, hint: "With racks online, hire until staffing meets the site need.", lesson: "Racks do not run themselves: understaffed sites fail more and repair slower — hire ahead of the fleet, not after it.", done: (g) => onlineRackCount(g) >= 1 && g.staff >= staffNeeded(g).needed },
+  { id: "sellrack", title: "Sell your first obsolete rack", go: "stock", reward: 2e6, hint: "Decommission an aging, unclustered rack for its residual value.", lesson: "GPUs lose value to new generations faster than to wear — refresh on a cadence and sell while residual value is real.", done: (g) => (g.stats?.decommissioned ?? 0) >= 1 }
 ];
 const hallLoad = (g) => g.halls.reduce((n, h) => n + h.racks.reduce((a, p) => {
   const d = g.racks.find((r) => r.id === p.designId);
@@ -11255,7 +11586,66 @@ const knowledgeQueries = {
   concepts: () => CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G$1()) })),
   missions: () => MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go, done: m.done(G$1()) }))
 };
-const PARTS = { design: designQueries, catalog: catalogQueries, facility: facilityQueries, contracts: contractsQueries, economy: economyQueries, knowledge: knowledgeQueries };
+const lifecycleQueries = {
+  lifecycle: () => {
+    const g = G$1();
+    const rows = [];
+    let n = 0;
+    for (const hall of g.halls) {
+      for (const r of hall.racks) {
+        n++;
+        const residualUSD = rackResidualUSD(g, r);
+        const residualPct = Math.round(residualFactor(g, r) * 100);
+        rows.push({
+          id: r.id,
+          serial: `RK-${String(r.serial ?? n).padStart(4, "0")}`,
+          hallId: hall.id,
+          hallName: hall.name,
+          design: g.racks.find((x) => x.id === r.designId)?.name ?? r.designId,
+          accelerator: rackAccelItem(g, r.designId)?.name ?? "",
+          ageMonths: rackAgeMonths(r, g.month),
+          residualPct,
+          residualUSD,
+          saleUSD: Math.round(residualUSD * 0.85),
+          status: r.status,
+          ...r.clusterId ? { clusterId: r.clusterId } : {},
+          advice: residualPct >= 60 ? "keep" : residualPct >= 30 ? "consider selling" : "replace"
+        });
+      }
+    }
+    return {
+      rows,
+      totals: {
+        racks: rows.length,
+        residualUSD: rows.reduce((s2, r) => s2 + r.residualUSD, 0),
+        saleUSD: rows.reduce((s2, r) => s2 + r.saleUSD, 0),
+        assetValue: assetValue(g)
+      }
+    };
+  }
+};
+const staffingQueries = {
+  staffing: () => {
+    const g = G$1();
+    const { needed, breakdown } = staffNeeded(g);
+    const { failureMult, repairExtraMonths } = staffEffect(g);
+    return {
+      have: g.staff,
+      needed,
+      breakdown,
+      failureMult,
+      repairExtraMonths,
+      monthlyCostUSD: g.staff * STAFF_COST_PER_MONTH,
+      hireCostUSD: RECRUIT_COST_USD,
+      severanceUSD: SEVERANCE_USD
+    };
+  }
+};
+const sessionQueries = {
+  saves: () => listSaves(),
+  endReport: () => ({ status: G$1().status ?? "playing", report: G$1().endReport ?? null })
+};
+const PARTS = { design: designQueries, catalog: catalogQueries, facility: facilityQueries, contracts: contractsQueries, economy: economyQueries, knowledge: knowledgeQueries, lifecycle: lifecycleQueries, staffing: staffingQueries, session: sessionQueries };
 const QUERIES = {};
 for (const [domain, qs] of Object.entries(PARTS)) for (const [name, fn] of Object.entries(qs)) {
   if (name in QUERIES) throw new Error(`duplicate query '${name}' (domain ${domain})`);

@@ -1,8 +1,8 @@
 extends Node
 ## App shell: engine bridge + 3D hall + top bar, dock, screens, toasts. Screens live in ui/screens.
 
-const SCREENS := [["dash", "", "Datacenter"], ["shop", "", "Procure"], ["design", "", "Design Lab"], ["facility", "", "Build"], ["stock", "", "Warehouse"], ["energy", "", "Energy"], ["network", "", "Supercomputer"], ["contracts", "", "Customers"], ["codex", "", "Codex"]]
-const SCRIPTS := {"dash": "res://ui/screens/dash.gd", "shop": "res://ui/screens/procure.gd", "stock": "res://ui/screens/stock.gd", "contracts": "res://ui/screens/contracts.gd", "facility": "res://ui/screens/facility.gd", "codex": "res://ui/screens/codex.gd", "energy": "res://ui/screens/energy.gd", "network": "res://ui/screens/network.gd", "design": "res://ui/screens/design.gd"}
+const SCREENS := [["dash", "", "Datacenter"], ["shop", "", "Procure"], ["design", "", "Design Lab"], ["facility", "", "Build"], ["stock", "", "Warehouse"], ["energy", "", "Energy"], ["network", "", "Supercomputer"], ["contracts", "", "Customers"], ["ops", "", "Operations"], ["codex", "", "Codex"]]
+const SCRIPTS := {"dash": "res://ui/screens/dash.gd", "shop": "res://ui/screens/procure.gd", "stock": "res://ui/screens/stock.gd", "contracts": "res://ui/screens/contracts.gd", "facility": "res://ui/screens/facility.gd", "ops": "res://ui/screens/ops.gd", "codex": "res://ui/screens/codex.gd", "energy": "res://ui/screens/energy.gd", "network": "res://ui/screens/network.gd", "design": "res://ui/screens/design.gd"}
 const OVERLAY := ["dash", "facility"]
 const SECS := [0.0, 4.0, 1.6, 0.6]
 
@@ -42,6 +42,7 @@ func _ready() -> void:
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
+	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
@@ -71,7 +72,7 @@ func _build_shell() -> void:
 	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -560; dock.offset_right = 560; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
 	for i in SCREENS.size():
 		var s: Array = SCREENS[i]
-		var d := Kit.btn("%s [%d]" % [s[2], i + 1], func(): show_screen(s[0]), "", 14); d.custom_minimum_size = Vector2(118, 60); dock.add_child(d); dock_btns[s[0]] = d
+		var d := Kit.btn("%s [%d]" % [s[2], (i + 1) % 10], func(): show_screen(s[0]), "", 14); d.custom_minimum_size = Vector2(118, 60); dock.add_child(d); dock_btns[s[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
 	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1, 0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
 	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
@@ -94,7 +95,7 @@ func _title() -> void:
 	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
 		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): h.queue_free(); _new_game(m[0]), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	b.act("newGame", [7, "operator"]); _demo_hall()
-	vb.add_child(Kit.btn("CONTINUE SAVED GAME", func(): var r := b.act("load"); if r.get("ok", false): h.queue_free(); _begin(), "", 18))
+	vb.add_child(Kit.btn("CONTINUE SAVED GAME", func(): _slots("load", func(): h.queue_free(); _begin()), "", 18))
 	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
 	vb.add_child(Kit.label("Right-drag orbit · wheel zoom · WASD pan · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
@@ -138,6 +139,7 @@ func _on_changed() -> void:
 		if e.level != "info": toast(e.text, e.level)
 	_seen_log = g.log.size()
 	hall.rebuild()
+	_check_end()
 	if hall.get_meta("n", 0) == 0: pass
 	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
 
@@ -228,7 +230,61 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		return
 	if e.keycode == KEY_SPACE: next_month(); return
 	if e.keycode >= KEY_1 and e.keycode <= KEY_9: show_screen(SCREENS[e.keycode - KEY_1][0])
+	elif e.keycode == KEY_0: show_screen("codex")
 	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
+
+
+# ---------- game over + save slots ----------
+var end_ui: Control
+func _check_end() -> void:
+	var st: String = b.g.get("status", "playing")
+	if st == "playing" or end_ui != null or end_seen: return
+	speed = 0; clock = 0.0
+	var rep: Dictionary = b.q("endReport").get("report", {})
+	if rep.is_empty(): return
+	var won: bool = rep.reason == "horizon"; var col: Color = Kit.GR if won else Kit.RD
+	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); end_ui = h
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.72); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -400; pn.offset_right = 400; pn.offset_top = -215; pn.offset_bottom = 215
+	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), col, 14, 2, 26)); h.add_child(pn)
+	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
+	vb.add_child(Kit.label("2028 COMPLETE" if won else "GAME OVER", 20, Kit.DIM))
+	vb.add_child(Kit.label(str(rep.rating).to_upper(), 54, col))
+	vb.add_child(Kit.label(rep.summary, 17, Kit.TX, true))
+	var grid := GridContainer.new(); grid.columns = 2; grid.add_theme_constant_override("h_separation", 60); grid.add_theme_constant_override("v_separation", 6); vb.add_child(grid)
+	for kv in [["SCORE", Kit.num(rep.score)], ["NET WORTH", Kit.usd(rep.netWorth)], ["LIFETIME REVENUE", Kit.usd(rep.revenueTotal)], ["PEAK ACCELERATORS", Kit.num(rep.peakAccels)], ["CONTRACTS COMPLETED", str(int(rep.contractsCompleted))], ["REPUTATION", "★ %d" % int(rep.reputation)]]:
+		var c := VBoxContainer.new(); c.add_child(Kit.label(kv[0], 11, Kit.DIM)); c.add_child(Kit.label(str(kv[1]), 26, Kit.TX)); grid.add_child(c)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); vb.add_child(row)
+	row.add_child(Kit.btn("Look around the hall", func(): end_ui.queue_free(); end_ui = null; end_seen = true, "", 18))
+	row.add_child(Kit.btn("Back to title", func(): _menu_do("title"), "pri", 18))
+var end_seen := false
+
+## Save-slot picker. mode = "save" or "load"; used by the pause menu and the title screen.
+func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
+	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h)
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -330; pn.offset_right = 330; pn.offset_top = -230; pn.offset_bottom = 230
+	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
+	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
+	vb.add_child(Kit.label("SAVE GAME" if mode == "save" else "LOAD GAME", 30, Kit.CY))
+	var info := {}
+	for s in b.q("saves"): info[s.slot] = s
+	var slots: Array = ["main", "slot2", "slot3"] if mode == "save" else ["main", "slot2", "slot3", "auto"]
+	for slot in slots:
+		if mode == "load" and not info.has(slot): continue
+		var nm: String = {"main": "Slot 1", "slot2": "Slot 2", "slot3": "Slot 3", "auto": "Autosave"}[slot]
+		var d := "empty"
+		if info.has(slot):
+			var i: Dictionary = info[slot]; d = "%s · %s · %d racks%s" % [Kit.date_of(int(i.month)), Kit.usd(float(i.cash)), int(i.racks), "" if i.status == "playing" else " · " + str(i.status).to_upper()]
+		var bt := Kit.btn("%s\n%s" % [nm, d], func():
+			if mode == "save": b.act("save", [slot]); toast("Saved to %s." % nm, "good"); h.queue_free()
+			else:
+				var r := b.act("load", [slot])
+				if r.get("ok", false): h.queue_free(); if on_loaded.is_valid(): on_loaded.call()
+				else: toast(str(r.get("message", "Load failed.")), "bad"), "", 17)
+		bt.custom_minimum_size = Vector2(0, 62); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
+	if mode == "load" and info.is_empty(): vb.add_child(Kit.label("No saved games yet.", 16, Kit.DIM))
+	vb.add_child(Kit.btn("Close", func(): h.queue_free(), "", 16))
 
 func _menu() -> void:
 	if menu_ui != null: menu_ui.queue_free(); menu_ui = null; return
@@ -242,7 +298,7 @@ func _menu() -> void:
 func _menu_do(a: String) -> void:
 	match a:
 		"resume": _menu()
-		"save": b.act("save"); toast("Game saved.", "good"); _menu()
+		"save": _menu(); _slots("save")
 		"mute": audio.muted = not audio.muted
 		"title": b.act("save"); b.stop(); get_tree().reload_current_scene()
 		"quit":

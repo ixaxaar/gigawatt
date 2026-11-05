@@ -3,6 +3,7 @@ import { generateContracts } from './market';
 import type { RNG } from './rng';
 import { hallResilience } from './resilience';
 import { carrierCount } from './internet';
+import { disasterPool, scriptedEvents } from './eraEvents';
 
 type Log = (level: 'info' | 'good' | 'bad', text: string) => void;
 export const BASE_POWER_PRICE = 0.07;
@@ -12,6 +13,7 @@ const onlineRacks = (s: GameState) => s.halls.flatMap((h) => h.racks).filter((r)
 export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): void {
   // Power price mean-reverts toward baseline every month.
   s.utilityUSDPerKWh = Math.round((s.utilityUSDPerKWh + (BASE_POWER_PRICE - s.utilityUSDPerKWh) * 0.05) * 10000) / 10000;
+  scriptedEvents(s, log); // calendar beats fire in every month, grace period or not
   if (s.month < 11 + graceMonths) return;
   if (rng() > 0.28) return; // ~1 event every 3-4 months
 
@@ -69,5 +71,6 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
       log('good', `📣 A customer publishes a benchmark crediting your cluster's uptime: +${bonus ? '$' + (bonus / 1000).toFixed(0) + 'k' : ''} in spot demand and +1 reputation.`);
     });
   }
+  pool.push(...disasterPool(s, rng, log));
   pool[Math.floor(rng() * pool.length)]();
 }

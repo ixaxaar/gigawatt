@@ -9,7 +9,7 @@ export const BANKRUPT_AFTER_MONTHS = 3;
 export const netWorthOf = (g: GameState): number => g.cash - g.debt + assetValue(g);
 
 const RATINGS: [number, string][] = [
-  [1e9, 'AI Datacenter Tycoon'], [2e8, 'Hyperscale contender'], [5e7, 'Solid operator'], [0, 'Struggling operator'],
+  [1e9, 'AI Datacenter Tycoon'], [3e8, 'Hyperscale contender'], [1.2e8, 'Solid operator'], [5e7, 'Stalled operator'], [0, 'Struggling operator'],
 ];
 export const ratingFor = (netWorth: number): string => (RATINGS.find(([min]) => netWorth >= min) ?? [0, 'Bankrupt'])[1];
 
