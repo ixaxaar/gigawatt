@@ -71,6 +71,8 @@ cd godot
 
 **Controls:** `1`–`9` switch screens · `Space` next month · right-drag orbit · wheel zoom · `WASD` pan · `Q/E` rotate · `T` thermal view · `Esc` menu · `Ctrl+Q` quit.
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the engine is organised and where to add actions, queries and monthly systems.
+
 ## Train agents on it
 
 The simulation core is deterministic and headless, so it doubles as an environment for agents (RL, LLM tool-use, scripted bots).
