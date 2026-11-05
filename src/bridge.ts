@@ -17,7 +17,7 @@ import { CONCEPTS } from './concepts';
 import { validateTray, validateRack, validateHall, computePUE, partFitsSlot } from './sim/validate';
 import { evaluateCluster } from './sim/network';
 import { trainingTokensPerSec, inferenceCapacity, trainingMFU } from './sim/perf';
-import { quote, hallChecks } from './ui/quote';
+import { quote, hallChecks } from './quote';
 import { templateFacts, templateBom, racksFor, rackIdOf, trayIdOf } from './plan';
 import { contractFit, buildOptions, pipeline } from './contractfit';
 import { autoFabric } from './autopilot';

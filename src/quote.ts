@@ -1,7 +1,7 @@
-import type { GameState, SystemTemplate } from '../types';
-import { getItem } from '../data';
-import { offerAt, volumeDiscount } from '../store';
-import { templateBom, templateFacts, racksFor } from '../plan';
+import type { GameState, SystemTemplate } from './types';
+import { getItem } from './data';
+import { offerAt, volumeDiscount } from './store';
+import { templateBom, templateFacts, racksFor } from './plan';
 
 export interface Quote { cost: number; lead: number; lines: { id: string; name: string; n: number; unit: number; total: number }[]; unavailable: string[]; capped: string[] }
 export function quote(t: SystemTemplate, racks: number, month: number): Quote {

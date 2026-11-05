@@ -81,7 +81,7 @@ export function contractFit(g: GameState, c: Contract): Fit {
 // ---------------------------------------------------------------------------
 import { TEMPLATES } from './data/templates';
 import { templateFacts } from './plan';
-import { quote } from './ui/quote';
+import { quote } from './quote';
 import type { SystemTemplate } from './types';
 
 export interface BuildOption {

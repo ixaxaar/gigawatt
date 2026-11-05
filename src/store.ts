@@ -6,7 +6,7 @@
 import { getTemplate } from './data/templates';
 import { spareQty } from './sim/failures';
 import { templateBom, trayOf, rackOf, trayIdOf, rackIdOf } from './plan';
-import { create } from 'zustand';
+import { createStore } from './engine/runtime';
 import { ALL_ITEMS, getItem, VENDORS } from './data';
 import { monthToYear } from './types';
 import type {
@@ -262,7 +262,7 @@ const POWER_FEED_TYPES = [
   'transformer', 'ups', 'busway', 'power-shelf', 'solar-ppa', 'gas-turbine',
 ];
 
-export const useGame = create<GameStore>()((set, get) => {
+export const useGame = createStore<GameStore>((set, get) => {
   const commit = (mutate: (g: GameState) => ActionResult | void): ActionResult => {
     const g: GameState = JSON.parse(JSON.stringify(get().game)) as GameState;
     const res = mutate(g) ?? ok();

@@ -10,7 +10,7 @@ it('export catalog for Godot', () => {
 });
 
 import { templateFacts } from './plan';
-import { quote } from './ui/quote';
+import { quote } from './quote';
 it('export derived systems for Godot', () => {
   const out = TEMPLATES.map(t => {
     const f = templateFacts(t); const month = Math.max(0, Math.ceil((t.availableFrom - 2020) * 12) + 1);
