@@ -5,20 +5,25 @@ static var volume := 0.8
 static var ui_scale := 1.0
 static var colorblind := false
 static var reduced_motion := false
+## Graphics: 0 low, 1 balanced (default), 2 high. Screen-space effects and volumetric fog are the expensive part.
+static var quality := 1
 const PATH := "user://settings.cfg"
 
 static func load_all() -> void:
+	if OS.has_environment("GW_QUALITY"): quality = clampi(int(OS.get_environment("GW_QUALITY")), 0, 2)
 	var c := ConfigFile.new()
 	if c.load(PATH) != OK: return
+	var qenv := OS.has_environment("GW_QUALITY")
 	volume = clampf(float(c.get_value("a", "volume", 0.8)), 0.0, 1.0)
 	ui_scale = clampf(float(c.get_value("a", "ui_scale", 1.0)), 0.8, 1.5)
 	colorblind = bool(c.get_value("a", "colorblind", false))
 	reduced_motion = bool(c.get_value("a", "reduced_motion", false))
+	if not qenv: quality = clampi(int(c.get_value("a", "quality", 1)), 0, 2)
 
 static func save_all() -> void:
 	var c := ConfigFile.new()
 	c.set_value("a", "volume", volume); c.set_value("a", "ui_scale", ui_scale)
-	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion)
+	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "quality", quality)
 	c.save(PATH)
 
 ## Push the current values into the engine (call after load and after every change).

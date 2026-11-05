@@ -29,7 +29,7 @@ var guide: GuideOverlay
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
-	Settings.load_all(); Settings.apply(get_window())
+	Settings.load_all(); Settings.apply(get_window()); if get("hall") != null: hall.apply_quality()
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
@@ -102,7 +102,7 @@ func _title() -> void:
 	vb.add_child(Kit.btn("CONTINUE SAVED GAME", func(): _slots("load", func(): h.queue_free(); _begin()), "", 18))
 	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
 	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
-	vb.add_child(Kit.label("Right-drag orbit · wheel zoom · WASD pan · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
+	vb.add_child(Kit.label("Left-drag pan · right-drag orbit · wheel zoom · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
 
 func _demo_hall() -> void: pass
@@ -138,13 +138,13 @@ func _begin() -> void:
 	var tt := root.get_node_or_null("title")
 	if tt: tt.queue_free()
 	started = true; _seen_log = b.g.log.size(); speed = 0; clock = 0.0
-	hall.cam.h_offset = 0.0; hall.hall_i = 0; hall.dist = 17.0; hall.pitch = 0.42; hall.auto_orbit = true
-	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild()
+	hall.cam.h_offset = 0.0; hall.hall_i = 0; hall.auto_orbit = false
+	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild(); hall.top_view()
 
 func _on_changed() -> void:
 	if not started: return
 	var g := b.g
-	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.add_theme_color_override("font_color", Kit.GR if g.cash >= 0 else Kit.RD)
+	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(19, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
 	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
 	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == speed else Color.WHITE
@@ -252,6 +252,8 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if e.keycode == KEY_SPACE: next_month(); return
 	if e.keycode >= KEY_1 and e.keycode <= KEY_9: show_screen(SCREENS[e.keycode - KEY_1][0])
 	elif e.keycode == KEY_0: show_screen("codex")
+	elif e.keycode == KEY_V: hall.top_view()
+	elif e.keycode == KEY_L: hall.labels_on = not hall.labels_on; hall.rebuild()
 	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
 
 
@@ -261,6 +263,13 @@ func _smoke() -> void:
 	quiet = true; _load_scenario("stress-campus")
 	for sc in SCREENS:
 		show_screen(sc[0]); await get_tree().process_frame; await get_tree().process_frame
+	if OS.get_environment("GW_PERF") == "play": b.act("newGame", [11, "operator"]); b.act("setMode", ["operator"]); b.env("autoplay", ["tycoon", 48]); hall.hall_i = 0
+	if OS.has_environment("GW_PERF"):   # per-operation wall time on the biggest scenario
+		var t := Time.get_ticks_usec(); hall.rebuild(); print("PERF hall.rebuild %.1f ms nodes=%d" % [(Time.get_ticks_usec() - t) / 1000.0, hall.dyn.get_child_count()])
+		for sc in SCREENS:
+			var n0 := Bridge.req_n; var u0 := Bridge.req_us; t = Time.get_ticks_usec(); show_screen(sc[0]); print("PERF screen %s %.1f ms  engine calls=%d (%.1f ms)" % [sc[0], (Time.get_ticks_usec() - t) / 1000.0, Bridge.req_n - n0, (Bridge.req_us - u0) / 1000.0])
+		t = Time.get_ticks_usec(); b.act("nextMonth"); print("PERF nextMonth %.1f ms" % [(Time.get_ticks_usec() - t) / 1000.0])
+		t = Time.get_ticks_usec(); _on_changed(); print("PERF on_changed %.1f ms" % [(Time.get_ticks_usec() - t) / 1000.0])
 	b.act("nextMonth"); b.act("hireStaff", [1]); b.q("lifecycle"); b.q("staffing"); b.q("endReport")
 	_settings(); await get_tree().process_frame; _settings()
 	var years := int(OS.get_environment("GW_SMOKE_YEARS")) if OS.get_environment("GW_SMOKE_YEARS") != "" else 0
@@ -277,12 +286,12 @@ func _smoke() -> void:
 
 # ---------- settings + controls ----------
 var settings_ui: Control
-const CONTROLS := "[b]Space[/b] next month   [b]1-9, 0[/b] screens   [b]T[/b] thermal view   [b]Esc[/b] menu   [b]F1[/b] this panel\n[b]Right-drag[/b] orbit   [b]Wheel[/b] zoom   [b]WASD[/b] pan   [b]Q/E[/b] rotate   [b]Ctrl+Q[/b] quit\n[b]Speed buttons[/b] pause / 1x / 2x / 3x auto-advance"
+const CONTROLS := "[b]Space[/b] next month   [b]1-9, 0[/b] screens   [b]T[/b] thermal view   [b]Esc[/b] menu   [b]F1[/b] this panel\n[b]Left-drag[/b] or [b]WASD[/b] pan   [b]Right-drag[/b] orbit   [b]Wheel[/b] zoom   [b]Q/E[/b] rotate   [b]V[/b] top view   [b]L[/b] rack labels   [b]Ctrl+Q[/b] quit\n[b]Speed buttons[/b] pause / 1x / 2x / 3x auto-advance"
 func _settings() -> void:
 	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -360; pn.offset_right = 360; pn.offset_top = -215; pn.offset_bottom = 215
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -360; pn.offset_right = 360; pn.offset_top = -245; pn.offset_bottom = 245
 	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 24)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
 	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
@@ -290,6 +299,10 @@ func _settings() -> void:
 	var scl := _slider_row(vb, "UI scale", 0.8, 1.5, Settings.ui_scale, func(v): Settings.ui_scale = snappedf(v, 0.05); Settings.apply(get_window()); Settings.save_all())
 	var cb := CheckBox.new(); cb.text = "Colour-blind-safe cluster palette"; cb.button_pressed = Settings.colorblind; cb.toggled.connect(func(on): Settings.colorblind = on; Settings.save_all(); hall.rebuild()); vb.add_child(cb)
 	var rm := CheckBox.new(); rm.text = "Reduced motion (no auto-orbit camera)"; rm.button_pressed = Settings.reduced_motion; rm.toggled.connect(func(on): Settings.reduced_motion = on; Settings.save_all()); vb.add_child(rm)
+	var qr := HBoxContainer.new(); qr.add_theme_constant_override("separation", 14); vb.add_child(qr)
+	var ql := Kit.label("Graphics", 16, Kit.TX); ql.custom_minimum_size = Vector2(130, 0); qr.add_child(ql)
+	var qo := OptionButton.new(); for n in ["Low (fastest)", "Balanced", "High (all effects)"]: qo.add_item(n)
+	qo.selected = Settings.quality; qo.item_selected.connect(func(i): Settings.quality = i; Settings.save_all(); hall.apply_quality()); qr.add_child(qo)
 	vb.add_child(Kit.label("CONTROLS", 14, Kit.DIM)); vb.add_child(Kit.rich(CONTROLS, 15))
 	vb.add_child(Kit.btn("Close", func(): settings_ui.queue_free(); settings_ui = null, "pri", 18))
 	vol.grab_focus()

@@ -8709,6 +8709,7 @@ const procureActions = (c) => {
         qty: n,
         unitPrice: Math.round(offer.unitPrice * (1 - discount)),
         arriveMonth: g.month + offer.leadMonths,
+        placedMonth: g.month,
         ...spare ? { spare: true } : {}
       });
       recordSpend(g, item.vendor, cost);
@@ -8771,15 +8772,84 @@ const procureActions = (c) => {
         if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
         reserve(g, rackIdOf(t), nRacks);
-        for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
+        const batch = `bt-${g.month}-${g.orders.length + 1}-${t.id}`;
+        for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, batch, templateId: t.id, racks: nRacks, placedMonth: g.month, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
         for (const [vendorId, usdSpent] of vendorSpend) recordSpend(g, vendorId, usdSpent);
         const vendorNote = `${fwNote}${relNote}`;
         logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium)${vendorNote}. Full bill of materials arrives by month ${g.month + lead}.`);
         return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.${vendorNote}`);
       });
+    },
+    cancelOrder: (orderId) => commit((g) => {
+      const o2 = g.orders.find((x) => x.id === orderId);
+      if (!o2) return fail("That order has already arrived or does not exist.");
+      const lines = o2.batch ? g.orders.filter((x) => x.batch === o2.batch) : [o2];
+      const refund = Math.round(lines.reduce((n, x) => n + x.qty * x.unitPrice, 0) * REFUND);
+      g.cash += refund;
+      g.orders = g.orders.filter((x) => !lines.includes(x));
+      let what = `${o2.qty} × ${getItem(o2.itemId)?.name ?? o2.itemId}`;
+      if (o2.batch && o2.templateId) {
+        const t = getTemplate(o2.templateId);
+        if (t) {
+          reserve(g, rackIdOf(t), -(o2.racks ?? 0));
+          what = `${o2.racks} × ${t.name}`;
+        }
+        failProjects(g, o2.templateId, `order cancelled in month ${g.month}`);
+      }
+      logln(g, "info", `Cancelled ${what}; refunded $${usd(refund)} (${Math.round((1 - REFUND) * 100)}% restocking fee).`);
+      return ok(`Cancelled ${what}. Refunded $${usd(refund)}.`);
+    }),
+    reduceOrder: (orderId, qty) => {
+      const o2 = get().game.orders.find((x) => x.id === orderId);
+      if (!o2) return { ok: false, message: "That order has already arrived or does not exist." };
+      const n = Math.floor(qty);
+      if (!(n >= 0)) return { ok: false, message: "Quantity must be zero or more." };
+      if (n === 0) return get().cancelOrder(orderId);
+      return commit((g) => {
+        const cur = g.orders.find((x) => x.id === orderId);
+        if (!cur.batch || !cur.templateId) {
+          if (n >= cur.qty) return fail(`Orders can only be reduced (currently ${cur.qty}).`);
+          const refund2 = Math.round((cur.qty - n) * cur.unitPrice * REFUND);
+          g.cash += refund2;
+          cur.qty = n;
+          logln(g, "info", `Reduced ${getItem(cur.itemId)?.name ?? cur.itemId} order to ${n}; refunded $${usd(refund2)}.`);
+          return ok(`Reduced to ${n}. Refunded $${usd(refund2)}.`);
+        }
+        const t = getTemplate(cur.templateId);
+        const old = cur.racks ?? 0;
+        if (!t) return fail("Unknown template.");
+        if (n >= old) return fail(`A rack order can only be reduced (currently ${old} racks).`);
+        const bom = templateBom(t, n);
+        let refund = 0;
+        for (const l of g.orders.filter((x) => x.batch === cur.batch)) {
+          const want = l.spare ? spareQty(l.itemId, bom[l.itemId] ?? 0) : bom[l.itemId] ?? 0;
+          if (want < l.qty) {
+            refund += (l.qty - want) * l.unitPrice * REFUND;
+            l.qty = want;
+          }
+          l.racks = n;
+        }
+        g.orders = g.orders.filter((x) => x.qty > 0);
+        refund = Math.round(refund);
+        g.cash += refund;
+        reserve(g, rackIdOf(t), n - old);
+        for (const p of g.projects ?? []) if (p.templateId === t.id && p.stage === "building" && p.racks === old) {
+          p.racks = n;
+          p.notes.push(`order reduced to ${n} racks`);
+        }
+        logln(g, "info", `Reduced ${t.name} order from ${old} to ${n} racks; refunded $${usd(refund)}.`);
+        return ok(`Reduced to ${n} racks. Refunded $${usd(refund)}.`);
+      });
     }
   };
 };
+const REFUND = 0.9;
+function failProjects(g, templateId, why) {
+  for (const p of g.projects ?? []) if (p.templateId === templateId && p.stage === "building") {
+    p.stage = "failed";
+    p.notes.push(`stopped: ${why}`);
+  }
+}
 const designActions = (c) => {
   const { commit, logln } = c;
   return {

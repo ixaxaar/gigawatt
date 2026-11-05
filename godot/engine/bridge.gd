@@ -43,11 +43,18 @@ func start() -> bool:
 func stop() -> void:
 	if _pid > 0: OS.kill(_pid)
 
+static var _perf := OS.has_environment("GW_PERF")
+static var req_n := 0
+static var req_us := 0
 func _req(d: Dictionary) -> Dictionary:
 	_id += 1; d["id"] = _id
+	var t0 := Time.get_ticks_usec()
 	_io.store_line(JSON.stringify(d)); _io.flush()
 	var line := _io.get_line()
+	var t1 := Time.get_ticks_usec()
 	var r = JSON.parse_string(line)
+	req_n += 1; req_us += Time.get_ticks_usec() - t0
+	if _perf and (Time.get_ticks_usec() - t0) > 8000: print("PERFREQ %s %s wait=%.1fms parse=%.1fms bytes=%d" % [d.get("fn"), d.get("name", ""), (t1 - t0) / 1000.0, (Time.get_ticks_usec() - t1) / 1000.0, line.length()])
 	if typeof(r) != TYPE_DICTIONARY: return {"ok": false, "error": "bad reply: " + line.left(120)}
 	return r
 

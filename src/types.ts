@@ -535,7 +535,8 @@ export interface PowerOffer {
   offerUntil: number;
 }
 export interface PowerContract extends PowerOffer { startMonth: number; endMonth: number }
-export interface Order { id: string; itemId: string; qty: number; unitPrice: number; arriveMonth: number; /** Delivered to the spares shelf instead of general stock. */ spare?: boolean; }
+export interface Order { id: string; itemId: string; qty: number; unitPrice: number; arriveMonth: number; /** Delivered to the spares shelf instead of general stock. */ spare?: boolean;
+  /** Orders placed together by buyTemplate share a batch (cancelled/resized as one). */ batch?: string; templateId?: string; racks?: number; placedMonth?: number; }
 /** Set on contracts offered by a returning customer after a clean run. */
 export interface RenewalTag { renewalOf?: string }
 export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number; }

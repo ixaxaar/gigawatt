@@ -9,6 +9,9 @@ var sp_state := {"sp": true}
 var design_q := ""
 var open_missing := {}
 var folds := {}
+var ml_all := false
+var led_all := false
+const ML_CAP := 60
 const KIND_ORDER := ["accelerator", "cpu", "memory", "nvme", "nic", "switch", "cable", "chassis", "rack", "storage", "power", "cooling"]
 
 func _serial(rack_id: String) -> String:
@@ -105,13 +108,17 @@ func _rebuild() -> void:
 	if ml.is_empty(): fl[1].add_child(Kit.label("None deployed.", 13, Kit.DIM))
 	else:
 		var mrows := []
+		var shown := 0
 		for m in ml:
+			if not ml_all and shown >= ML_CAP: break
+			shown += 1
 			var doing: String = m.role
 			if m.get("customer") != null: doing += " · %s" % m.customer
 			elif m.get("cluster") != null: doing += " · " + str(m.cluster)
 			var col := Kit.GR if m.status == "online" else (Kit.RD if m.status == "failed" else Kit.AM)
 			mrows.append([m.serial, Kit.label(m.design, 12, Kit.TX, true), "%s #%d" % [m.hall, int(m.slot + 1)], Kit.label(str(m.status) + ("" if m.status == "online" else " → " + Kit.date_of(m.readyMonth)), 12, col, true), Kit.label(doing, 12, Kit.GR if ["training", "serving"].has(m.role) else Kit.DIM, true)])
 		fl[1].add_child(Kit.table(["Serial", "Machine", "Where", "Status", "Doing"], mrows))
+		if ml.size() > ML_CAP: fl[1].add_child(Kit.link(("Showing all %d racks — collapse" % ml.size()) if ml_all else "Show all %d racks (first %d shown)" % [ml.size(), ML_CAP], func(): ml_all = not ml_all; refresh(), 13))
 	var value := 0.0; for r in led: value += r.warehouse
 	var lp := Kit.panel("Full inventory ledger (%d units in warehouse)" % int(value), false, right)
 	var kinds := []; for r in led:
@@ -121,7 +128,9 @@ func _rebuild() -> void:
 	for k in kinds:
 		for r in led:
 			if r.kind != k: continue
+			if not led_all and not (r.warehouse > 0 or r.get("spares", 0) > 0 or r.onOrder > 0 or r.get("deployed", 0) > 0): continue
 			var nm := VBoxContainer.new(); nm.add_child(Kit.link(r.name, func(): app.learn(r.id), 13)); nm.add_child(Kit.label(r.vendor, 10, Kit.DIM))
 			rows2.append([nm, r.kind, ("%d%s" % [int(r.warehouse), (" +%d spare" % int(r.spares)) if r.get("spares", 0) > 0 else ""]) if (r.warehouse > 0 or r.get("spares", 0) > 0) else "—", ("%d · %s" % [int(r.onOrder), Kit.date_of(r.nextEta)]) if r.onOrder > 0 else "—", str(int(r.deployed)) if r.deployed > 0 else "—"])
 	if rows2.is_empty(): lp[1].add_child(Kit.label("Empty. Buy something in Procure.", 13, Kit.DIM))
 	else: lp[1].add_child(Kit.table(["Part", "Kind", "Warehouse", "On order", "Deployed"], rows2))
+	lp[1].add_child(Kit.link("Showing every catalog part — only parts you own or ordered" if led_all else "Showing parts you own or have on order · show the whole catalog", func(): led_all = not led_all; refresh(), 13))

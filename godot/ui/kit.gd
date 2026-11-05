@@ -18,8 +18,16 @@ static func sb(bg: Color = PANEL, border: Color = LINE, r := 10, bw := 1, pad :=
 	var s := StyleBoxFlat.new(); s.bg_color = bg; s.border_color = border; s.set_border_width_all(bw); s.set_corner_radius_all(r)
 	s.content_margin_left = pad; s.content_margin_right = pad; s.content_margin_top = pad * 0.75; s.content_margin_bottom = pad * 0.75; return s
 
+## One shared LabelSettings per (size, colour): building a label with two theme overrides costs ~2x as much,
+## and screens create thousands of labels.
+static var _ls_cache := {}
+static func ls(size: int, col: Color) -> LabelSettings:
+	var k := Vector3i(size, col.r8 | (col.g8 << 8) | (col.b8 << 16), col.a8)
+	if _ls_cache.has(k): return _ls_cache[k]
+	var s := LabelSettings.new(); s.font_size = size; s.font_color = col; _ls_cache[k] = s; return s
+
 static func label(t: String, size := 16, col: Color = TX, wrap := false) -> Label:
-	var l := Label.new(); l.text = t; l.add_theme_font_size_override("font_size", size); l.add_theme_color_override("font_color", col)
+	var l := Label.new(); l.text = t; l.label_settings = ls(size, col)
 	if wrap: l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return l
 
@@ -28,14 +36,22 @@ static func rich(t: String, size := 15) -> RichTextLabel:
 	r.add_theme_font_size_override("normal_font_size", size); r.add_theme_font_size_override("bold_font_size", size); r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE; return r
 
-static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
-	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.focus_mode = Control.FOCUS_NONE
+static var _btn_styles := {}
+## Button StyleBoxes depend only on the kind, so they are built once and shared (hundreds of buttons per screen).
+static func _styles(kind: String) -> Dictionary:
+	if _btn_styles.has(kind): return _btn_styles[kind]
 	var base := Color(0.09, 0.14, 0.2); var brd := LINE
 	if kind == "pri": base = Color(0.1, 0.33, 0.48); brd = CY
 	elif kind == "go": base = Color(0.07, 0.4, 0.28); brd = GR
 	elif kind == "danger": base = Color(0.4, 0.1, 0.14); brd = RD
-	b.add_theme_stylebox_override("normal", sb(base, brd, 8, 1, 10)); b.add_theme_stylebox_override("hover", sb(base.lightened(0.16), CY, 8, 1, 10))
-	b.add_theme_stylebox_override("pressed", sb(base.darkened(0.2), CY, 8, 2, 10)); b.add_theme_stylebox_override("disabled", sb(Color(0.06, 0.08, 0.1), Color(0.12, 0.16, 0.2), 8, 1, 10))
+	var st := {"normal": sb(base, brd, 8, 1, 10), "hover": sb(base.lightened(0.16), CY, 8, 1, 10), "pressed": sb(base.darkened(0.2), CY, 8, 2, 10), "disabled": sb(Color(0.06, 0.08, 0.1), Color(0.12, 0.16, 0.2), 8, 1, 10)}
+	_btn_styles[kind] = st; return st
+
+static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
+	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.focus_mode = Control.FOCUS_NONE
+	var st := _styles(kind)
+	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
+	b.add_theme_stylebox_override("pressed", st.pressed); b.add_theme_stylebox_override("disabled", st.disabled)
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.pressed.connect(cb); return b
 
 static func link(text: String, cb: Callable, size := 14) -> Button:

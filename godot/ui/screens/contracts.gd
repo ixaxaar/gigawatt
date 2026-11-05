@@ -91,6 +91,7 @@ func _offer(parent: Control, c: Dictionary) -> void:
 	var b: Bridge = app.b
 	var renew: bool = c.has("renewalOf")
 	var pn := Kit.fold_panel(("↻ RENEWAL · " if renew else "") + "%s · %s · %s" % [c.customer, c.archetype, c.model.name], "o" + str(c.id), folds, refresh, true, parent, not renew); var v: VBoxContainer = pn[1]
+	if bool(folds.get("o" + str(c.id), not renew)): return   # collapsed: don't build the (expensive) body until it is opened
 	if renew: v.add_child(Kit.label("↻ %s liked your last contract and wants a bigger one — priced +5%%." % c.renewalOf, 13, Color("#ffd166"), true))
 	var t: bool = c.kind == "training"
 	v.add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%sB%s · %s[/color]" % [c.model.name, Kit.num(c.model.paramsB, 1), (" (%sB active)" % Kit.num(c.model.activeParamsB, 1)) if c.model.activeParamsB != c.model.paramsB else "", c.kind], 15))

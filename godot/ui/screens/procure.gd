@@ -179,4 +179,28 @@ func _parts(root: Control) -> void:
 		var np := Kit.panel("", false, dc); np[1].add_child(Kit.label("Select a part to see specs, the engineering story and tradeoffs.", 14, Kit.DIM, true))
 	var op := Kit.panel("Open orders", false, dc)
 	if b.g.orders.is_empty(): op[1].add_child(Kit.label("None", 13, Kit.DIM))
-	for o in b.g.orders: op[1].add_child(Kit.label("%d× %s → month %d" % [o.qty, o.itemId, o.arriveMonth], 12, Kit.DIM))
+	else: op[1].add_child(Kit.label("Every open order, including ones placed from Customers / Easy Path. Cancelling refunds 90%.", 11, Kit.DIM, true))
+	var seen := {}
+	for o in b.g.orders:
+		if o.get("batch") != null:
+			if seen.has(o.batch): continue
+			seen[o.batch] = true
+		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); op[1].add_child(row)
+		var is_batch: bool = o.get("batch") != null
+		var title: String
+		var cost := 0.0
+		if is_batch:
+			var rd: Dictionary = {}
+			for r in b.g.racks: if r.id == "rack-" + str(o.templateId): rd = r
+			title = "%d × %s (full BOM)" % [int(o.racks), rd.get("name", str(o.templateId))]
+			for x in b.g.orders: if x.get("batch") == o.batch: cost += x.qty * x.unitPrice
+		else:
+			title = "%d × %s%s" % [int(o.qty), b.item(o.itemId).get("name", o.itemId), " (spare)" if o.get("spare", false) else ""]
+			cost = o.qty * o.unitPrice
+		var lb := Kit.label("%s · %s · arrives %s" % [title, Kit.usd(cost), Kit.date_of(o.arriveMonth)], 12, Kit.TX, true); lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(lb)
+		var cur: int = int(o.racks) if is_batch else int(o.qty)
+		if cur > 1:
+			row.add_child(Kit.btn("−1", func(): bmsg = b.act("reduceOrder", [o.id, cur - 1]).message; app.sfx("click"); refresh(), "", 11))
+			if cur > 3: row.add_child(Kit.btn("half", func(): bmsg = b.act("reduceOrder", [o.id, cur / 2]).message; app.sfx("click"); refresh(), "", 11))
+		row.add_child(Kit.btn("Cancel", func(): Kit.confirm(self, "Cancel %s? You get 90%% back." % title, func(): bmsg = b.act("cancelOrder", [o.id]).message; app.sfx("sell"); refresh(), "Cancel order"), "danger", 11))
+	if bmsg != "" and sel == "": op[1].add_child(Kit.label(bmsg, 12, Kit.DIM, true))

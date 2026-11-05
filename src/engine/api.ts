@@ -14,6 +14,10 @@ export interface GameStore {
   buy: (itemId: string, qty: number, spare?: boolean) => ActionResult;
   /** Adopt a template's tray+rack designs and order the full bill of materials for `racks` racks, atomically. */
   buyTemplate: (templateId: string, racks: number, spares?: boolean) => ActionResult;
+  /** Cancel an open order (a whole rack batch if it belongs to one). Refunds 90%. */
+  cancelOrder: (orderId: string) => ActionResult;
+  /** Reduce an open order: a loose line to `qty`, or a rack batch to `qty` racks. */
+  reduceOrder: (orderId: string, qty: number) => ActionResult;
   adoptTemplate: (templateId: string) => ActionResult;
   saveTray: (tray: TrayDesign) => ActionResult;
   saveRack: (rack: RackDesign) => ActionResult;

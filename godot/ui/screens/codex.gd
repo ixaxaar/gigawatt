@@ -49,6 +49,7 @@ func _rebuild() -> void:
 			var key := "k_" + str(k)
 			if ql != "" or holds: if not folds.has(key): folds[key] = false
 			var fp := Kit.fold_panel("%s  (%d)" % [KIND_LBL.get(k, str(k)), arr.size()], key, folds, func(): refresh(), false, lc, true)
+			if bool(folds.get(key, true)): continue   # collapsed: skip building hundreds of cards nobody sees
 			for i in arr:
 				var on: bool = sel == i.id
 				var card := PanelContainer.new(); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
