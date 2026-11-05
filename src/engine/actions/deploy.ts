@@ -75,7 +75,7 @@ export const deployActions = (c: Ctx): Partial<GameStore> => {
           id: `RK-${String(g.rackSeq).padStart(4, "0")}`,
           serial: g.rackSeq,
           designId,
-          slot: hall.racks.length,
+          slot: (() => { const used = new Set(hall.racks.map((r) => r.slot)); let i = 0; while (used.has(i)) i++; return i; })(),
           status: 'installing',
           readyMonth: g.month + RACK_READY_LEAD + burnInLeadDelta(g),
           installedMonth: g.month,

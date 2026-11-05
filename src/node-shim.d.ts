@@ -8,3 +8,4 @@ declare module 'node:fs' {
 declare const process: { stdin: any; stdout: { write(s: string): void }; env: Record<string, string | undefined> };
 declare const console: { log(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void };
 declare const localStorage: { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void };
+declare const performance: { now(): number };

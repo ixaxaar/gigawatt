@@ -62,7 +62,7 @@ const lerpCurve = (points: [number, number][], x: number): number => {
 // launch at a premium (~$3) then decay; the H100 era sits around $2.5-3.
 const GPU_HOUR_ANCHOR: [number, number][] = [
   [2020, 1.9], [2021, 1.75], [2022, 1.6], [2023.2, 2.9], [2024, 2.6], [2024.6, 3.0],
-  [2025, 2.8], [2026, 2.6], [2026.8, 3.4], [2027, 3.2], [2028, 3.0],
+  [2025, 3.6], [2026, 4.4], [2026.8, 5.6], [2027, 5.6], [2028, 5.2],
 ];
 export const gpuHourAnchor = (year: number): number => lerpCurve(GPU_HOUR_ANCHOR, year);
 
@@ -80,8 +80,8 @@ const ERA_MEM_GB: [number, number][] = [
 ];
 const ERA_SCALEOUT_GBPS: [number, number][] = [[2020, 6], [2022, 12.5], [2023.5, 25], [2024.5, 50], [2026, 100], [2027, 200], [2028, 200]];
 const ERA_TOKENS_PER_SEC: [number, number][] = [
-  [2020, 3e3], [2021, 2e4], [2022, 1e5], [2023, 5e5], [2024, 3e6],
-  [2025, 2e7], [2026, 8e7], [2027, 2e8], [2028, 5e8],
+  [2020, 3e3], [2021, 1.2e4], [2022, 4e4], [2023, 1.2e5], [2024, 3e5],
+  [2025, 6e5], [2026, 1.0e6], [2027, 1.5e6], [2028, 2.2e6],
 ];
 
 const ACCEL_BUCKETS = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
@@ -127,7 +127,10 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
   const out: Contract[] = [];
   const n = 1 + Math.floor(rng() * 3);
   for (let i = 0; i < n; i++) {
-    const model = pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
+    // Demand mix: half the market is the long tail of small/efficient models that a mid-size operator can actually serve
+    // (fine-tunes, embeddings, 7-70B serving); the rest chases the newest frontier models.
+    const tail = eligible.filter((m) => m.activeParamsB <= 80 && m.paramsB <= 700);
+    const model = rng() < 0.5 && tail.length ? pick(rng, tail) : pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
     const trainP = model.paramsB > 200 ? 0.7 : model.paramsB < 15 ? 0.12 : 0.4;
     const archetype = rollArchetype(rng, state.reputation);
     const t = ARCHETYPE_TABLE[archetype];
@@ -147,7 +150,8 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
       const raw = (stateGB / memPerAccel) * randRange(rng, 2, 4.5) * t.accelMult;
       const minAccelerators = Math.min(32768, Math.max(32, bucket(Math.ceil(raw))));
       const isMoe = model.activeParamsB < model.paramsB * 0.8;
-      const moeDomain = year >= 2027 ? 128 : year >= 2025.5 ? 64 : year >= 2024 ? 32 : 16;
+      // units are the game's accelerator count: an NVL72 rack-scale domain is 36 of them
+      const moeDomain = year >= 2025.5 ? 32 : year >= 2024 ? 16 : 8;
       const minScaleUpDomain = Math.min(
         minAccelerators,
         isMoe ? moeDomain : year >= 2025 ? 16 : 8,

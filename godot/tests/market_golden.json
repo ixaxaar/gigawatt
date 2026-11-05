@@ -31,24 +31,24 @@
      "customer": "Nordwind Auto",
      "archetype": "enterprise",
      "model": {
-      "id": "gpt3-175b",
-      "name": "GPT-3 175B",
-      "paramsB": 175,
-      "activeParamsB": 175,
-      "layers": 96,
-      "kvBytesPerToken": 4718592,
-      "era": 2020.3
+      "id": "gpt2-xl",
+      "name": "GPT-2 1.5B",
+      "paramsB": 1.5,
+      "activeParamsB": 1.5,
+      "layers": 48,
+      "kvBytesPerToken": 196608,
+      "era": 2020
      },
-     "durationMonths": 18,
+     "durationMonths": 21,
      "penaltyRate": 0.011,
      "deadlineMonth": 14,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 16899,
-     "tpotMs": 59,
-     "ttftMs": 260,
+     "tokensPerSec": 10231,
+     "tpotMs": 26,
+     "ttftMs": 440,
      "contextTokens": 1024,
-     "pricePerMTok": 50.096,
-     "rampMonths": 7
+     "pricePerMTok": 1.422,
+     "rampMonths": 6
     }
    ]
   },
@@ -62,24 +62,24 @@
      "customer": "Nordwind Auto",
      "archetype": "enterprise",
      "model": {
-      "id": "mtnlg-530b",
-      "name": "Megatron-Turing NLG 530B",
-      "paramsB": 530,
-      "activeParamsB": 530,
-      "layers": 105,
-      "kvBytesPerToken": 8601600,
-      "era": 2022
+      "id": "gptj-6b",
+      "name": "GPT-J 6B",
+      "paramsB": 6,
+      "activeParamsB": 6,
+      "layers": 28,
+      "kvBytesPerToken": 28672,
+      "era": 2021.5
      },
-     "durationMonths": 18,
+     "durationMonths": 21,
      "penaltyRate": 0.011,
      "deadlineMonth": 27,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 90938,
-     "tpotMs": 59,
-     "ttftMs": 260,
-     "contextTokens": 4096,
-     "pricePerMTok": 86.735,
-     "rampMonths": 7
+     "tokensPerSec": 36375,
+     "tpotMs": 26,
+     "ttftMs": 440,
+     "contextTokens": 2048,
+     "pricePerMTok": 3.076,
+     "rampMonths": 6
     }
    ]
   },
@@ -105,7 +105,7 @@
      "penaltyRate": 0.011,
      "deadlineMonth": 51,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 2728136,
+     "tokensPerSec": 272814,
      "tpotMs": 26,
      "ttftMs": 440,
      "contextTokens": 8192,
@@ -136,7 +136,7 @@
      "penaltyRate": 0.011,
      "deadlineMonth": 83,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 145500588,
+     "tokensPerSec": 1212505,
      "tpotMs": 26,
      "ttftMs": 440,
      "contextTokens": 32768,
@@ -155,24 +155,24 @@
      "customer": "Glyph AI",
      "archetype": "startup",
      "model": {
-      "id": "gpt3-175b",
-      "name": "GPT-3 175B",
-      "paramsB": 175,
-      "activeParamsB": 175,
-      "layers": 96,
-      "kvBytesPerToken": 4718592,
-      "era": 2020.3
+      "id": "gpt2-xl",
+      "name": "GPT-2 1.5B",
+      "paramsB": 1.5,
+      "activeParamsB": 1.5,
+      "layers": 48,
+      "kvBytesPerToken": 196608,
+      "era": 2020
      },
      "durationMonths": 3,
      "penaltyRate": 0.006,
      "deadlineMonth": 17,
      "slaAvailability": 0.9532604092801921,
-     "minAccelerators": 256,
+     "minAccelerators": 32,
      "minScaleUpDomain": 8,
-     "minScaleOutGBsPerAccel": 8.98,
-     "minTotalMemGB": 2800,
+     "minScaleOutGBsPerAccel": 6.73,
+     "minTotalMemGB": 24,
      "pricePerAccelHour": 1.49,
-     "rampMonths": 11
+     "rampMonths": 6
     }
    ]
   },
@@ -181,34 +181,115 @@
    "seed": 42,
    "contracts": [
     {
-     "kind": "training",
-     "id": "trn-24-0-2573",
+     "kind": "inference",
+     "id": "inf-24-0-2573",
      "customer": "CERN OpenLab",
      "archetype": "lab",
      "model": {
-      "id": "mtnlg-530b",
-      "name": "Megatron-Turing NLG 530B",
-      "paramsB": 530,
-      "activeParamsB": 530,
-      "layers": 105,
-      "kvBytesPerToken": 8601600,
-      "era": 2022
+      "id": "gptj-6b",
+      "name": "GPT-J 6B",
+      "paramsB": 6,
+      "activeParamsB": 6,
+      "layers": 28,
+      "kvBytesPerToken": 28672,
+      "era": 2021.5
      },
-     "durationMonths": 10,
+     "durationMonths": 11,
      "penaltyRate": 0.006,
      "deadlineMonth": 29,
      "slaAvailability": 0.97365474648308,
-     "minAccelerators": 512,
-     "minScaleUpDomain": 8,
-     "minScaleOutGBsPerAccel": 12.5,
-     "minTotalMemGB": 8480,
-     "pricePerAccelHour": 2.01,
-     "rampMonths": 12
+     "tokensPerSec": 21598,
+     "tpotMs": 55,
+     "ttftMs": 320,
+     "contextTokens": 2048,
+     "pricePerMTok": 2.325,
+     "rampMonths": 7
     },
     {
      "kind": "training",
-     "id": "trn-24-1-7179",
-     "customer": "RIKEN AICS",
+     "id": "trn-24-1-1460",
+     "customer": "Nordwind Auto",
+     "archetype": "enterprise",
+     "model": {
+      "id": "gpt3-175b",
+      "name": "GPT-3 175B",
+      "paramsB": 175,
+      "activeParamsB": 175,
+      "layers": 96,
+      "kvBytesPerToken": 4718592,
+      "era": 2020.3
+     },
+     "durationMonths": 12,
+     "penaltyRate": 0.008,
+     "deadlineMonth": 27,
+     "slaAvailability": 0.9756178139243274,
+     "minAccelerators": 512,
+     "minScaleUpDomain": 8,
+     "minScaleOutGBsPerAccel": 12.5,
+     "minTotalMemGB": 2800,
+     "pricePerAccelHour": 1.63,
+     "rampMonths": 12
+    }
+   ]
+  },
+  {
+   "month": 48,
+   "seed": 36,
+   "contracts": [
+    {
+     "kind": "training",
+     "id": "trn-48-0-8670",
+     "customer": "Nordwind Auto",
+     "archetype": "enterprise",
+     "model": {
+      "id": "gpt4",
+      "name": "GPT-4",
+      "paramsB": 1800,
+      "activeParamsB": 280,
+      "layers": 120,
+      "kvBytesPerToken": 491520,
+      "era": 2023.2
+     },
+     "durationMonths": 7,
+     "penaltyRate": 0.015,
+     "deadlineMonth": 53,
+     "slaAvailability": 0.9770029145479202,
+     "minAccelerators": 2048,
+     "minScaleUpDomain": 16,
+     "minScaleOutGBsPerAccel": 37.5,
+     "minTotalMemGB": 28800,
+     "pricePerAccelHour": 3.74,
+     "rampMonths": 17
+    },
+    {
+     "kind": "training",
+     "id": "trn-48-1-8911",
+     "customer": "Emirates AI Council",
+     "archetype": "sovereign",
+     "model": {
+      "id": "mixtral-8x7b",
+      "name": "Mixtral 8x7B MoE",
+      "paramsB": 46.7,
+      "activeParamsB": 12.9,
+      "layers": 32,
+      "kvBytesPerToken": 131072,
+      "era": 2023.9
+     },
+     "durationMonths": 18,
+     "penaltyRate": 0.02,
+     "deadlineMonth": 54,
+     "slaAvailability": 0.9914370121737011,
+     "minAccelerators": 64,
+     "minScaleUpDomain": 16,
+     "minScaleOutGBsPerAccel": 37.5,
+     "minTotalMemGB": 748,
+     "pricePerAccelHour": 3.18,
+     "rampMonths": 9
+    },
+    {
+     "kind": "inference",
+     "id": "inf-48-2-1245",
+     "customer": "MIT LIDS",
      "archetype": "lab",
      "model": {
       "id": "gpt2-xl",
@@ -219,97 +300,16 @@
       "kvBytesPerToken": 196608,
       "era": 2020
      },
-     "durationMonths": 4,
-     "penaltyRate": 0.005,
-     "deadlineMonth": 28,
-     "slaAvailability": 0.9733733742590993,
-     "minAccelerators": 32,
-     "minScaleUpDomain": 8,
-     "minScaleOutGBsPerAccel": 9.38,
-     "minTotalMemGB": 24,
-     "pricePerAccelHour": 1.57,
-     "rampMonths": 6
-    }
-   ]
-  },
-  {
-   "month": 48,
-   "seed": 36,
-   "contracts": [
-    {
-     "kind": "training",
-     "id": "trn-48-0-8336",
-     "customer": "VectorForge",
-     "archetype": "startup",
-     "model": {
-      "id": "gpt35-turbo",
-      "name": "GPT-3.5 Turbo",
-      "paramsB": 175,
-      "activeParamsB": 175,
-      "layers": 96,
-      "kvBytesPerToken": 393216,
-      "era": 2022.9
-     },
-     "durationMonths": 3,
-     "penaltyRate": 0.006,
-     "deadlineMonth": 54,
-     "slaAvailability": 0.9526540115661919,
-     "minAccelerators": 64,
-     "minScaleUpDomain": 8,
-     "minScaleOutGBsPerAccel": 37.5,
-     "minTotalMemGB": 2800,
-     "pricePerAccelHour": 2.2,
-     "rampMonths": 9
-    },
-    {
-     "kind": "training",
-     "id": "trn-48-1-9441",
-     "customer": "Skyline Telecom",
-     "archetype": "enterprise",
-     "model": {
-      "id": "chinchilla-70b",
-      "name": "Chinchilla 70B",
-      "paramsB": 70,
-      "activeParamsB": 70,
-      "layers": 80,
-      "kvBytesPerToken": 2621440,
-      "era": 2022.25
-     },
      "durationMonths": 7,
-     "penaltyRate": 0.01,
-     "deadlineMonth": 54,
-     "slaAvailability": 0.9849581676698289,
-     "minAccelerators": 64,
-     "minScaleUpDomain": 8,
-     "minScaleOutGBsPerAccel": 37.5,
-     "minTotalMemGB": 1120,
-     "pricePerAccelHour": 2.8,
-     "rampMonths": 9
-    },
-    {
-     "kind": "training",
-     "id": "trn-48-2-5782",
-     "customer": "Stealth Labs",
-     "archetype": "startup",
-     "model": {
-      "id": "palm-540b",
-      "name": "PaLM 540B",
-      "paramsB": 540,
-      "activeParamsB": 540,
-      "layers": 118,
-      "kvBytesPerToken": 2895872,
-      "era": 2022.3
-     },
-     "durationMonths": 2,
-     "penaltyRate": 0.004,
-     "deadlineMonth": 53,
-     "slaAvailability": 0.9475870879879221,
-     "minAccelerators": 256,
-     "minScaleUpDomain": 8,
-     "minScaleOutGBsPerAccel": 37.5,
-     "minTotalMemGB": 8640,
-     "pricePerAccelHour": 3.02,
-     "rampMonths": 12
+     "penaltyRate": 0.008,
+     "deadlineMonth": 51,
+     "slaAvailability": 0.9673569013760425,
+     "tokensPerSec": 144097,
+     "tpotMs": 55,
+     "ttftMs": 170,
+     "contextTokens": 65536,
+     "pricePerMTok": 0.229,
+     "rampMonths": 8
     }
    ]
   },
@@ -318,10 +318,10 @@
    "seed": 28,
    "contracts": [
     {
-     "kind": "training",
-     "id": "trn-80-0-3476",
-     "customer": "Helios Bank",
-     "archetype": "enterprise",
+     "kind": "inference",
+     "id": "inf-80-0-3555",
+     "customer": "Peregrine Models",
+     "archetype": "startup",
      "model": {
       "id": "gpt5",
       "name": "GPT-5",
@@ -331,22 +331,22 @@
       "kvBytesPerToken": 491520,
       "era": 2025.65
      },
-     "durationMonths": 16,
-     "penaltyRate": 0.011,
-     "deadlineMonth": 82,
-     "slaAvailability": 0.9846453655906953,
-     "minAccelerators": 512,
-     "minScaleUpDomain": 64,
-     "minScaleOutGBsPerAccel": 166.67,
-     "minTotalMemGB": 14400,
-     "pricePerAccelHour": 4.65,
-     "rampMonths": 13
+     "durationMonths": 5,
+     "penaltyRate": 0.004,
+     "deadlineMonth": 86,
+     "slaAvailability": 0.9493432243796996,
+     "tokensPerSec": 535494,
+     "tpotMs": 67,
+     "ttftMs": 650,
+     "contextTokens": 262144,
+     "pricePerMTok": 2.06,
+     "rampMonths": 5
     },
     {
-     "kind": "training",
-     "id": "trn-80-1-8888",
-     "customer": "EU Sovereign Cloud",
-     "archetype": "sovereign",
+     "kind": "inference",
+     "id": "inf-80-1-4777",
+     "customer": "VectorForge",
+     "archetype": "startup",
      "model": {
       "id": "gpt5",
       "name": "GPT-5",
@@ -356,16 +356,16 @@
       "kvBytesPerToken": 491520,
       "era": 2025.65
      },
-     "durationMonths": 22,
-     "penaltyRate": 0.012,
+     "durationMonths": 7,
+     "penaltyRate": 0.005,
      "deadlineMonth": 86,
-     "slaAvailability": 0.9917540206806734,
-     "minAccelerators": 512,
-     "minScaleUpDomain": 64,
-     "minScaleOutGBsPerAccel": 166.67,
-     "minTotalMemGB": 14400,
-     "pricePerAccelHour": 4.8,
-     "rampMonths": 13
+     "slaAvailability": 0.9478092359611764,
+     "tokensPerSec": 443082,
+     "tpotMs": 48,
+     "ttftMs": 540,
+     "contextTokens": 32768,
+     "pricePerMTok": 2.641,
+     "rampMonths": 8
     }
    ]
   }

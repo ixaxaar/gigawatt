@@ -66,7 +66,7 @@ describe('pricing curves', () => {
     expect(gpuHourAnchor(2023.5)).toBeGreaterThanOrEqual(2.5);
     expect(gpuHourAnchor(2023.5)).toBeLessThanOrEqual(3.0);
     expect(gpuHourAnchor(2024.0)).toBeLessThan(gpuHourAnchor(2023.2));
-    expect(gpuHourAnchor(2025.5)).toBeLessThan(gpuHourAnchor(2024.6));
+    expect(gpuHourAnchor(2026.8)).toBeGreaterThan(gpuHourAnchor(2024.6)); // superchip / rack-scale accelerators earn a generation premium
     expect(gpuHourAnchor(2020.5)).toBeLessThan(2.0);
   });
 
@@ -112,13 +112,16 @@ describe('generateContracts', () => {
     }
   });
 
-  it('2028 contracts reference frontier models only', () => {
+  it('2028 demand mixes frontier models with a long tail of small ones a mid-size operator can serve', () => {
     const s = makeState();
-    for (let seed = 0; seed < 20; seed++) {
+    let frontier = 0, tail = 0;
+    for (let seed = 0; seed < 40; seed++) {
       for (const c of generateContracts(s, monthsFor(2028), mulberry32(seed))) {
-        expect(c.model.era).toBeGreaterThan(2025);
+        if (c.model.era > 2025) frontier++;
+        if (c.model.activeParamsB <= 80 && c.model.paramsB <= 700) tail++;
       }
     }
+    expect(frontier).toBeGreaterThan(10); expect(tail).toBeGreaterThan(10);
   });
 
   it('training contracts are structurally coherent', () => {
@@ -143,7 +146,7 @@ describe('generateContracts', () => {
       expect(c.slaAvailability).toBeLessThanOrEqual(1);
       expect(c.penaltyRate).toBeGreaterThan(0);
       if (c.model.activeParamsB < c.model.paramsB * 0.8) {
-        expect(c.minScaleUpDomain).toBeGreaterThanOrEqual(16);
+        expect(c.minScaleUpDomain).toBeGreaterThanOrEqual(Math.min(c.minAccelerators, 8)); // MoE needs at least an 8-wide NVLink island
       }
     }
   });

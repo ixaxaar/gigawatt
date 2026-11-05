@@ -21,6 +21,6 @@ export function makeCtx(get: () => GameStore, set: Setter<GameStore>): Ctx {
       if (res.ok) set({ game: g });
       return res;
     },
-    logln: (g, level, text) => { g.log.push({ month: g.month, level, text }); },
+    logln: (g, level, text) => { g.log.push({ month: g.month, level, text }); if (g.log.length > 400) g.log.splice(0, g.log.length - 400); },
   };
 }

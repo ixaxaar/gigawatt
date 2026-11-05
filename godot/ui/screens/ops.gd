@@ -4,6 +4,9 @@ extends Control
 var app
 var msg := ""
 var msg_bad := false
+var fw_vendor := ""
+var fw_commit := 1.0e7
+var fw_months := 24
 
 func _act(name: String, args: Array) -> void:
 	var r: Dictionary = app.b.act(name, args)
@@ -89,3 +92,90 @@ func _rebuild() -> void:
 		sr.add_child(Kit.label("%s at 60%% resale" % Kit.usd(0.6 * float(it.get("priceUSD", 0.0)) * qty), 12, Kit.GR))
 		sr.add_child(Kit.btn("Sell 1", func(): _act("sellInventory", [id, 1]), "", 12))
 		sr.add_child(Kit.btn("Sell all", func(): _act("sellInventory", [id, qty]), "danger", 12))
+	# --- operating policy
+	var pol: Dictionary = g.get("policy", {})
+	var burn := int(pol.get("burnInMonths", 1)); var maint := int(pol.get("maintenance", 0))
+	var pv = b.q("preview"); if typeof(pv) != TYPE_DICTIONARY: pv = {}
+	var opp := Kit.panel("Operating policy", false, sc)
+	opp[1].add_child(Kit.label("BURN-IN — how long new racks soak before going live", 11, Kit.DIM))
+	var bh := HBoxContainer.new(); bh.add_theme_constant_override("separation", 6); opp[1].add_child(bh)
+	var blab := ["0 mo — skip: ships dead GPUs (3x burn-in failures)", "1 mo — standard", "2 mo — thorough (0.5x failures, +1 month lead)", "3 mo — exhaustive (0.25x failures, +2 months lead)"]
+	for m in 4:
+		var tb := Kit.btn(blab[m], func(): _act("setPolicy", [m, maint]), "", 12)
+		if m == burn: tb.modulate = Color(0.5, 1.0, 0.9)
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(tb)
+	opp[1].add_child(Kit.label("MAINTENANCE — how hard you fight hardware decay", 11, Kit.DIM))
+	var mh := HBoxContainer.new(); mh.add_theme_constant_override("separation", 6); opp[1].add_child(mh)
+	var mlab := ["Reactive — $0", "Preventive — $150/rack/mo (0.75x failures)", "Premium — $400/rack/mo (0.55x failures)"]
+	for l in 3:
+		var mb := Kit.btn(mlab[l], func(): _act("setPolicy", [burn, l]), "", 12)
+		if l == maint: mb.modulate = Color(0.5, 1.0, 0.9)
+		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; mh.add_child(mb)
+	opp[1].add_child(Kit.label("Applies to racks placed from now on and to future failures. Maintenance contracts currently cost %s per month." % Kit.usd(float(pv.get("maintenanceUSD", 0.0))), 11, Kit.DIM, true))
+	# --- vendor relationships & frameworks
+	var vq = b.q("vendors")
+	var vrows: Array = vq if typeof(vq) == TYPE_ARRAY else (vq.get("rows", []) if typeof(vq) == TYPE_DICTIONARY else [])
+	var vp := Kit.panel("Vendor relationships & frameworks", false, sc)
+	if vrows.is_empty(): vp[1].add_child(Kit.label("No vendor relationships yet — buy parts to earn them.", 12, Kit.DIM))
+	for v in vrows:
+		var fw: Dictionary = v.get("framework") if v.get("framework") != null else {}
+		var vh := HBoxContainer.new(); vh.add_theme_constant_override("separation", 8); vp[1].add_child(vh)
+		vh.add_child(_cell(str(v.get("name", v.get("id", "?"))), 120.0))
+		var relb := VBoxContainer.new(); relb.custom_minimum_size = Vector2(80.0, 0); vh.add_child(relb)
+		relb.add_child(Kit.bar(float(v.get("rel", 0.0)), 100.0))
+		relb.add_child(Kit.label("relationship %d" % int(v.get("rel", 0)), 10, Kit.DIM))
+		vh.add_child(_cell("x%.2f alloc" % float(v.get("capMult", 1.0)), 66.0, Kit.CY))
+		vh.add_child(_cell("-%.1f%% rel price" % float(v.get("relDiscountPct", 0.0)), 76.0, Kit.GR))
+		if fw.is_empty():
+			var nfl := _cell("no framework", 150.0, Kit.DIM); nfl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vh.add_child(nfl)
+		else:
+			var fpb := VBoxContainer.new(); fpb.custom_minimum_size = Vector2(150.0, 0); fpb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vh.add_child(fpb)
+			fpb.add_child(Kit.bar(float(fw.get("spentUSD", 0.0)), float(fw.get("commitUSD", 0.0))))
+			fpb.add_child(Kit.label("%s of %s spent · %d%% off · ends %s" % [Kit.usd(float(fw.get("spentUSD", 0.0))), Kit.usd(float(fw.get("commitUSD", 0.0))), int(fw.get("discountPct", 0)), Kit.date_of(float(fw.get("endMonth", 0)))], 10, Kit.DIM))
+			var cbn := Kit.btn("Cancel", func():
+				var unmet: float = maxf(0.0, float(fw.get("commitUSD", 0.0)) - float(fw.get("spentUSD", 0.0)))
+				Kit.confirm(self, "Cancel the %s framework? Walking away costs 20%% of the unspent commitment (%s) as a penalty and the relationship sours." % [str(v.get("name", "?")), Kit.usd(unmet * 0.2)], func(): _act("cancelFramework", [str(fw.get("id", ""))]), "Cancel it"), "danger", 11)
+			vh.add_child(cbn)
+	var vopts := []
+	for vv in b.vendors: vopts.append([vv.id, str(vv.name)])
+	var vnames := {}
+	for o in vopts: vnames[o[0]] = o[1]
+	if not vopts.is_empty():
+		if fw_vendor == "" or not vnames.has(fw_vendor): fw_vendor = vopts[0][0]
+		vp[1].add_child(Kit.hsep())
+		var fh := HBoxContainer.new(); fh.add_theme_constant_override("separation", 8); vp[1].add_child(fh)
+		fh.add_child(Kit.label("New framework:", 12, Kit.DIM))
+		fh.add_child(Kit.option(vopts, fw_vendor, func(id): fw_vendor = str(id); refresh()))
+		for c in [2.0e6, 1.0e7, 5.0e7]:
+			var cb := Kit.btn(Kit.usd(c), func(): fw_commit = c; refresh(), "pri" if is_equal_approx(fw_commit, c) else "", 12)
+			fh.add_child(cb)
+		for mm in [12, 24, 36]:
+			var mtb := Kit.btn("%d mo" % mm, func(): fw_months = mm; refresh(), "pri" if fw_months == mm else "", 12)
+			fh.add_child(mtb)
+		var qq = b.q("frameworkQuote", [fw_vendor, int(fw_commit), fw_months]); if typeof(qq) != TYPE_DICTIONARY: qq = {}
+		var sgn := Kit.btn("Sign framework", func():
+			Kit.confirm(self, "Sign a %s framework with %s — %s over %d months at %d%% off their parts? The %s deposit is paid now and counts toward the commitment." % [Kit.usd(fw_commit), str(vnames.get(fw_vendor, fw_vendor)), Kit.usd(fw_commit), fw_months, int(qq.get("discountPct", 0)), Kit.usd(float(qq.get("depositUSD", 0.0)))], func(): _act("signFramework", [fw_vendor, int(fw_commit), fw_months])), "go", 13)
+		sgn.disabled = not qq.get("valid", false)
+		vp[1].add_child(sgn)
+		if qq.get("valid", false): vp[1].add_child(Kit.label("Quote: %d%% off %s parts · deposit %s · %s over %d months." % [int(qq.get("discountPct", 0)), str(vnames.get(fw_vendor, fw_vendor)), Kit.usd(float(qq.get("depositUSD", 0.0))), Kit.usd(fw_commit), fw_months], 12, Kit.GR, true))
+		else: vp[1].add_child(Kit.label("Cannot sign: %s" % str(qq.get("reason", "no quote")), 12, Kit.RD, true))
+	# --- market competition
+	var rq = b.q("rivals"); if typeof(rq) != TYPE_DICTIONARY: rq = {}
+	var rrows: Array = rq.get("rivals", [])
+	var pidx := float(rq.get("priceIndex", 1.0))
+	var mp := Kit.panel("Market competition", false, sc)
+	var why := "Rivals are undercutting: contract offers are priced x%.2f." if pidx < 0.995 else ("Your scale commands a premium: contract offers are priced x%.2f." if pidx > 1.005 else "Contract offers are priced at list (x%.2f).")
+	mp[1].add_child(Kit.label(why % pidx, 12, Kit.DIM, true))
+	mp[1].add_child(Kit.stats([["Price index", "x%.2f" % pidx, Kit.RD if pidx < 0.995 else (Kit.AM if pidx > 1.005 else Kit.TX)], ["Your accels", Kit.num(float(rq.get("playerAccels", 0.0)))], ["Your share", "%.1f%%" % float(rq.get("playerSharePct", 0.0))]], 3))
+	if rrows.is_empty(): mp[1].add_child(Kit.label("No rival operators tracked yet.", 12, Kit.DIM))
+	for r in rrows:
+		var rh := HBoxContainer.new(); rh.add_theme_constant_override("separation", 8); mp[1].add_child(rh)
+		rh.add_child(_cell("%s · %s" % [str(r.get("name", "?")), str(r.get("style", ""))], 160.0))
+		var shb := VBoxContainer.new(); shb.custom_minimum_size = Vector2(90.0, 0); shb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; rh.add_child(shb)
+		shb.add_child(Kit.bar(float(r.get("sharePct", 0.0)), 100.0))
+		shb.add_child(Kit.label("%.1f%% share" % float(r.get("sharePct", 0.0)), 10, Kit.DIM))
+		rh.add_child(_cell("%s accels" % Kit.num(float(r.get("accels", 0.0))), 90.0))
+		var pm := float(r.get("priceMult", 1.0))
+		var ptxt := "undercutting %d%%" % int(round((1.0 - pm) * 100.0)) if pm < 0.995 else ("premium %d%%" % int(round((pm - 1.0) * 100.0)) if pm > 1.005 else "at list price")
+		rh.add_child(_cell(ptxt, 110.0, Kit.RD if pm < 0.995 else (Kit.AM if pm > 1.005 else Kit.DIM)))
+	mp[1].add_child(Kit.label(str(rq.get("headline", "")), 12, Kit.DIM, true))

@@ -18,8 +18,8 @@ export const commissioning: System = {
       } else if (rack.status === 'commissioning' && s.month >= rack.readyMonth) {
         if (rng() < o.commissionFailProb * commissionFailMult(s)) {
           rack.status = 'failed';
-          rack.readyMonth = s.month + o.repairMonths;
-          log('bad', `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
+          rack.readyMonth = s.month + Math.min(o.repairMonths, 2); // dead-on-arrival: the integrator swaps the part under warranty
+          log('bad', `Rack ${rack.id} failed burn-in during commissioning (dead on arrival); warranty swap ETA month ${rack.readyMonth}.`);
         } else {
           rack.status = 'online';
           log('good', `Rack ${rack.id} commissioned and online.`);

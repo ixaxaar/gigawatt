@@ -3,10 +3,12 @@
 import { ALL_ITEMS, getItem, ITEMS_BY_KIND } from './data';
 import { getTemplate } from './data/templates';
 import { evaluateCluster } from './sim/network';
+import { validateRack } from './sim/validate';
 import { offerAt, rackBom, useGame, type GameStore } from './store';
 const G = () => useGame.getState().game;
 import { uplinkGbps, contractNeedGbps } from './sim/internet';
 import { rackIdOf, templateFacts } from './plan';
+import { buildOptions, contractFit } from './contractfit';
 import type { Cluster, FabricDesign, GameState, Project, ScaleOutTech, Topology } from './types';
 
 const TECH: ScaleOutTech[] = ['ib-ndr', 'ib-xdr', 'spectrum-x', 'eth-400', 'eth-800', 'roce', 'uec-eth'];
@@ -61,10 +63,20 @@ export function stepProject(st: GameStore, pid: string): void {
     const bom = rackBom(G(), designId) ?? {};
     const have = (n: number) => Object.entries(bom).every(([id, c]) => (G().inventory[id] ?? 0) >= c * n);
     let placed = p.rackIds.length;
+    const before = new Set(useStoreHall(st, hall.id).racks.map(r => r.id));
     if (load <= h2.itPowerKW && load <= h2.coolingKW) {
       while (placed < p.racks && free - (placed - p.rackIds.length) > 0 && have(1)) { const r = st.placeRack(hall.id, designId); if (!r.ok) { note(`placement blocked: ${r.message}`); break; } placed++; }
     }
-    if (placed > p.rackIds.length) { const ids = useStoreHall(st, hall.id).racks.filter(r => r.designId === designId && !r.clusterId).map(r => r.id).slice(0, p.racks); note(`deployed ${placed}/${p.racks} racks`); st.patchProject(pid, { rackIds: ids, ...(placed >= p.racks ? { stage: 'commissioning' as const } : {}) }); }
+    if (placed > p.rackIds.length) { const ids = [...p.rackIds, ...useStoreHall(st, hall.id).racks.filter(r => !before.has(r.id)).map(r => r.id)]; note(`deployed ${placed}/${p.racks} racks`); st.patchProject(pid, { rackIds: ids, ...(placed >= p.racks ? { stage: 'commissioning' as const } : {}) }); }
+    else {
+      const why = load > h2.itPowerKW ? `waiting for power: need ${load.toFixed(0)} kW IT, hall has ${h2.itPowerKW.toFixed(0)} kW (order a transformer on Build)`
+        : load > h2.coolingKW ? `waiting for cooling: need ${load.toFixed(0)} kW, hall rejects ${h2.coolingKW.toFixed(0)} kW (add cooling on Build)`
+        : free <= 0 ? `${hall.name} is full — buy floor space on Build`
+        : !have(1) ? 'waiting for parts to arrive (lead time)' : 'waiting';
+      const last = (G().projects ?? []).find(x => x.id === pid)?.notes.slice(-1)[0] ?? '';
+      if (!last.endsWith(why)) note(why);
+      if (G().month - p.startMonth > 16) { st.patchProject(pid, { stage: 'failed', notes: [...(G().projects ?? []).find(x => x.id === pid)!.notes, 'Gave up after 16 months stuck — the parts are in your warehouse; finish the build by hand.'].slice(-12) }); }
+    }
   } else if (p.stage === 'commissioning') {
     const racks = useStoreHall(st, hall.id).racks.filter(r => p.rackIds.includes(r.id));
     if (racks.length && racks.every(r => r.status === 'online')) { note('all racks online — designing the fabric'); st.patchProject(pid, { stage: 'clustering' }); stepProject(st, pid); }
@@ -101,6 +113,21 @@ export function stepAllProjects(getSt: () => GameStore): void { ensureUplink(get
 export function startProject(st: GameStore, contractId: string, templateId: string, racks: number): { ok: boolean; message: string } {
   const t = getTemplate(templateId); if (!t) return { ok: false, message: 'Unknown build.' };
   const g0 = G();
+  const cand = g0.activeContracts.find(a => a.contract.id === contractId)?.contract ?? g0.availableContracts.find(c => c.id === contractId);
+  if (!cand) return { ok: false, message: 'Contract not found.' };
+  // 1) Idle hardware first: a cluster you already own that qualifies and is not serving anyone costs nothing to reuse.
+  const busy = new Set(g0.activeContracts.flatMap(a => a.clusterIds));
+  const idle = contractFit(g0, cand).all.find(x => x.ok && !busy.has(x.cluster.id));
+  if (idle) {
+    if (!g0.activeContracts.some(a => a.contract.id === contractId)) { const a = st.acceptContract(contractId); if (!a.ok) return a; }
+    const r = st.assignContract(contractId, [idle.cluster.id]);
+    if (r.ok) return { ok: true, message: `Reused your idle cluster "${idle.cluster.name}" — no new hardware needed. Revenue starts next month.` };
+  }
+  const opts = buildOptions(g0, cand);
+  const opt = opts.find(o => o.t.id === templateId);
+  if (!opt) return { ok: false, message: `${t.name} cannot serve ${cand.customer}'s ${cand.model.name} (${opts.length ? 'qualifying builds: ' + opts.slice(0, 3).map(o => o.t.name).join(', ') : 'no build you can buy today qualifies'}).` };
+  if (racks < opt.racks) return { ok: false, message: `${cand.customer} needs at least ${opt.racks} × ${t.name} to qualify (you asked for ${racks}).` };
+  if (!opt.fitsRamp) return { ok: false, message: `Parts take ${opt.lead} months to arrive but ${cand.customer} requires capacity within ${cand.rampMonths ?? 4} months of signing — they would walk away. Pick a build with a shorter lead time.` };
   if (!g0.activeContracts.some(a => a.contract.id === contractId)) { const a = st.acceptContract(contractId); if (!a.ok) return a; }
   const r = st.buyTemplate(templateId, racks); if (!r.ok) return r;
   const f = templateFacts(t);
@@ -108,7 +135,10 @@ export function startProject(st: GameStore, contractId: string, templateId: stri
   let hall = G().halls.find(h => COOL_LEVEL[h.coolingClass] >= COOL_LEVEL[t.rack.cooling] && h.rackSlots - h.racks.length >= racks);
   const notes: string[] = [`ordered ${racks} × ${t.name}`];
   if (!hall) { const b = st.buildHall(`Hall ${String.fromCharCode(65 + G().halls.length)}`, t.rack.cooling as any, Math.max(8, racks + 4)); notes.push(b.message); hall = G().halls[G().halls.length - 1]; }
-  const need = f.kWPerRack * racks + hall.racks.length * 0;
+  // size plant for everything the hall will carry: racks already there + other projects still building + this order
+  const kwOf = (did: string) => { const d = G().racks.find(r => r.id === did); return d ? validateRack(d, G().trays, getItem).stats.kW : 0; };
+  const inFlightKW = (G().projects ?? []).filter(pp => pp.hallId === hall!.id && pp.stage === 'building').reduce((n, pp) => { const tt = getTemplate(pp.templateId); return n + (tt ? templateFacts(tt).kWPerRack * Math.max(0, pp.racks - pp.rackIds.length) : 0); }, 0);
+  const need = f.kWPerRack * racks + hall.racks.reduce((n, r) => n + kwOf(r.designId), 0) + inFlightKW;
   const plant: { id: string; n: number }[] = [];
   const g = G(); const fresh = g.halls.find(h => h.id === hall!.id)!;
   const pw = plantChoice(g, fresh.coolingClass, 'power'), cl = plantChoice(g, fresh.coolingClass, 'cooling');
