@@ -47,13 +47,7 @@ financing → reinvest. Failure/win: bankruptcy; or reach net-worth/capacity tar
 - **Infra**: Vertiv/Schneider/Eaton/Delta style power & cooling, CDUs, RDHx, immersion (Submer/GRC style), VAST/WEKA/DDN storage.
 
 ## Architecture
-- **Stack**: Vite + React + TypeScript + Zustand, SVG/Canvas views, Vitest. Pure-TS sim (no React) so it's testable
-  and deterministic (seeded RNG).
-- `src/types.ts` — **the contract**. Everything is data-driven off these types.
-- `src/data/*.ts` — catalogs (hardware facts). Each entry has `codex` text: summary, why-it-matters, tradeoffs.
-- `src/sim/*.ts` — engine: validation (tray/rack/hall/network), perf models, market, finance, tick.
-- `src/ui/*` — screens: Dashboard, Procurement, Tray Designer, Rack Designer, Hall/Floor, Network/Cluster, Contracts, Finance, Codex, Missions.
-- `src/store.ts` — Zustand game state + save/load (localStorage).
+See [ARCHITECTURE.md](ARCHITECTURE.md): a pure deterministic TypeScript engine (`src/engine`, `src/sim`, `src/data`) behind a JSON-lines protocol, with a Godot 4 front-end.
 
 ## Milestones
 M0 scaffold + types + this doc · M1 catalogs (5 parallel workers) · M2 sim engine + tests · M3 core UI (procurement,

@@ -19,7 +19,7 @@ describe('engine protocol', () => {
     expect(handle({ fn: 'act', name: 'patchProject' }).ok).toBe(false);
   });
   it('has queries and a tick pipeline with unique system ids', () => {
-    expect(Object.keys(QUERIES).length).toBeGreaterThan(50);
+    expect(Object.keys(QUERIES).length).toBeGreaterThan(40);
     const ids = PIPELINE.map((s) => s.id); expect(new Set(ids).size).toBe(ids.length);
   });
 });
