@@ -1,244 +1,17 @@
 import { createInterface } from "node:readline";
-const NAMES = { hpe: "HPE", asus: "ASUS", quanta: "Quanta (QCT)", wiwynn: "Wiwynn", cisco: "Cisco UCS", inspur: "Inspur", lenovo: "Lenovo", supermicro: "Supermicro", gigabyte: "Gigabyte", foxconn: "Foxconn", dell: "Dell", nvidia: "NVIDIA" };
-const DIY = (by = "generic") => ({
-  tier: "diy",
-  by,
-  label: "Build it yourself",
-  premium: 0,
-  lead: 1,
-  audience: "Teams with integration staff chasing lowest capex.",
-  pitch: "Buy the baseboard and every part separately and assemble, cable and burn-in yourself.",
-  tradeoff: "Cheapest, but you own integration, firmware validation and debugging; parts arrive on different lead times."
-});
-const OEM = (by, premium = 0.07) => ({
-  tier: "oem",
-  by,
-  label: `${NAMES[by] ?? by[0].toUpperCase() + by.slice(1)} integrated rack`,
-  premium,
-  lead: 0.85,
-  audience: "Most neoclouds: a validated rack from an OEM with a support contract.",
-  pitch: "OEM builds, cables and burn-tests the rack at the factory (L11/L12) and ships it ready to roll in.",
-  tradeoff: "A modest premium buys faster install and one vendor to call; less customisation than DIY."
-});
-const TURNKEY = (by, label, premium = 0.18) => ({
-  tier: "turnkey",
-  by,
-  label,
-  premium,
-  lead: 0.7,
-  audience: "First-time operators and anyone who values uptime and support over capex.",
-  pitch: "Vendor-engineered reference system with software stack and premium support; fastest to production.",
-  tradeoff: "Highest capex; you pay for validation, support SLAs and allocation priority."
-});
-const hdr = (accel, cpu2, dimm, dn, nic2, nn, nvme, psu, extra = []) => [
-  { slot: "accelerator", itemId: accel, count: 8 },
-  { slot: "cpu", itemId: cpu2, count: 2 },
-  { slot: "dimm", itemId: dimm, count: dn },
-  { slot: "nic", itemId: nic2, count: nn },
-  { slot: "nvme", itemId: nvme, count: 2 },
-  { slot: "psu", itemId: "vt-geist-5kw", count: psu },
-  ...extra
-];
-const sw$2 = (switchId, count = 1) => ({ type: "switch", switchId, count });
-const PLATFORMS = [
-  {
-    key: "hgx-a100",
-    label: "HGX A100 8-GPU",
-    from: 2020.85,
-    eol: 2024.5,
-    chassisId: "nv-hgx-a100-8gy",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 3,
-    cooling: "air",
-    parts: hdr("nv-a100-80-sxm", "amd-epyc-7742", "sam-ddr4-3200-64", 16, "nv-connectx6-hdr", 4, "sam-pm1733-3t84", 4),
-    extras: [sw$2("nv-qm8700")],
-    story: "The Ampere generation: 8 A100s in one NVLink3 box, scaled out over 200G InfiniBand. DGX A100 is NVIDIA's own build of this.",
-    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.08), TURNKEY("nvidia", "NVIDIA DGX A100 (rack)"), OEM("lenovo", 0.09), OEM("inspur", 0.05), OEM("quanta", 0.04)]
-  },
-  {
-    key: "hgx-h100",
-    label: "HGX H100 8-GPU",
-    from: 2022.9,
-    eol: 2025.5,
-    chassisId: "nv-hgx-h100-8gy",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 2,
-    cooling: "air",
-    parts: hdr("nv-h100-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$2("nv-qm9700")],
-    story: "Hopper: FP8 Transformer Engine and NVLink4. 10 kW per server is the edge of air cooling, so only two fit per air rack.",
-    variants: [DIY(), OEM("supermicro"), OEM("hpe", 0.09), TURNKEY("nvidia", "NVIDIA DGX H100 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08)]
-  },
-  {
-    key: "hgx-h200",
-    label: "HGX H200 8-GPU",
-    from: 2024.5,
-    eol: 2026,
-    chassisId: "nv-hgx-h100-8gy",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 2,
-    cooling: "air",
-    parts: hdr("nv-h200-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$2("nv-qm9700")],
-    story: "Same Hopper compute, 141 GB of faster HBM3e: a drop-in for inference, where memory bandwidth and capacity set tokens/s.",
-    variants: [DIY(), OEM("supermicro"), TURNKEY("nvidia", "NVIDIA DGX H200 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08), OEM("hpe", 0.09)]
-  },
-  {
-    key: "hgx-b200",
-    label: "HGX B200 8-GPU (liquid)",
-    from: 2025,
-    chassisId: "nv-hgx-b200-8gy",
-    rackId: "gen-rack-19-48u-dlc",
-    trays: 4,
-    cooling: "dlc",
-    parts: [...hdr("nv-b200-sxm", "amd-epyc-turin", "skh-ddr5-6400-96", 16, "nv-connectx8", 4, "mic-9550-15t36", 6), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
-    extras: [sw$2("nv-qmx8000")],
-    story: "Blackwell in the HGX form factor: 15 kW per server needs direct liquid cooling, so you need a CDU and liquid-ready racks.",
-    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA DGX B200 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("hpe", 0.09)]
-  },
-  {
-    key: "hgx-h200-rdhx",
-    label: "HGX H200 8-GPU (rear-door cooled)",
-    from: 2024.5,
-    eol: 2026,
-    chassisId: "nv-hgx-h100-8gy",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 4,
-    cooling: "rdhx",
-    parts: hdr("nv-h200-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$2("nv-qm9700")],
-    story: "The same air-cooled Hopper servers, but a chilled-water rear-door heat exchanger on the rack lets you double the density to four servers (~40 kW) without touching the servers.",
-    variants: [OEM("supermicro"), OEM("dell", 0.08), OEM("lenovo", 0.09), OEM("hpe", 0.09)]
-  },
-  {
-    key: "mi300x-rdhx",
-    label: "AMD Instinct MI300X 8-GPU (rear-door cooled)",
-    from: 2023.9,
-    eol: 2026,
-    chassisId: "sm-ubb-oam8-mi300x",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 4,
-    cooling: "rdhx",
-    parts: hdr("amd-mi300x", "amd-epyc-genoa", "sam-ddr5-5600-64", 12, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$2("cs-n9364e")],
-    story: "MI300X servers in rear-door-cooled racks: a pragmatic retrofit path for existing air halls that need more kW per rack.",
-    variants: [OEM("supermicro"), DIY("gigabyte")]
-  },
-  {
-    key: "gb200",
-    label: "GB200 NVL72 rack-scale",
-    from: 2024.9,
-    eol: 2026.5,
-    chassisId: "nv-gb200-nvl72-ct",
-    rackId: "fox-nvl72-mgx",
-    trays: 18,
-    cooling: "dlc",
-    parts: [{ slot: "accelerator", itemId: "nv-gb200", count: 2 }, { slot: "nic", itemId: "nv-connectx8", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
-    extras: [sw$2("nv-nvlink-switch-tray5", 9)],
-    story: "72 Blackwell GPUs in ONE NVLink domain: one 120+ kW liquid-cooled rack acts as a single giant GPU. You cannot DIY this; it ships integrated.",
-    variants: [OEM("foxconn", 0.06), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA GB200 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
-  },
-  {
-    key: "gb300",
-    label: "GB300 NVL72 rack-scale",
-    from: 2025.7,
-    chassisId: "nv-gb200-nvl72-ct",
-    rackId: "fox-nvl72-mgx",
-    trays: 18,
-    cooling: "dlc",
-    parts: [{ slot: "accelerator", itemId: "nv-gb300", count: 2 }, { slot: "nic", itemId: "nv-connectx8", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
-    extras: [sw$2("nv-nvlink-switch-tray5", 9)],
-    story: "Blackwell Ultra NVL72: 288 GB HBM3e per GPU for long-context reasoning inference at rack scale.",
-    variants: [OEM("foxconn", 0.06), TURNKEY("nvidia", "NVIDIA GB300 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("dell", 0.09), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
-  },
-  {
-    key: "mi300x",
-    label: "AMD Instinct MI300X 8-GPU",
-    from: 2023.9,
-    eol: 2026,
-    chassisId: "sm-ubb-oam8-mi300x",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 2,
-    cooling: "air",
-    parts: hdr("amd-mi300x", "amd-epyc-genoa", "sam-ddr5-5600-64", 12, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
-    extras: [sw$2("cs-n9364e")],
-    story: "AMD's answer to H100: 192 GB HBM3 per GPU (more than H100/H200) on an 8-GPU OAM board. Ethernet-first scale-out and the ROCm software stack.",
-    variants: [DIY("gigabyte"), OEM("supermicro"), OEM("dell", 0.08), OEM("lenovo", 0.09), OEM("asus", 0.06), OEM("hpe", 0.09)]
-  },
-  {
-    key: "mi355x",
-    label: "AMD Instinct MI355X 8-GPU (liquid)",
-    from: 2025.5,
-    chassisId: "gig-ubb-oam8-lq",
-    rackId: "gen-rack-19-48u-dlc",
-    trays: 4,
-    cooling: "dlc",
-    parts: [...hdr("amd-mi355x", "amd-epyc-turin", "skh-ddr5-6400-96", 12, "nv-connectx7", 4, "mic-9550-15t36", 4), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
-    extras: [sw$2("nv-sn5600")],
-    story: "CDNA4 with 288 GB HBM3E and FP4/FP6 support, liquid cooled at 1.4 kW per GPU.",
-    variants: [DIY("gigabyte"), OEM("supermicro", 0.08), OEM("dell", 0.09), OEM("hpe", 0.09), OEM("asus", 0.06), OEM("lenovo", 0.09)]
-  },
-  {
-    key: "gaudi3",
-    label: "Intel Gaudi 3 8-accelerator",
-    from: 2024.7,
-    chassisId: "int-gaudi3-hls",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 2,
-    cooling: "air",
-    parts: [{ slot: "accelerator", itemId: "int-gaudi-3", count: 8 }, { slot: "cpu", itemId: "amd-epyc-genoa", count: 2 }, { slot: "dimm", itemId: "sam-ddr5-5600-64", count: 12 }, { slot: "nvme", itemId: "sam-pm9a3-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-5kw", count: 4 }],
-    extras: [sw$2("cs-n9364e")],
-    story: "Ethernet-native: each Gaudi 3 has 24x200G RoCE ports on the chip itself, so no separate NICs are needed.",
-    variants: [OEM("supermicro", 0.06), DIY(), OEM("dell", 0.08), OEM("hpe", 0.09)]
-  },
-  {
-    key: "galaxy",
-    label: "Tenstorrent Galaxy (32-chip)",
-    from: 2023.5,
-    chassisId: "tt-galaxy-4u",
-    rackId: "gen-rack-19-48u-hd",
-    trays: 3,
-    cooling: "air",
-    parts: [{ slot: "accelerator", itemId: "tt-galaxy", count: 1 }, { slot: "cpu", itemId: "amd-epyc-genoa", count: 1 }, { slot: "dimm", itemId: "sam-ddr5-5600-64", count: 4 }, { slot: "nic", itemId: "nv-connectx7", count: 1 }, { slot: "psu", itemId: "vt-geist-5kw", count: 4 }],
-    extras: [sw$2("cs-n9364e")],
-    story: "Open RISC-V architecture: 32 Wormhole chips meshed by Ethernet inside the box and between boxes, no NVLink and no InfiniBand.",
-    variants: [DIY("generic")]
-  },
-  {
-    key: "cs3",
-    label: "Cerebras CS-3 (wafer-scale)",
-    from: 2024.3,
-    chassisId: "cb-cs3-cab",
-    rackId: "gen-rack-19-48u-dlc",
-    trays: 2,
-    cooling: "dlc",
-    parts: [{ slot: "accelerator", itemId: "cb-wse-3", count: 1 }, { slot: "nic", itemId: "nv-connectx7", count: 2 }, { slot: "nvme", itemId: "sam-pm9a3-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-22kw", count: 6 }],
-    extras: [],
-    story: "One 46,000 mm² wafer is the chip: 900k cores with all weights in on-wafer SRAM, so there is no HBM and no GPU-to-GPU network inside the system.",
-    variants: [TURNKEY("cerebras", "Cerebras CS-3 system", 0.1)]
-  }
-];
-const nameOf = (v2) => NAMES[v2] ?? v2[0].toUpperCase() + v2.slice(1);
-const TEMPLATES = PLATFORMS.flatMap((p) => p.variants.map((v2) => {
-  const codex = { summary: `${p.label} - ${v2.label}. ${v2.pitch}`, explain: p.story, tradeoffs: [v2.tradeoff, p.cooling === "air" ? "Air-cooled: simple facility, limited rack density." : "Liquid-cooled: needs a DLC hall with CDUs."], tags: [p.key, v2.tier, p.cooling] };
-  return {
-    id: `tpl-${p.key}-${v2.by}-${v2.tier}`,
-    name: v2.tier === "turnkey" ? v2.label : `${p.label} · ${nameOf(v2.by)} ${v2.tier === "diy" ? "(DIY)" : "rack"}`,
-    integrator: v2.by,
-    tier: v2.tier,
-    platform: p.label,
-    tagline: v2.pitch,
-    availableFrom: p.from,
-    eolAfter: p.eol,
-    tray: { chassisId: p.chassisId, parts: p.parts },
-    rack: { rackId: p.rackId, trayCount: p.trays, extras: p.extras, cooling: p.cooling },
-    premium: v2.premium,
-    leadFactor: v2.lead,
-    audience: v2.audience,
-    codex
+const mem$2 = /* @__PURE__ */ new Map();
+globalThis.localStorage = { getItem: (k2) => mem$2.get(k2) ?? null, setItem: (k2, v2) => void mem$2.set(k2, v2), removeItem: (k2) => void mem$2.delete(k2) };
+function createStore(init2) {
+  let state;
+  const subs = /* @__PURE__ */ new Set();
+  const get = () => state;
+  const set = (patch2) => {
+    state = { ...state, ...typeof patch2 === "function" ? patch2(state) : patch2 };
+    subs.forEach((f) => f(state));
   };
-}));
-const getTemplate = (id) => TEMPLATES.find((t) => t.id === id);
+  state = init2(set, get);
+  return { getState: get, setState: set, subscribe: (fn) => (subs.add(fn), () => subs.delete(fn)) };
+}
 const NVIDIA_ACCELERATORS = [
   {
     id: "nv-v100-sxm2",
@@ -5065,10 +4838,10 @@ const CAT_POWER_VENDORS = [
 ];
 const cdx$4 = ([summary, explain, tradeoffs, tags]) => ({ summary, explain, tradeoffs, tags });
 const base$4 = (id, name, v2, from, price, lead, c) => ({ id, name, vendor: v2, availableFrom: from, priceUSD: price, leadTimeMonths: lead, codex: cdx$4(c) });
-const st$3 = (tier, ru, lead = 3) => (id, name, v2, price, pb, r, w, watts, c, from = 2020, l = lead) => ({ kind: "storage", ...base$4(id, name, v2, from, price, l, c), tier, capacityPB: pb, readGBs: r, writeGBs: w, rackUnits: ru, watts });
-const hot = st$3("hot-nvme", 2);
-const warm = st$3("warm", 4);
-const obj = st$3("object", 4);
+const st$4 = (tier, ru, lead = 3) => (id, name, v2, price, pb, r, w, watts, c, from = 2020, l = lead) => ({ kind: "storage", ...base$4(id, name, v2, from, price, l, c), tier, capacityPB: pb, readGBs: r, writeGBs: w, rackUnits: ru, watts });
+const hot = st$4("hot-nvme", 2);
+const warm = st$4("warm", 4);
+const obj = st$4("object", 4);
 const RAW_STORAGE = [
   // ---- DDN EXAScaler / SFA (Lustre + storage fabric) ----
   hot("ddn-ai200x2", "DDN EXAScaler AI200X2 (2U NVMe Lustre)", "ddn", 175e3, 0.3, 65, 25, 1500, ["2U EXAScaler Lustre appliance, the compact A3I-class step.", "AI200X2 pairs Lustre parallel filesystem with NVMe in 2U for teams starting AI clusters; add units to scale bandwidth linearly.", ["Entry A3I economics", "Bandwidth scales only per unit"]], 2022.5),
@@ -5159,26 +4932,26 @@ const CAT_NVME = [
   nv$1(5)("wd-sn861-15t36", "Western Digital SN861 15.36TB U.3 (Gen5)", "wd", 1600, 15.36, 14, 8, 24, ["WD's Gen5 datacenter flagship for AI-scale reads.", "SN861 answers Samsung PM1743 with ~14 GB/s reads and better power efficiency per GB/s, targeting checkpoint-heavy AI shelves.", ["Efficient Gen5 bandwidth", "Newer ramp, pricier per TB"]], 2024.2, 2),
   nv$1(4)("seagate-xp2050-3t84", "Seagate Nytro XP2050 3.84TB (dual-port U.3)", "seagate", 600, 3.84, 6.5, 5.5, 13, ["Dual-ported NVMe SSD that stays alive through a controller failure.", "Two PCIe ports let a drive straddle two hosts: arrays and clustered filesystems keep serving through one path's loss - a classic HA storage trick.", ["Path redundancy per drive", "Dual-port tax on price"]], 2022.5)
 ];
-const mem$2 = (type) => (id, name, v2, price, gb, mts, watts, c, from = 2020, lead = 1) => ({ kind: "memory", ...base$4(id, name, v2, from, price, lead, c), type, capacityGB: gb, speedMTs: mts, watts });
+const mem$1 = (type) => (id, name, v2, price, gb, mts, watts, c, from = 2020, lead = 1) => ({ kind: "memory", ...base$4(id, name, v2, from, price, lead, c), type, capacityGB: gb, speedMTs: mts, watts });
 const CAT_MEMORY = [
   // ---- Samsung ----
-  mem$2("ddr4")("sam-ddr4-3200-128", "Samsung DDR4-3200 LRDIMM 128GB", "samsung", 620, 128, 3200, 10, ["128GB load-reduced DDR4 module for maxing out older Gen4 hosts.", "LRDIMMs buffer the ranks so two DIMMs per channel still train; they filled 4TB+ EPYC Rome/Milan hosts before 3DS DDR5 existed.", ["Biggest DDR4 capacity per slot", "Extra buffering latency"]], 2020),
-  mem$2("ddr5")("sam-ddr5-4800-64", "Samsung DDR5-4800 RDIMM 64GB", "samsung", 400, 64, 4800, 10, ["First-wave DDR5 64GB RDIMM for Sapphire Rapids/Genoa hosts.", "JEDEC 4800 was the launch spec; these filled early 2022-23 GPU hosts where every 32-DIMM socket wanted 2TB.", ["Launch DDR5 capacity point", "Slowest DDR5 gear ratio"]], 2022),
-  mem$2("ddr5")("sam-ddr5-5600-96", "Samsung DDR5-5600 RDIMM 96GB", "samsung", 620, 96, 5600, 14, ["96GB 3DS RDIMM: mid-capacity step for 12-channel Turin hosts.", "3DS stacking yields 96GB at RDIMM-ish pricing, letting one EPYC socket reach 1.15TB without LRDIMM premiums.", ["1.15TB per socket without LRDIMM", "3DS latency slightly above monolithic"]], 2024.2),
-  mem$2("ddr5")("sam-ddr5-6400-128", "Samsung DDR5-6400 RDIMM 128GB 3DS", "samsung", 1100, 128, 6400, 16, ["128GB DDR5-6400: the fast end of server RDIMM in 2024-25.", "6400 MT/s is the top JEDEC bin Granite Rapids/Turin memory controllers run broadly; 128GB 3DS stacks combine capacity with that bandwidth.", ["Top standard DDR5 bin", "Cost per GB climbs with speed"]], 2024.7),
-  mem$2("lpddr5x")("sam-socamm-96", "Samsung SOCAMM 96GB LPDDR5X (Grace-class)", "samsung", 450, 96, 6400, 6, ["Small Outline Compression Attached Memory Module for GB200-class Grace CPUs.", "SOCAMM packs LPDDR5X into removable small modules: NVIDIA's Grace superchips populate them 8-at-a-time for ~480GB and ~8 TB/s of shared CPU-GPU memory.", ["Removable LPDDR5X: serviceable unlike soldered", "Speed bins lag soldered LPDDR5X"], ["unverified"]], 2024.7),
+  mem$1("ddr4")("sam-ddr4-3200-128", "Samsung DDR4-3200 LRDIMM 128GB", "samsung", 620, 128, 3200, 10, ["128GB load-reduced DDR4 module for maxing out older Gen4 hosts.", "LRDIMMs buffer the ranks so two DIMMs per channel still train; they filled 4TB+ EPYC Rome/Milan hosts before 3DS DDR5 existed.", ["Biggest DDR4 capacity per slot", "Extra buffering latency"]], 2020),
+  mem$1("ddr5")("sam-ddr5-4800-64", "Samsung DDR5-4800 RDIMM 64GB", "samsung", 400, 64, 4800, 10, ["First-wave DDR5 64GB RDIMM for Sapphire Rapids/Genoa hosts.", "JEDEC 4800 was the launch spec; these filled early 2022-23 GPU hosts where every 32-DIMM socket wanted 2TB.", ["Launch DDR5 capacity point", "Slowest DDR5 gear ratio"]], 2022),
+  mem$1("ddr5")("sam-ddr5-5600-96", "Samsung DDR5-5600 RDIMM 96GB", "samsung", 620, 96, 5600, 14, ["96GB 3DS RDIMM: mid-capacity step for 12-channel Turin hosts.", "3DS stacking yields 96GB at RDIMM-ish pricing, letting one EPYC socket reach 1.15TB without LRDIMM premiums.", ["1.15TB per socket without LRDIMM", "3DS latency slightly above monolithic"]], 2024.2),
+  mem$1("ddr5")("sam-ddr5-6400-128", "Samsung DDR5-6400 RDIMM 128GB 3DS", "samsung", 1100, 128, 6400, 16, ["128GB DDR5-6400: the fast end of server RDIMM in 2024-25.", "6400 MT/s is the top JEDEC bin Granite Rapids/Turin memory controllers run broadly; 128GB 3DS stacks combine capacity with that bandwidth.", ["Top standard DDR5 bin", "Cost per GB climbs with speed"]], 2024.7),
+  mem$1("lpddr5x")("sam-socamm-96", "Samsung SOCAMM 96GB LPDDR5X (Grace-class)", "samsung", 450, 96, 6400, 6, ["Small Outline Compression Attached Memory Module for GB200-class Grace CPUs.", "SOCAMM packs LPDDR5X into removable small modules: NVIDIA's Grace superchips populate them 8-at-a-time for ~480GB and ~8 TB/s of shared CPU-GPU memory.", ["Removable LPDDR5X: serviceable unlike soldered", "Speed bins lag soldered LPDDR5X"], ["unverified"]], 2024.7),
   // ---- Micron ----
-  mem$2("ddr4")("mic-ddr4-3200-64", "Micron DDR4-3200 RDIMM 64GB", "micron", 340, 64, 3200, 6, ["Micron's 64GB DDR4 RDIMM for the Gen4 GPU-host era.", "Same spec class as the Samsung part; mixing vendors per channel is disallowed - pick one brand per host for validated training.", ["Second source for DDR4 fleets", "DDR4 bandwidth caps modern hosts"]], 2020),
-  mem$2("ddr5")("mic-ddr5-4800-64", "Micron DDR5-4800 RDIMM 64GB", "micron", 400, 64, 4800, 10, ["Micron's first-wave DDR5 64GB RDIMM.", "The 2022 DDR5 supply crunch made these briefly pricier than the DDR4 they replaced; prices normalized once Korean fabs caught up.", ["Launch DDR5 second source", "Was scarcity-priced through 2022"]], 2022),
-  mem$2("ddr5")("mic-ddr5-5600-96", "Micron DDR5-5600 RDIMM 96GB", "micron", 600, 96, 5600, 14, ["96GB 3DS RDIMM second-source for EPYC Turin hosts.", "Micron's 3DS 96GB matches the Samsung part: 12 channels x 96GB x 2 sockets = 2.3TB per HGX node.", ["Cheap mid-capacity uplift", "Verify BIOS QVL before mixing brands"]], 2024.2),
-  mem$2("ddr5")("mic-ddr5-6400-128", "Micron DDR5-6400 RDIMM 128GB 3DS", "micron", 1150, 128, 6400, 16, ["128GB DDR5-6400 3DS RDIMM for bandwidth-hungry hosts.", "Populating 32 DIMMs of these in an HGX tray gives 4TB at 6400 - the high-water mark of standard RDIMM before MRDIMM.", ["4TB per tray at top RDIMM speed", "Price per GB nearly doubles vs 5600"]], 2024.8),
-  mem$2("lpddr5x")("mic-socamm-96", "Micron SOCAMM 96GB LPDDR5X", "micron", 450, 96, 6400, 6, ["Micron's SOCAMM LPDDR5X module for GB200/GB300 Grace hosts.", "Micron is a primary SOCAMM supplier for NVIDIA rack programs; modules hot-plug via connector instead of board rework.", ["Grace-standard memory on connectors", "Only used in ARM superchip trays"], ["unverified"]], 2024.7),
+  mem$1("ddr4")("mic-ddr4-3200-64", "Micron DDR4-3200 RDIMM 64GB", "micron", 340, 64, 3200, 6, ["Micron's 64GB DDR4 RDIMM for the Gen4 GPU-host era.", "Same spec class as the Samsung part; mixing vendors per channel is disallowed - pick one brand per host for validated training.", ["Second source for DDR4 fleets", "DDR4 bandwidth caps modern hosts"]], 2020),
+  mem$1("ddr5")("mic-ddr5-4800-64", "Micron DDR5-4800 RDIMM 64GB", "micron", 400, 64, 4800, 10, ["Micron's first-wave DDR5 64GB RDIMM.", "The 2022 DDR5 supply crunch made these briefly pricier than the DDR4 they replaced; prices normalized once Korean fabs caught up.", ["Launch DDR5 second source", "Was scarcity-priced through 2022"]], 2022),
+  mem$1("ddr5")("mic-ddr5-5600-96", "Micron DDR5-5600 RDIMM 96GB", "micron", 600, 96, 5600, 14, ["96GB 3DS RDIMM second-source for EPYC Turin hosts.", "Micron's 3DS 96GB matches the Samsung part: 12 channels x 96GB x 2 sockets = 2.3TB per HGX node.", ["Cheap mid-capacity uplift", "Verify BIOS QVL before mixing brands"]], 2024.2),
+  mem$1("ddr5")("mic-ddr5-6400-128", "Micron DDR5-6400 RDIMM 128GB 3DS", "micron", 1150, 128, 6400, 16, ["128GB DDR5-6400 3DS RDIMM for bandwidth-hungry hosts.", "Populating 32 DIMMs of these in an HGX tray gives 4TB at 6400 - the high-water mark of standard RDIMM before MRDIMM.", ["4TB per tray at top RDIMM speed", "Price per GB nearly doubles vs 5600"]], 2024.8),
+  mem$1("lpddr5x")("mic-socamm-96", "Micron SOCAMM 96GB LPDDR5X", "micron", 450, 96, 6400, 6, ["Micron's SOCAMM LPDDR5X module for GB200/GB300 Grace hosts.", "Micron is a primary SOCAMM supplier for NVIDIA rack programs; modules hot-plug via connector instead of board rework.", ["Grace-standard memory on connectors", "Only used in ARM superchip trays"], ["unverified"]], 2024.7),
   // ---- SK hynix ----
-  mem$2("ddr4")("skh-ddr4-3200-64", "SK hynix DDR4-3200 RDIMM 64GB", "skhynix", 340, 64, 3200, 6, ["SK hynix 64GB DDR4 RDIMM - the third DDR4 source.", "Having three RDIMM vendors smooths allocation crunches; spec-identical parts mean channel-level brand mixing is a policy choice, not a technical one.", ["Third DDR4 source", "Legacy speed for new builds"]], 2020),
-  mem$2("ddr5")("skh-ddr5-4800-64", "SK hynix DDR5-4800 RDIMM 64GB", "skhynix", 400, 64, 4800, 10, ["SK hynix first-wave DDR5 64GB RDIMM.", "Launch-bin DDR5; SK hynix volume skewed to hyperscalers, so channel stock lagged Samsung/Micron in 2022.", ["Launch DDR5 third source", "Channel availability lagged in 2022"]], 2022),
-  mem$2("ddr5")("skh-ddr5-5600-128", "SK hynix DDR5-5600 RDIMM 128GB 3DS", "skhynix", 1200, 128, 5600, 15, ["128GB 3DS RDIMM at 5600 for capacity-first hosts.", "A 2-socket host of 24 slots reaches 3TB of CPU memory for KV-cache-heavy inference servers without MRDIMM pricing.", ["3TB+ hosts without LRDIMM pricing", "Runs a gear slower than 6400 parts"]], 2024.3),
-  mem$2("ddr5")("skh-ddr5-6400-128", "SK hynix DDR5-6400 RDIMM 128GB 3DS", "skhynix", 1150, 128, 6400, 16, ["Top-bin 128GB RDIMM matching Granite/Turin controllers.", "SK hynix 1b-nm DRAM made 6400 MT/s at 128GB practical; bandwidth per socket approaches 640 GB/s in 12-channel EPYC.", ["Top-bin DDR5 bandwidth", "Premium pricing per GB"]], 2024.8),
-  mem$2("lpddr5x")("skh-socamm-128", "SK hynix SOCAMM 128GB LPDDR5X", "skhynix", 560, 128, 6400, 7, ["128GB LPDDR5X SOCAMM for GB300-class Grace hosts.", "GB300 doubled per-superchip LPDDR5X (to 384GB+); SOCAMM 128GB steps are how the density scales while staying field-replaceable.", ["Grace capacity step-up", "Superchip-tray-only fit"], ["unverified"]], 2025.5)
+  mem$1("ddr4")("skh-ddr4-3200-64", "SK hynix DDR4-3200 RDIMM 64GB", "skhynix", 340, 64, 3200, 6, ["SK hynix 64GB DDR4 RDIMM - the third DDR4 source.", "Having three RDIMM vendors smooths allocation crunches; spec-identical parts mean channel-level brand mixing is a policy choice, not a technical one.", ["Third DDR4 source", "Legacy speed for new builds"]], 2020),
+  mem$1("ddr5")("skh-ddr5-4800-64", "SK hynix DDR5-4800 RDIMM 64GB", "skhynix", 400, 64, 4800, 10, ["SK hynix first-wave DDR5 64GB RDIMM.", "Launch-bin DDR5; SK hynix volume skewed to hyperscalers, so channel stock lagged Samsung/Micron in 2022.", ["Launch DDR5 third source", "Channel availability lagged in 2022"]], 2022),
+  mem$1("ddr5")("skh-ddr5-5600-128", "SK hynix DDR5-5600 RDIMM 128GB 3DS", "skhynix", 1200, 128, 5600, 15, ["128GB 3DS RDIMM at 5600 for capacity-first hosts.", "A 2-socket host of 24 slots reaches 3TB of CPU memory for KV-cache-heavy inference servers without MRDIMM pricing.", ["3TB+ hosts without LRDIMM pricing", "Runs a gear slower than 6400 parts"]], 2024.3),
+  mem$1("ddr5")("skh-ddr5-6400-128", "SK hynix DDR5-6400 RDIMM 128GB 3DS", "skhynix", 1150, 128, 6400, 16, ["Top-bin 128GB RDIMM matching Granite/Turin controllers.", "SK hynix 1b-nm DRAM made 6400 MT/s at 128GB practical; bandwidth per socket approaches 640 GB/s in 12-channel EPYC.", ["Top-bin DDR5 bandwidth", "Premium pricing per GB"]], 2024.8),
+  mem$1("lpddr5x")("skh-socamm-128", "SK hynix SOCAMM 128GB LPDDR5X", "skhynix", 560, 128, 6400, 7, ["128GB LPDDR5X SOCAMM for GB300-class Grace hosts.", "GB300 doubled per-superchip LPDDR5X (to 384GB+); SOCAMM 128GB steps are how the density scales while staying field-replaceable.", ["Grace capacity step-up", "Superchip-tray-only fit"], ["unverified"]], 2025.5)
 ];
 const rk = (std) => (id, name, v2, price, units, kw, wkg, cooling, wMM, dMM, hMM, busbar, c, from = 2020, lead = 2) => ({ kind: "rack", ...base$4(id, name, v2, from, price, lead, c), standard: std, units, maxKW: kw, maxWeightKg: wkg, cooling, widthMM: wMM, depthMM: dMM, heightMM: hMM, hasBusbar: busbar });
 const r19 = rk("19in");
@@ -5442,7 +5215,7 @@ const NIC_FIX = {
 };
 const CAT_NICS = RAW_NICS.map((n) => NIC_FIX[n.id] ? { ...n, ...NIC_FIX[n.id], codex: { ...n.codex, tags: [...n.codex.tags ?? [], ...NIC_FIX[n.id].gbps ? [] : []] } } : n);
 const CAT_CABLES = RAW_CABLES.filter((c) => !/-mpo\d+-/.test(c.id));
-const sw$1 = (id, name, vendor, role, tech, launch, priceUSD, lead, ports, portGbps, capTbps, units, watts, summary, explain, tradeoffs, tags, opts = {}) => ({
+const sw$2 = (id, name, vendor, role, tech, launch, priceUSD, lead, ports, portGbps, capTbps, units, watts, summary, explain, tradeoffs, tags, opts = {}) => ({
   id,
   name,
   vendor,
@@ -5464,7 +5237,7 @@ const sw$1 = (id, name, vendor, role, tech, launch, priceUSD, lead, ports, portG
 });
 const CAT_SWITCHES_A = [
   // ---------- NVIDIA Spectrum / Quantum ----------
-  sw$1(
+  sw$2(
     "nv-sn5400",
     "NVIDIA Spectrum-4 SN5400 (64x400G)",
     "nvidia",
@@ -5483,7 +5256,7 @@ const CAT_SWITCHES_A = [
     ["400G optics keep the BOM cheaper than 800G", "Half the fabric bandwidth of SN5600"],
     ["spectrum-4", "400g", "roce", "ethernet"]
   ),
-  sw$1(
+  sw$2(
     "nv-sn4700",
     "NVIDIA Spectrum-3 SN4700 (32x400G)",
     "nvidia",
@@ -5502,7 +5275,7 @@ const CAT_SWITCHES_A = [
     ["Cheaper 400G entry than Spectrum-4", "Half the radix of 64-port Spectrum-4 boxes"],
     ["spectrum-3", "400g", "roce"]
   ),
-  sw$1(
+  sw$2(
     "nv-sn4600c",
     "NVIDIA Spectrum-3 SN4600C (64x200G + 400G uplinks)",
     "nvidia",
@@ -5521,7 +5294,7 @@ const CAT_SWITCHES_A = [
     ["Dense cheap 200G ports", "Only a few true 400G uplinks"],
     ["spectrum-3", "200g", "roce", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "nv-sn3700",
     "NVIDIA Spectrum-2 SN3700 (32x200G)",
     "nvidia",
@@ -5541,7 +5314,7 @@ const CAT_SWITCHES_A = [
     ["spectrum-2", "200g", "roce"],
     { eolAfter: 2025 }
   ),
-  sw$1(
+  sw$2(
     "nv-sn3420",
     "NVIDIA Spectrum-2 SN3420 (48x100G + 6x200G)",
     "nvidia",
@@ -5561,7 +5334,7 @@ const CAT_SWITCHES_A = [
     ["spectrum-2", "100g", "frontend", "unverified"],
     { eolAfter: 2024.5, features: ["100g-leaf", "6x200g-uplink", "roce", "vxlan"] }
   ),
-  sw$1(
+  sw$2(
     "nv-qm9790",
     "NVIDIA Quantum-2 QM9790 (144x400G NDR IB)",
     "nvidia",
@@ -5580,7 +5353,7 @@ const CAT_SWITCHES_A = [
     ["Fewer switches per fat-tree stage than QM9700", "OSFP breakout cabling everywhere"],
     ["infiniband", "ndr", "sharp", "scale-out"]
   ),
-  sw$1(
+  sw$2(
     "nv-qm8790",
     "NVIDIA Quantum QM8790 (80x200G HDR IB)",
     "nvidia",
@@ -5599,7 +5372,7 @@ const CAT_SWITCHES_A = [
     ["High radix per chassis", "HDR generation - NDR is now the standard"],
     ["infiniband", "hdr", "scale-out", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "nv-q3200",
     "NVIDIA Quantum-X800 QM3200 (64x800G XDR IB)",
     "nvidia",
@@ -5618,7 +5391,7 @@ const CAT_SWITCHES_A = [
     ["800G optics are expensive", "XDR ecosystem still ramping"],
     ["infiniband", "xdr", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "nv-sn2201",
     "NVIDIA SN2201 (48x1G + 8x10G OOB)",
     "nvidia",
@@ -5639,7 +5412,7 @@ const CAT_SWITCHES_A = [
     { features: ["48x1g-rj45", "8x10g-sfp"] }
   ),
   // ---------- Arista ----------
-  sw$1(
+  sw$2(
     "ar-7050x4",
     "Arista 7050X4 32x100G leaf (Trident 3)",
     "arista",
@@ -5659,7 +5432,7 @@ const CAT_SWITCHES_A = [
     ["trident3", "100g", "leaf", "frontend"],
     { eolAfter: 2024.5 }
   ),
-  sw$1(
+  sw$2(
     "ar-7060x4",
     "Arista 7060X4 32x400G (Tomahawk 3)",
     "arista",
@@ -5679,7 +5452,7 @@ const CAT_SWITCHES_A = [
     ["tomahawk3", "400g", "leaf"],
     { eolAfter: 2024 }
   ),
-  sw$1(
+  sw$2(
     "ar-7060x5",
     "Arista 7060X5 64x400G (Tomahawk 4)",
     "arista",
@@ -5698,7 +5471,7 @@ const CAT_SWITCHES_A = [
     ["Proven volume platform", "No 800G upgrade path"],
     ["tomahawk4", "400g", "leaf", "spine"]
   ),
-  sw$1(
+  sw$2(
     "ar-7060dx5",
     "Arista 7060DX5-64S 64x800G (Tomahawk 5)",
     "arista",
@@ -5717,7 +5490,7 @@ const CAT_SWITCHES_A = [
     ["800G optics dominate the BOM", "Merchant silicon - no NVIDIA telemetry stack"],
     ["tomahawk5", "800g", "leaf", "ai"]
   ),
-  sw$1(
+  sw$2(
     "ar-7170",
     "Arista 7170-32C (Jericho2 router, MACsec)",
     "arista",
@@ -5737,7 +5510,7 @@ const CAT_SWITCHES_A = [
     ["jericho2", "router", "macsec"],
     { eolAfter: 2025.5 }
   ),
-  sw$1(
+  sw$2(
     "ar-7260x3",
     "Arista 7260CX3 32x100G leaf (Trident 3)",
     "arista",
@@ -5757,7 +5530,7 @@ const CAT_SWITCHES_A = [
     ["trident3", "100g", "leaf", "unverified"],
     { eolAfter: 2023 }
   ),
-  sw$1(
+  sw$2(
     "ar-7280r3",
     "Arista 7280R3-32C4 (Jericho3 router)",
     "arista",
@@ -5776,7 +5549,7 @@ const CAT_SWITCHES_A = [
     ["Deep buffers absorb microbursts", "Router pricing per port"],
     ["jericho3", "400g", "router"]
   ),
-  sw$1(
+  sw$2(
     "ar-7280r4a",
     "Arista 7280R4A-48 (Jericho3-AI leaf)",
     "arista",
@@ -5795,7 +5568,7 @@ const CAT_SWITCHES_A = [
     ["Jericho3-AI features in 1U", "Fewer 800G options than 7388X5/7060X6"],
     ["jericho3-ai", "400g", "ai", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "ar-7388x5",
     "Arista 7388X5 AI leaf (Tomahawk 5)",
     "arista",
@@ -5814,7 +5587,7 @@ const CAT_SWITCHES_A = [
     ["Merchant-silicon economics", "Exact port splits vary by SKU"],
     ["tomahawk5", "ai", "leaf", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "ar-7800r3",
     "Arista 7800R3-8 modular spine (Jericho3)",
     "arista",
@@ -5833,7 +5606,7 @@ const CAT_SWITCHES_A = [
     ["Chassis capex and floor space", "Overkill below hyperscale"],
     ["jericho3", "modular", "spine", "router", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "ar-7700r4",
     "Arista 7700R4-4 Distributed Etherlink Switch",
     "arista",
@@ -5853,7 +5626,7 @@ const CAT_SWITCHES_A = [
     ["jericho3-ai", "800g", "des", "ai", "unverified"]
   ),
   // ---------- Cisco ----------
-  sw$1(
+  sw$2(
     "cs-n93600gx",
     "Cisco Nexus 93600YC-GX (48x25G + 6x400G)",
     "cisco",
@@ -5873,7 +5646,7 @@ const CAT_SWITCHES_A = [
     ["nexus", "gx", "400g", "frontend"],
     { eolAfter: 2024.5, features: ["nexus", "vxlan", "evpn", "48x25g-host", "6x400g-uplink", "telemetry"] }
   ),
-  sw$1(
+  sw$2(
     "cs-n93180fx3",
     "Cisco Nexus 93180YC-FX3 (48x25G + 6x100G)",
     "cisco",
@@ -5893,7 +5666,7 @@ const CAT_SWITCHES_A = [
     ["nexus", "fx3", "25g", "tor", "frontend"],
     { eolAfter: 2025.5, features: ["nexus", "vxlan", "evpn", "48x25g-host", "6x100g-uplink"] }
   ),
-  sw$1(
+  sw$2(
     "cs-n9332d",
     "Cisco Nexus 9332D-GX2B (32x400G)",
     "cisco",
@@ -5912,7 +5685,7 @@ const CAT_SWITCHES_A = [
     ["Compact 400G radix", "Smaller ecosystem than mainstream Nexus 9300"],
     ["nexus", "gx2", "400g", "ai"]
   ),
-  sw$1(
+  sw$2(
     "cs-n9364d",
     "Cisco Nexus 9364D-GX2A (64x400G)",
     "cisco",
@@ -5931,7 +5704,7 @@ const CAT_SWITCHES_A = [
     ["Full 400G radix in 1U", "CloudScale ASIC - feature split vs Silicon One models"],
     ["nexus", "gx2", "400g", "ai", "leaf"]
   ),
-  sw$1(
+  sw$2(
     "cs-n9508",
     "Cisco Nexus 9508 modular (8-slot, 36x400G cards)",
     "cisco",
@@ -5950,7 +5723,7 @@ const CAT_SWITCHES_A = [
     ["Chassis economics need filling", "13U and heavy cabling"],
     ["nexus", "9500", "modular", "spine", "400g"]
   ),
-  sw$1(
+  sw$2(
     "cs-n9808",
     "Cisco Nexus 9808 modular (8-slot 400G)",
     "cisco",
@@ -5969,7 +5742,7 @@ const CAT_SWITCHES_A = [
     ["Future-proof modular core", "Expensive versus fixed-form spines"],
     ["nexus", "9800", "modular", "400g", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "cs-8201",
     "Cisco 8201 (Silicon One 400G)",
     "cisco",
@@ -5989,7 +5762,7 @@ const CAT_SWITCHES_A = [
     ["silicon-one", "400g", "router", "unverified"],
     { features: ["silicon-one", "ios-xr", "24x400g", "8x100g"] }
   ),
-  sw$1(
+  sw$2(
     "cs-8501",
     "Cisco Nexus 8501 (Silicon One dense 800G)",
     "cisco",
@@ -6008,7 +5781,7 @@ const CAT_SWITCHES_A = [
     ["Very new - thin field history", "Positioning still settling versus Nexus 9800"],
     ["silicon-one", "800g", "ai", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "cs-8812",
     "Cisco 8812 (12-slot Silicon One chassis)",
     "cisco",
@@ -6027,7 +5800,7 @@ const CAT_SWITCHES_A = [
     ["Huge capex and power", "Needs carrier-class planning"],
     ["silicon-one", "modular", "router", "unverified"]
   ),
-  sw$1(
+  sw$2(
     "cs-n93108tcfx3",
     "Cisco Nexus 93108TC-FX3 (48x10G copper OOB)",
     "cisco",
@@ -7141,9 +6914,9 @@ const EXP_NICS = [
     features: ["rdma", "gpudirect"]
   })
 ];
-const sw = (o2) => ({ kind: "switch", cooling: ["air"], inNetworkCompute: false, ...o2 });
+const sw$1 = (o2) => ({ kind: "switch", cooling: ["air"], inNetworkCompute: false, ...o2 });
 const EXP_SWITCHES = [
-  sw({
+  sw$1({
     ...base("cl-ds5000-sonic", "Celestica DS5000 64x400G (SONiC)", "generic", 2023, 42e3, 3, ["Open-networking 51.2 Tb/s-class white-box switch running SONiC.", "Hyperscalers buy white-box Tomahawk switches for half the price and run SONiC. You save capex but own the software, tuning and bug fixes.", ["About half the price of branded Ethernet", "You are your own support team"]]),
     role: "scale-out",
     tech: "eth-400",
@@ -7154,7 +6927,7 @@ const EXP_SWITCHES = [
     watts: 750,
     features: ["rocev2", "sonic"]
   }),
-  sw({
+  sw$1({
     ...base("ar-7050x3", "Arista 7050X3 32x100G leaf", "arista", 2020, 14e3, 2, ["Workhorse 100G leaf for 2020-era Ethernet back-ends and storage.", "Cheap and ubiquitous; enough for A100 nodes with 100G NICs, a bottleneck for anything later.", ["Low cost per port", "Out of its depth past 200G"]]),
     role: "scale-out",
     tech: "eth-100",
@@ -7165,7 +6938,7 @@ const EXP_SWITCHES = [
     watts: 250,
     features: ["rocev2", "eos"]
   }),
-  sw({
+  sw$1({
     ...base("cs-8101-32h", "Cisco 8101-32H 32x400G", "cisco", 2022.5, 36e3, 3, ["Cisco Silicon One 400G router/switch for fabric and storage.", "Deep buffers and strong telemetry. Cisco, Arista and NVIDIA Spectrum-X all aim at the AI Ethernet back-end.", ["Operational maturity", "Premium price per port"]]),
     role: "scale-out",
     tech: "eth-400",
@@ -7176,7 +6949,7 @@ const EXP_SWITCHES = [
     watts: 500,
     features: ["rocev2", "silicon-one"]
   }),
-  sw({
+  sw$1({
     ...base("gen-oob-1g48", "Management switch 48x1G (OOB)", "generic", 2020, 1800, 1, ["Out-of-band management switch for BMCs and PDUs.", "Every server and PDU has a management port. The OOB network is how you recover a hung node without touching it.", ["Tiny cost, vital reliability", "One per rack adds up at scale"]]),
     role: "oob",
     tech: "eth-100",
@@ -7293,10 +7066,10 @@ const EXP_STORAGE = [
     watts: 900
   })
 ];
-const mem$1 = (o2) => ({ kind: "memory", ...o2 });
+const mem = (o2) => ({ kind: "memory", ...o2 });
 const EXP_MEMORY = [
-  mem$1({ ...base("sam-ddr5-4800-32", "Samsung DDR5-4800 RDIMM 32GB", "samsung", 2022, 230, 1, ["Entry DDR5 DIMM for cost-sensitive hosts.", "Enough for inference hosts that do not cache datasets.", ["Cheap", "Low capacity"]]), type: "ddr5", capacityGB: 32, speedMTs: 4800, watts: 8 }),
-  mem$1({ ...base("sam-ddr5-5600-128", "Samsung DDR5-5600 RDIMM 128GB", "samsung", 2023.5, 1400, 2, ["128GB DDR5 for memory-hungry hosts.", "Useful for CPU offload and KV-cache spill; costs more per GB.", ["High capacity per slot", "Higher $/GB"]]), type: "ddr5", capacityGB: 128, speedMTs: 5600, watts: 12 })
+  mem({ ...base("sam-ddr5-4800-32", "Samsung DDR5-4800 RDIMM 32GB", "samsung", 2022, 230, 1, ["Entry DDR5 DIMM for cost-sensitive hosts.", "Enough for inference hosts that do not cache datasets.", ["Cheap", "Low capacity"]]), type: "ddr5", capacityGB: 32, speedMTs: 4800, watts: 8 }),
+  mem({ ...base("sam-ddr5-5600-128", "Samsung DDR5-5600 RDIMM 128GB", "samsung", 2023.5, 1400, 2, ["128GB DDR5 for memory-hungry hosts.", "Useful for CPU offload and KV-cache spill; costs more per GB.", ["High capacity per slot", "Higher $/GB"]]), type: "ddr5", capacityGB: 128, speedMTs: 5600, watts: 12 })
 ];
 const nv = (o2) => ({ kind: "nvme", ...o2 });
 const EXP_NVME = [
@@ -7365,58 +7138,417 @@ const ALL_ITEMS = [
 const BY_ID = new Map(ALL_ITEMS.map((i) => [i.id, i]));
 const getItem = (id) => BY_ID.get(id);
 const ITEMS_BY_KIND = (k2) => ALL_ITEMS.filter((i) => i.kind === k2);
-const PART_RATE = {
-  accelerator: 1 / 8e3,
-  psu: 1 / 3e3,
-  nic: 1 / 6e3,
-  nvme: 1 / 6e3,
-  memory: 1 / 2e4,
-  cpu: 1 / 2e4,
-  switch: 1 / 5e3
-};
-const PART_LABEL = {
-  accelerator: "GPU/accelerator",
-  psu: "power supply",
-  nic: "NIC",
-  nvme: "NVMe drive",
-  memory: "DIMM",
-  cpu: "CPU",
-  switch: "ToR switch"
-};
-function rackParts(state, designId) {
-  const out = {};
-  const d = state.racks.find((r) => r.id === designId);
-  const add = (id, n) => {
-    out[id] = (out[id] ?? 0) + n;
+const MONTHS_PER_YEAR = 12;
+const BASE_YEAR = 2020;
+const monthToYear = (m) => BASE_YEAR + m / MONTHS_PER_YEAR;
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
-  for (const it2 of d?.items ?? []) {
-    if (it2.type === "tray") {
-      const t = state.trays.find((x) => x.id === it2.trayId);
-      for (const p of t?.parts ?? []) add(p.itemId, p.count * it2.count);
-    } else if (it2.type === "switch") add(it2.switchId, it2.count);
+}
+const randRange = (rng, lo, hi) => lo + rng() * (hi - lo);
+const randInt = (rng, lo, hi) => Math.floor(lo + rng() * (hi - lo + 1));
+function pick(rng, arr) {
+  return arr[Math.min(arr.length - 1, Math.floor(rng() * arr.length))];
+}
+const MODELS = [
+  { id: "gpt2-xl", name: "GPT-2 1.5B", paramsB: 1.5, activeParamsB: 1.5, layers: 48, kvBytesPerToken: 196608, era: 2020 },
+  { id: "gpt3-175b", name: "GPT-3 175B", paramsB: 175, activeParamsB: 175, layers: 96, kvBytesPerToken: 4718592, era: 2020.3 },
+  { id: "gptj-6b", name: "GPT-J 6B", paramsB: 6, activeParamsB: 6, layers: 28, kvBytesPerToken: 28672, era: 2021.5 },
+  { id: "mtnlg-530b", name: "Megatron-Turing NLG 530B", paramsB: 530, activeParamsB: 530, layers: 105, kvBytesPerToken: 8601600, era: 2022 },
+  { id: "chinchilla-70b", name: "Chinchilla 70B", paramsB: 70, activeParamsB: 70, layers: 80, kvBytesPerToken: 2621440, era: 2022.25 },
+  { id: "palm-540b", name: "PaLM 540B", paramsB: 540, activeParamsB: 540, layers: 118, kvBytesPerToken: 2895872, era: 2022.3 },
+  { id: "gpt35-turbo", name: "GPT-3.5 Turbo", paramsB: 175, activeParamsB: 175, layers: 96, kvBytesPerToken: 393216, era: 2022.9 },
+  { id: "llama-65b", name: "LLaMA 65B", paramsB: 65, activeParamsB: 65, layers: 80, kvBytesPerToken: 2621440, era: 2023.1 },
+  { id: "gpt4", name: "GPT-4", paramsB: 1800, activeParamsB: 280, layers: 120, kvBytesPerToken: 491520, era: 2023.2 },
+  { id: "llama2-70b", name: "Llama 2 70B", paramsB: 70, activeParamsB: 70, layers: 80, kvBytesPerToken: 327680, era: 2023.55 },
+  { id: "mistral-7b", name: "Mistral 7B", paramsB: 7, activeParamsB: 7, layers: 32, kvBytesPerToken: 131072, era: 2023.75 },
+  { id: "mixtral-8x7b", name: "Mixtral 8x7B MoE", paramsB: 46.7, activeParamsB: 12.9, layers: 32, kvBytesPerToken: 131072, era: 2023.9 },
+  { id: "grok-1", name: "Grok-1 314B MoE", paramsB: 314, activeParamsB: 80, layers: 64, kvBytesPerToken: 262144, era: 2024.25 },
+  { id: "llama3-70b", name: "Llama 3 70B", paramsB: 70, activeParamsB: 70, layers: 80, kvBytesPerToken: 327680, era: 2024.3 },
+  { id: "gpt4o", name: "GPT-4o", paramsB: 200, activeParamsB: 200, layers: 88, kvBytesPerToken: 360448, era: 2024.45 },
+  { id: "llama31-405b", name: "Llama 3.1 405B", paramsB: 405, activeParamsB: 405, layers: 126, kvBytesPerToken: 516096, era: 2024.6 },
+  { id: "deepseek-v3", name: "DeepSeek-V3 671B MoE", paramsB: 671, activeParamsB: 37, layers: 61, kvBytesPerToken: 70272, era: 2024.95 },
+  { id: "deepseek-r1", name: "DeepSeek-R1 671B MoE", paramsB: 671, activeParamsB: 37, layers: 61, kvBytesPerToken: 70272, era: 2025.05 },
+  { id: "grok-3", name: "Grok-3", paramsB: 400, activeParamsB: 50, layers: 80, kvBytesPerToken: 327680, era: 2025.15 },
+  { id: "llama4-maverick", name: "Llama 4 Maverick 400B MoE", paramsB: 400, activeParamsB: 17, layers: 128, kvBytesPerToken: 524288, era: 2025.3 },
+  { id: "qwen3-235b", name: "Qwen3 235B-A22B MoE", paramsB: 235, activeParamsB: 22, layers: 94, kvBytesPerToken: 192512, era: 2025.35 },
+  { id: "kimi-k2", name: "Kimi K2 1T MoE", paramsB: 1e3, activeParamsB: 32, layers: 61, kvBytesPerToken: 70272, era: 2025.45 },
+  { id: "glm45", name: "GLM-4.5 355B MoE", paramsB: 355, activeParamsB: 32, layers: 92, kvBytesPerToken: 376832, era: 2025.55 },
+  { id: "gpt5", name: "GPT-5", paramsB: 900, activeParamsB: 120, layers: 120, kvBytesPerToken: 491520, era: 2025.65 },
+  { id: "llama5", name: "Llama 5", paramsB: 1600, activeParamsB: 80, layers: 140, kvBytesPerToken: 161280, era: 2026.4 },
+  { id: "deepseek-v4", name: "DeepSeek-V4 MoE", paramsB: 700, activeParamsB: 40, layers: 64, kvBytesPerToken: 73728, era: 2026.6 },
+  { id: "gemini3-ultra", name: "Gemini 3 Ultra", paramsB: 2500, activeParamsB: 90, layers: 160, kvBytesPerToken: 655360, era: 2026.9 },
+  { id: "gpt6", name: "GPT-6", paramsB: 3e3, activeParamsB: 150, layers: 180, kvBytesPerToken: 737280, era: 2027.4 },
+  { id: "frontier-stargate", name: "Stargate-class frontier run", paramsB: 8e3, activeParamsB: 250, layers: 220, kvBytesPerToken: 905216, era: 2028 }
+];
+const CUSTOMERS = {
+  startup: ["Stealth Labs", "Glyph AI", "Peregrine Models", "Otter Systems", "VectorForge"],
+  lab: ["MIT LIDS", "Flatiron Institute", "CERN OpenLab", "RIKEN AICS", "Turing Institute"],
+  enterprise: ["Acme Retail Media", "Helios Bank", "Nordwind Auto", "MedSyn Pharma", "Skyline Telecom"],
+  sovereign: ["EU Sovereign Cloud", "Emirates AI Council", "Nippon AI Grid", "Sovereign Tech Fund"]
+};
+const lerpCurve$1 = (points, x) => {
+  if (x <= points[0][0]) return points[0][1];
+  for (let i = 1; i < points.length; i++) {
+    if (x <= points[i][0]) {
+      const [x0, y0] = points[i - 1];
+      const [x1, y1] = points[i];
+      return y0 + (x - x0) / (x1 - x0) * (y1 - y0);
+    }
+  }
+  return points[points.length - 1][1];
+};
+const GPU_HOUR_ANCHOR = [
+  [2020, 1.9],
+  [2021, 1.75],
+  [2022, 1.6],
+  [2023.2, 2.9],
+  [2024, 2.6],
+  [2024.6, 3],
+  [2025, 2.8],
+  [2026, 2.6],
+  [2026.8, 3.4],
+  [2027, 3.2],
+  [2028, 3]
+];
+const gpuHourAnchor = (year) => lerpCurve$1(GPU_HOUR_ANCHOR, year);
+const MTOK_DECAY = [
+  [2020, 1],
+  [2021, 0.75],
+  [2022, 0.55],
+  [2023, 0.4],
+  [2024, 0.175],
+  [2025, 0.115],
+  [2026, 0.07],
+  [2027, 0.05],
+  [2028, 0.035]
+];
+const mtokPrice = (activeParamsB, year) => 0.96 * Math.pow(Math.max(1, activeParamsB), 0.8) * lerpCurve$1(MTOK_DECAY, year);
+const ERA_MEM_GB = [
+  [2020, 40],
+  [2022, 80],
+  [2023.7, 141],
+  [2024.8, 192],
+  [2026.2, 288],
+  [2027, 384],
+  [2028, 384]
+];
+const ERA_SCALEOUT_GBPS = [[2020, 6], [2022, 12.5], [2023.5, 25], [2024.5, 50], [2026, 100], [2027, 200], [2028, 200]];
+const ERA_TOKENS_PER_SEC = [
+  [2020, 3e3],
+  [2021, 2e4],
+  [2022, 1e5],
+  [2023, 5e5],
+  [2024, 3e6],
+  [2025, 2e7],
+  [2026, 8e7],
+  [2027, 2e8],
+  [2028, 5e8]
+];
+const ACCEL_BUCKETS = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
+const bucket = (n) => ACCEL_BUCKETS.find((b) => b >= n) ?? ACCEL_BUCKETS[ACCEL_BUCKETS.length - 1];
+const CONTEXT_OPTIONS = [
+  [2022, [1024, 2048]],
+  [2024, [2048, 4096, 8192]],
+  [2026, [8192, 32768, 65536]],
+  [2029, [32768, 131072, 262144]]
+];
+const round2$1 = (x) => Math.round(x * 100) / 100;
+const round3 = (x) => Math.round(x * 1e3) / 1e3;
+const ARCHETYPE_TABLE = {
+  startup: { minRep: 0, weight: 0.38, accelMult: 1, tokenMult: 0.25, priceMult: 0.9, trainDur: [2, 6], inferDur: [3, 9], sla: 0.95, penalty: [4e-3, 8e-3] },
+  lab: { minRep: 20, weight: 0.3, accelMult: 1, tokenMult: 0.6, priceMult: 1, trainDur: [4, 10], inferDur: [6, 12], sla: 0.97, penalty: [5e-3, 0.01] },
+  enterprise: { minRep: 45, weight: 0.22, accelMult: 2, tokenMult: 1, priceMult: 1.1, trainDur: [6, 18], inferDur: [12, 24], sla: 0.98, penalty: [8e-3, 0.015] },
+  sovereign: { minRep: 70, weight: 0.1, accelMult: 4, tokenMult: 2.5, priceMult: 1.15, trainDur: [12, 36], inferDur: [24, 48], sla: 0.995, penalty: [0.01, 0.02] }
+};
+function rollArchetype(rng, reputation) {
+  const eligible = Object.keys(ARCHETYPE_TABLE).map((a) => ({ a, t: ARCHETYPE_TABLE[a] })).filter(({ t }) => reputation >= t.minRep);
+  const total = eligible.reduce((s2, e) => s2 + e.t.weight, 0);
+  let r = rng() * total;
+  for (const e of eligible) {
+    r -= e.t.weight;
+    if (r <= 0) return e.a;
+  }
+  return eligible[0].a;
+}
+function generateContracts(state, month, rng) {
+  const year = monthToYear(month);
+  const eligible = MODELS.filter((m) => m.era <= year + 0.01);
+  if (eligible.length === 0) return [];
+  const out = [];
+  const n = 1 + Math.floor(rng() * 3);
+  for (let i = 0; i < n; i++) {
+    const model = pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
+    const trainP = model.paramsB > 200 ? 0.7 : model.paramsB < 15 ? 0.12 : 0.4;
+    const archetype = rollArchetype(rng, state.reputation);
+    const t = ARCHETYPE_TABLE[archetype];
+    const suffix = String(1e3 + Math.floor(rng() * 9e3));
+    const common = {
+      customer: pick(rng, CUSTOMERS[archetype]),
+      archetype,
+      model,
+      durationMonths: 0,
+      penaltyRate: round3(randRange(rng, t.penalty[0], t.penalty[1])),
+      deadlineMonth: month + randInt(rng, 2, 6),
+      slaAvailability: Math.min(0.999, Math.max(0.9, t.sla + randRange(rng, -5e-3, 5e-3)))
+    };
+    if (rng() < trainP) {
+      const stateGB = 16 * model.paramsB;
+      const memPerAccel = lerpCurve$1(ERA_MEM_GB, year);
+      const raw = stateGB / memPerAccel * randRange(rng, 2, 4.5) * t.accelMult;
+      const minAccelerators = Math.min(32768, Math.max(32, bucket(Math.ceil(raw))));
+      const isMoe = model.activeParamsB < model.paramsB * 0.8;
+      const moeDomain = year >= 2027 ? 128 : year >= 2025.5 ? 64 : year >= 2024 ? 32 : 16;
+      const minScaleUpDomain = Math.min(
+        minAccelerators,
+        isMoe ? moeDomain : year >= 2025 ? 16 : 8
+      );
+      const tier = lerpCurve$1(ERA_SCALEOUT_GBPS, year);
+      const contract = {
+        kind: "training",
+        id: `trn-${month}-${i}-${suffix}`,
+        ...common,
+        durationMonths: randInt(rng, t.trainDur[0], t.trainDur[1]),
+        minAccelerators,
+        minScaleUpDomain,
+        minScaleOutGBsPerAccel: round2$1(model.paramsB < 15 ? tier * 0.75 : tier),
+        minTotalMemGB: Math.ceil(stateGB),
+        pricePerAccelHour: round2$1(
+          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15)
+        )
+      };
+      contract.rampMonths = Math.min(20, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0));
+      out.push(contract);
+    } else {
+      const tps = Math.max(
+        100,
+        Math.round(lerpCurve$1(ERA_TOKENS_PER_SEC, year) * t.tokenMult * randRange(rng, 0.6, 1.8))
+      );
+      const tpotMs = Math.round(randRange(rng, 20, 60) + (model.activeParamsB > 80 ? randRange(rng, 10, 40) : 0));
+      const ctxOpts = CONTEXT_OPTIONS.find(([y]) => year < y)?.[1] ?? [262144];
+      const contract = {
+        kind: "inference",
+        id: `inf-${month}-${i}-${suffix}`,
+        ...common,
+        durationMonths: randInt(rng, t.inferDur[0], t.inferDur[1]),
+        tokensPerSec: tps,
+        tpotMs: Math.max(15, tpotMs),
+        ttftMs: Math.round(randRange(rng, 150, 700) / 10) * 10,
+        contextTokens: pick(rng, ctxOpts),
+        pricePerMTok: Math.max(
+          0.01,
+          round3(
+            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2)
+          )
+        )
+      };
+      contract.rampMonths = randInt(rng, 5, 8);
+      out.push(contract);
+    }
   }
   return out;
 }
-const partClass = (id) => {
-  const k2 = getItem(id)?.kind;
-  return k2 && PART_RATE[k2] !== void 0 ? k2 : void 0;
+const scaleOutTier = (year) => lerpCurve$1(ERA_SCALEOUT_GBPS, year);
+const up = (id) => {
+  const i = getItem(id);
+  return i && i.kind === "uplink" ? i : void 0;
 };
-function rackRates(state, designId) {
-  return Object.entries(rackParts(state, designId)).flatMap(([id, n]) => {
-    const c = partClass(id);
-    return c ? [{ id, rate: n * PART_RATE[c] }] : [];
-  });
+function uplinkGbps(s2) {
+  if (!s2.uplinks) return Infinity;
+  return Object.entries(s2.uplinks).reduce((n, [id, c]) => n + (up(id)?.gbps ?? 0) * c, 0);
 }
-function recommendedSpares(state, id) {
-  let total = 0;
-  for (const h of state.halls) for (const p of h.racks) total += rackParts(state, p.designId)[id] ?? 0;
-  const c = partClass(id);
-  if (!c || total === 0) return 0;
-  return Math.max(1, Math.ceil(total * PART_RATE[c] * 3));
+const uplinkMonthlyUSD = (s2) => Object.entries(s2.uplinks ?? {}).reduce((n, [id, c]) => n + (up(id)?.mrcUSD ?? 0) * c, 0);
+const carrierCount = (s2) => new Set(Object.entries(s2.uplinks ?? {}).filter(([, c]) => c > 0).map(([id]) => up(id)?.carrier).filter(Boolean)).size;
+function contractNeedGbps(c) {
+  return c.kind === "inference" ? Math.max(0.2, (c.tokensPerSec ?? 0) / 5e4) : Math.max(0.2, (c.minAccelerators ?? 0) * 0.02);
 }
-function spareQty(id, qty) {
-  const c = partClass(id);
-  return c ? Math.max(1, Math.ceil(qty * PART_RATE[c] * 6)) : 0;
+function totalNeedGbps(s2) {
+  return s2.activeContracts.filter((a) => a.clusterIds.length > 0).reduce((n, a) => n + contractNeedGbps(a.contract), 0);
+}
+const HOURS_PER_MONTH = 730;
+const STAFF_COST_PER_MONTH = 12e3;
+const SUPPORT_RATE_PER_YEAR = 0.05;
+const DEPRECIATION_YEARS = 5;
+const DEFAULT_APR = 0.07;
+const FALLBACK_PUE = 1.4;
+const clusterPowerKW = (state) => state.clusters.reduce((s2, c) => s2 + (c.stats?.powerKW ?? 0), 0);
+const weightedPue = (state) => {
+  const total = state.halls.reduce((s2, h) => s2 + h.itPowerKW, 0);
+  if (total <= 0) {
+    const ps = state.halls.map((h) => h.pue);
+    return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : FALLBACK_PUE;
+  }
+  return state.halls.reduce((s2, h) => s2 + h.pue * h.itPowerKW, 0) / total;
+};
+function monthlyOpex(state, opts = {}) {
+  const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state));
+  const pue2 = opts.pue ?? weightedPue(state);
+  const kwh = itPowerKW * pue2 * HOURS_PER_MONTH;
+  const powerUSD = kwh * state.utilityUSDPerKWh;
+  const staffUSD = state.staff * (opts.staffCostPerMonth ?? STAFF_COST_PER_MONTH);
+  const supportUSD = (opts.capexUSD ?? estimateCapexBasis(state)) * SUPPORT_RATE_PER_YEAR / 12;
+  const networkUSD = uplinkMonthlyUSD(state);
+  return {
+    itPowerKW,
+    pue: pue2,
+    kwh,
+    powerUSD,
+    staffUSD,
+    supportUSD,
+    networkUSD,
+    totalUSD: powerUSD + staffUSD + supportUSD + networkUSD
+  };
+}
+const monthlyDepreciation = (capexUSD, years = DEPRECIATION_YEARS) => years > 0 ? capexUSD / (years * 12) : 0;
+const monthlyInterest = (debtUSD, apr = DEFAULT_APR) => debtUSD * apr / 12;
+function trayBomValue(design) {
+  let v2 = getItem(design.chassisId)?.priceUSD ?? 0;
+  return v2 + design.parts.reduce((s2, p) => s2 + (getItem(p.itemId)?.priceUSD ?? 0) * p.count, 0);
+}
+function rackBomValue(state, design) {
+  let v2 = getItem(design.rackId)?.priceUSD ?? 0;
+  for (const item of design.items) {
+    if (item.type === "tray") {
+      const tray = state.trays.find((t) => t.id === item.trayId);
+      v2 += (tray ? trayBomValue(tray) : 0) * item.count;
+    } else {
+      const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
+      v2 += (getItem(id)?.priceUSD ?? 0) * item.count;
+    }
+  }
+  return v2;
+}
+function estimateCapexBasis(state) {
+  let v2 = 0;
+  for (const [id, count] of Object.entries(state.inventory)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
+  for (const hall of state.halls) {
+    for (const [id, count] of Object.entries(hall.powerEquip)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
+    for (const [id, count] of Object.entries(hall.coolingEquip)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
+    for (const rack of hall.racks) {
+      const design = state.racks.find((r) => r.id === rack.designId);
+      if (design) v2 += rackBomValue(state, design);
+    }
+  }
+  return v2;
+}
+function contractRevenue(ac, opts) {
+  const hours = opts.hoursPerMonth ?? HOURS_PER_MONTH;
+  const c = ac.contract;
+  const avail = Math.max(0, Math.min(1, opts.availability));
+  const gross = c.kind === "training" ? (opts.accelerators ?? 0) * c.pricePerAccelHour * hours : (opts.tokensPerSec ?? 0) * hours * 3600 / 1e6 * c.pricePerMTok;
+  const slaMet = avail >= c.slaAvailability;
+  const billable = slaMet ? gross : gross * (avail / Math.max(c.slaAvailability, 1e-9));
+  const rawPenalty = slaMet ? 0 : gross * c.penaltyRate * Math.max(0, c.slaAvailability - avail) * 100;
+  const penalty = Math.min(rawPenalty, gross * 0.25);
+  return { grossUSD: gross, billableUSD: billable, penaltyUSD: penalty, netUSD: billable - penalty, slaMet };
+}
+const clamp$2 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const r2 = (x) => Math.round(x * 100) / 100;
+const SOURCES = {
+  grid: { names: ["Metro Utility", "Regional Grid Co-op", "StateWide Electric"], priceMWh: [58, 74], term: [12, 36], overdraw: [0.15, 0.3], overage: 1.4, firmness: [0.9, 0.97], lesson: "Utility firm service: reliable and flexible, priced near spot. Overdraw is tolerated until the interconnect trips." },
+  solar: { names: ["SunHarvest PPA", "Helios Renewables", "DesertBright Solar"], priceMWh: [34, 46], term: [60, 120], overdraw: [0, 0.05], overage: 2, firmness: [0.72, 0.82], lesson: "Solar PPA: cheapest energy, but non-firm — nights and clouds mean you fall back to the grid at spot." },
+  gas: { names: ["Cascade Gas Peakers", "Permian Power", "Gulf Coast Generation"], priceMWh: [78, 98], term: [24, 60], overdraw: [0.05, 0.12], overage: 1.8, firmness: [0.96, 0.99], lesson: "Gas generation: dispatchable and firm, but fuel-indexed and expensive. Tight overdraw limits." },
+  hydro: { names: ["Columbia Basin Hydro", "Alpine Hydro Co"], priceMWh: [38, 52], term: [60, 180], overdraw: [0.05, 0.1], overage: 1.6, firmness: [0.9, 0.95], lesson: "Hydro: cheap, low-carbon baseload with long terms — but droughts happen." },
+  nuclear: { names: ["Ridgeline Nuclear", "Harbor Atomic"], priceMWh: [48, 62], term: [120, 240], overdraw: [0, 0.03], overage: 2.5, firmness: [0.985, 0.998], lesson: "Nuclear PPA: the firmest carbon-free power, long take-or-pay terms and almost no overdraw — you must size the commit carefully." }
+};
+const POWER_SOURCES = SOURCES;
+function generatePowerOffers(s2, rng, n = 1) {
+  const out = [];
+  const hallKW = s2.halls.reduce((a, h) => a + h.itPowerKW, 0);
+  for (let i = 0; i < n; i++) {
+    const kinds = Object.keys(SOURCES);
+    const kind = kinds[Math.floor(rng() * kinds.length)];
+    if ((kind === "nuclear" || kind === "hydro") && s2.reputation < 15 && rng() < 0.7) continue;
+    const t = SOURCES[kind];
+    const pick2 = (a) => a[0] + (a[1] - a[0]) * rng();
+    const baseMW = Math.max(1, Math.round(hallKW / 1e3 * (0.4 + rng() * 1.2) * (kind === "nuclear" ? 3 : 1)));
+    out.push({
+      id: `pw-${s2.month}-${Math.floor(rng() * 1e5)}`,
+      supplier: t.names[Math.floor(rng() * t.names.length)],
+      source: kind,
+      mw: baseMW,
+      priceUSDPerMWh: Math.round(pick2(t.priceMWh)),
+      termMonths: Math.round(pick2(t.term)),
+      overdrawPct: r2(pick2(t.overdraw)),
+      overageMult: t.overage,
+      firmness: r2(pick2(t.firmness)),
+      offerUntil: s2.month + 4
+    });
+  }
+  return out;
+}
+function settlePower(s2, drawMW, rng, log) {
+  const spotMWh = s2.utilityUSDPerKWh * 1e3;
+  const cs = s2.powerContracts ?? [];
+  const live = cs.filter((c) => s2.month >= c.startMonth && s2.month <= c.endMonth);
+  if (!live.length) return { netUSD: drawMW * spotMWh * HOURS_PER_MONTH, contractUSD: 0, overageUSD: 0, spotUSD: drawMW * spotMWh * HOURS_PER_MONTH, resaleUSD: 0, committedMW: 0, capMW: 0, drawMW, avgUSDPerMWh: spotMWh };
+  let contractUSD = 0, committed = 0, cap = 0, overageCap = 0, overagePrice = 0;
+  const delivered = [];
+  for (const c of live) {
+    contractUSD += c.mw * c.priceUSDPerMWh * HOURS_PER_MONTH;
+    const failed = rng() > c.firmness;
+    const frac = failed ? c.source === "solar" ? 0.35 : 0.5 : 1;
+    if (failed) log("bad", `${c.supplier} (${c.source}) curtailed — only ${Math.round(frac * 100)}% delivered this month. You still pay take-or-pay and buy the gap at spot.`);
+    delivered.push({ c, frac });
+    committed += c.mw * frac;
+    cap += c.mw * frac * (1 + c.overdrawPct);
+    overageCap += c.mw * frac * c.overdrawPct;
+    overagePrice = Math.max(overagePrice, c.priceUSDPerMWh * c.overageMult);
+  }
+  const base2 = delivered.reduce((a, d) => a + d.c.mw * d.frac, 0);
+  let overageUSD = 0, spotUSD = 0, resaleUSD = 0;
+  if (drawMW <= base2) resaleUSD = (base2 - drawMW) * spotMWh * 0.8 * HOURS_PER_MONTH;
+  else {
+    const over = Math.min(drawMW - base2, overageCap);
+    overageUSD = over * overagePrice * HOURS_PER_MONTH;
+    const rest = drawMW - base2 - over;
+    if (rest > 0) spotUSD = rest * spotMWh * HOURS_PER_MONTH;
+  }
+  const net = contractUSD + overageUSD + spotUSD - resaleUSD;
+  return { netUSD: net, contractUSD, overageUSD, spotUSD, resaleUSD, committedMW: committed, capMW: cap, drawMW, avgUSDPerMWh: drawMW > 0 ? net / (drawMW * HOURS_PER_MONTH) : 0 };
+}
+function powerMarketTick(s2, rng, log) {
+  s2.powerOffers = (s2.powerOffers ?? []).filter((o2) => o2.offerUntil >= s2.month);
+  const ended = (s2.powerContracts ?? []).filter((c) => s2.month > c.endMonth);
+  for (const c of ended) log("info", `Power contract with ${c.supplier} (${c.mw} MW) has ended. Renegotiate on the Energy screen or you are back on the spot utility rate.`);
+  s2.powerContracts = (s2.powerContracts ?? []).filter((c) => s2.month <= c.endMonth);
+  if (rng() < 0.45) s2.powerOffers = [...s2.powerOffers, ...generatePowerOffers(s2, rng, 1)].slice(-6);
+}
+const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
+function spotUtilization(price, month) {
+  return clamp$2(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
+}
+function stepSpotPrice(s2, rng) {
+  const anchor = spotAnchor(s2.month);
+  const cur = s2.spotPrice ?? anchor;
+  const shock = (rng() - 0.5) * 0.22 + (rng() < 0.06 ? rng() < 0.5 ? 0.35 : -0.3 : 0);
+  const next = clamp$2(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
+  s2.spotPrice = r2(next);
+  s2.spotHistory = [...s2.spotHistory ?? [], s2.spotPrice].slice(-24);
+}
+function spotRevenue(s2, servedClusterIds, accelsOfDesign = () => 0) {
+  const price = s2.spotPrice ?? spotAnchor(s2.month);
+  if (price < (s2.spotReserve ?? 0)) return { revenue: 0, accels: 0, util: 0 };
+  const util = spotUtilization(price, s2.month);
+  let accels = 0;
+  for (const id of s2.spotClusters ?? []) {
+    if (servedClusterIds.has(id)) continue;
+    accels += s2.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0;
+  }
+  const inClusterSpot = new Set(s2.spotClusters ?? []);
+  for (const id of s2.spotRacks ?? []) {
+    const pr = s2.halls.flatMap((h) => h.racks).find((r) => r.id === id);
+    if (!pr || pr.status !== "online") continue;
+    if (pr.clusterId && (servedClusterIds.has(pr.clusterId) || inClusterSpot.has(pr.clusterId))) continue;
+    accels += accelsOfDesign(pr.designId);
+  }
+  return { revenue: accels * util * price * HOURS_PER_MONTH, accels, util };
 }
 const NVME_LANES_PER_DRIVE = 4;
 const GPUS_PER_SPINE_TRAY = 8;
@@ -7821,6 +7953,430 @@ function computePUE(hall, get) {
   const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
   return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
 }
+const DEMAND_CURVE = [
+  [2020, 0.2],
+  [2022.4, 0.4],
+  [2023.3, 1],
+  [2024.6, 0.9],
+  [2026, 0.55],
+  [2028, 0.5]
+];
+const lerpCurve = (pts, x) => {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    if (x <= pts[i][0]) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      return y0 + (x - x0) / (x1 - x0) * (y1 - y0);
+    }
+  }
+  return pts[pts.length - 1][1];
+};
+const START_MONTH = 11;
+const demandIndex = (year) => lerpCurve(DEMAND_CURVE, year);
+const offerAt = (item, month) => {
+  const year = monthToYear(month);
+  if (year < item.availableFrom) {
+    return {
+      item,
+      available: false,
+      reason: `Not shipping until ${Math.floor(item.availableFrom)} — labs and hyperscalers queue first.`,
+      unitPrice: 0,
+      leadMonths: 0
+    };
+  }
+  if (item.eolAfter && year > item.eolAfter) {
+    return {
+      item,
+      available: false,
+      reason: "End-of-sale: the vendor no longer ships this generation. Look at newer parts.",
+      unitPrice: 0,
+      leadMonths: 0
+    };
+  }
+  const age = year - item.availableFrom;
+  const hype = age < 0.4 ? 1.12 : 1;
+  const decay = Math.max(0.55, 1 - 0.1 * Math.max(0, age - 0.4));
+  const demand = demandIndex(year);
+  const boom = 1 + demand * (item.kind === "accelerator" ? 0.18 : 0.06);
+  const lead = Math.max(
+    1,
+    Math.round(item.leadTimeMonths * (1 + demand * (item.kind === "accelerator" ? 1 : 0.25)))
+  );
+  return {
+    item,
+    available: true,
+    unitPrice: Math.round(item.priceUSD * hype * decay * boom),
+    leadMonths: lead,
+    qtyCap: item.allocationPerQuarter
+  };
+};
+const volumeDiscount = (item, qty, unitPrice) => {
+  const vendor = VENDORS.find((v2) => v2.id === item.vendor);
+  if (!vendor || qty <= 0) return 0;
+  const doublings = Math.floor(Math.log2(Math.max(1, unitPrice * qty) / 1e6));
+  if (doublings <= 0) return 0;
+  return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
+};
+const rackBom = (state, designId) => {
+  const design = state.racks.find((r) => r.id === designId);
+  if (!design) return void 0;
+  const need = { [design.rackId]: 1 };
+  for (const item of design.items) {
+    if (item.type === "tray") {
+      const tray = state.trays.find((t) => t.id === item.trayId);
+      if (!tray) return void 0;
+      for (const p of tray.parts) need[p.itemId] = (need[p.itemId] ?? 0) + p.count * item.count;
+    } else {
+      const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
+      need[id] = (need[id] ?? 0) + item.count;
+    }
+  }
+  return need;
+};
+const availableFor = (g, designId) => {
+  const bom = rackBom(g, designId) ?? {};
+  const held = {};
+  for (const [did, n] of Object.entries(g.rackReserve ?? {})) {
+    if (did === designId || !(n > 0)) continue;
+    for (const [p, per] of Object.entries(rackBom(g, did) ?? {})) held[p] = (held[p] ?? 0) + per * n;
+  }
+  const out = {};
+  for (const p of Object.keys(bom)) out[p] = Math.max(0, (g.inventory[p] ?? 0) - (held[p] ?? 0));
+  return out;
+};
+const reserve = (g, designId, n) => {
+  g.rackReserve = { ...g.rackReserve ?? {}, [designId]: Math.max(0, (g.rackReserve?.[designId] ?? 0) + n) };
+  if (!g.rackReserve[designId]) delete g.rackReserve[designId];
+};
+const FLOOR_UNIT_SLOTS = 10;
+const FLOOR_UNIT_COST = 25e4 * FLOOR_UNIT_SLOTS;
+const floorCommissionMonths = (units) => 2 + Math.ceil(units / 5);
+const creditLimit = (state) => 5e6 + estimateCapexBasis(state) * 0.6;
+function newGameState(seed) {
+  const hall = {
+    id: "hall-1",
+    name: "Hall A",
+    coolingClass: "air",
+    rackSlots: 40,
+    itPowerKW: 500,
+    coolingKW: 600,
+    pue: 1,
+    powerEquip: { "et-padmount-2500": 1, "se-galaxy-vs-500": 1 },
+    coolingEquip: { "vt-crah-100": 6 },
+    racks: [],
+    floorLoadKgPerRack: 1500
+  };
+  hall.pue = computePUE(hall, getItem);
+  const g = {
+    month: START_MONTH,
+    seed,
+    cash: 5e7,
+    debt: 0,
+    reputation: 10,
+    halls: [hall],
+    trays: [],
+    racks: [],
+    clusters: [],
+    inventory: {},
+    orders: [],
+    availableContracts: [],
+    activeContracts: [],
+    log: [],
+    staff: 2,
+    utilityUSDPerKWh: 0.07,
+    uplinks: { "transit-10g-a": 1 },
+    codexSeen: [],
+    missionsDone: [],
+    history: [],
+    powerOffers: [],
+    powerContracts: [],
+    spotClusters: [],
+    spotReserve: 0
+  };
+  g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
+  g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));
+  g.log.push({
+    month: START_MONTH,
+    level: "info",
+    text: "GIGAWATT day one: $50M cash, Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh."
+  });
+  g.log.push({
+    month: START_MONTH,
+    level: "info",
+    text: "Order parts, design a tray and rack, then place racks — contracts on the market pay once a cluster serves them."
+  });
+  return g;
+}
+const POWER_LESSON = Object.fromEntries(Object.entries(POWER_SOURCES).map(([k2, v2]) => [k2, v2.lesson]));
+const SAVE_KEY = "gigawatt-save-v1";
+const ok = (message = "", issues) => ({ ok: true, message, issues });
+const fail = (message, issues) => ({ ok: false, message, issues });
+const usd = (n) => Math.round(n).toLocaleString("en-US");
+const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+const POWER_FEED_TYPES = [
+  "transformer",
+  "ups",
+  "busway",
+  "power-shelf",
+  "solar-ppa",
+  "gas-turbine"
+];
+function makeCtx(get, set) {
+  return {
+    get,
+    set,
+    commit: (mutate) => {
+      const g = JSON.parse(JSON.stringify(get().game));
+      const res = mutate(g) ?? ok();
+      if (res.ok) set({ game: g });
+      return res;
+    },
+    logln: (g, level, text) => {
+      g.log.push({ month: g.month, level, text });
+    }
+  };
+}
+const NAMES = { hpe: "HPE", asus: "ASUS", quanta: "Quanta (QCT)", wiwynn: "Wiwynn", cisco: "Cisco UCS", inspur: "Inspur", lenovo: "Lenovo", supermicro: "Supermicro", gigabyte: "Gigabyte", foxconn: "Foxconn", dell: "Dell", nvidia: "NVIDIA" };
+const DIY = (by = "generic") => ({
+  tier: "diy",
+  by,
+  label: "Build it yourself",
+  premium: 0,
+  lead: 1,
+  audience: "Teams with integration staff chasing lowest capex.",
+  pitch: "Buy the baseboard and every part separately and assemble, cable and burn-in yourself.",
+  tradeoff: "Cheapest, but you own integration, firmware validation and debugging; parts arrive on different lead times."
+});
+const OEM = (by, premium = 0.07) => ({
+  tier: "oem",
+  by,
+  label: `${NAMES[by] ?? by[0].toUpperCase() + by.slice(1)} integrated rack`,
+  premium,
+  lead: 0.85,
+  audience: "Most neoclouds: a validated rack from an OEM with a support contract.",
+  pitch: "OEM builds, cables and burn-tests the rack at the factory (L11/L12) and ships it ready to roll in.",
+  tradeoff: "A modest premium buys faster install and one vendor to call; less customisation than DIY."
+});
+const TURNKEY = (by, label, premium = 0.18) => ({
+  tier: "turnkey",
+  by,
+  label,
+  premium,
+  lead: 0.7,
+  audience: "First-time operators and anyone who values uptime and support over capex.",
+  pitch: "Vendor-engineered reference system with software stack and premium support; fastest to production.",
+  tradeoff: "Highest capex; you pay for validation, support SLAs and allocation priority."
+});
+const hdr = (accel, cpu2, dimm, dn, nic2, nn, nvme, psu, extra = []) => [
+  { slot: "accelerator", itemId: accel, count: 8 },
+  { slot: "cpu", itemId: cpu2, count: 2 },
+  { slot: "dimm", itemId: dimm, count: dn },
+  { slot: "nic", itemId: nic2, count: nn },
+  { slot: "nvme", itemId: nvme, count: 2 },
+  { slot: "psu", itemId: "vt-geist-5kw", count: psu },
+  ...extra
+];
+const sw = (switchId, count = 1) => ({ type: "switch", switchId, count });
+const PLATFORMS = [
+  {
+    key: "hgx-a100",
+    label: "HGX A100 8-GPU",
+    from: 2020.85,
+    eol: 2024.5,
+    chassisId: "nv-hgx-a100-8gy",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 3,
+    cooling: "air",
+    parts: hdr("nv-a100-80-sxm", "amd-epyc-7742", "sam-ddr4-3200-64", 16, "nv-connectx6-hdr", 4, "sam-pm1733-3t84", 4),
+    extras: [sw("nv-qm8700")],
+    story: "The Ampere generation: 8 A100s in one NVLink3 box, scaled out over 200G InfiniBand. DGX A100 is NVIDIA's own build of this.",
+    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.08), TURNKEY("nvidia", "NVIDIA DGX A100 (rack)"), OEM("lenovo", 0.09), OEM("inspur", 0.05), OEM("quanta", 0.04)]
+  },
+  {
+    key: "hgx-h100",
+    label: "HGX H100 8-GPU",
+    from: 2022.9,
+    eol: 2025.5,
+    chassisId: "nv-hgx-h100-8gy",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 2,
+    cooling: "air",
+    parts: hdr("nv-h100-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw("nv-qm9700")],
+    story: "Hopper: FP8 Transformer Engine and NVLink4. 10 kW per server is the edge of air cooling, so only two fit per air rack.",
+    variants: [DIY(), OEM("supermicro"), OEM("hpe", 0.09), TURNKEY("nvidia", "NVIDIA DGX H100 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08)]
+  },
+  {
+    key: "hgx-h200",
+    label: "HGX H200 8-GPU",
+    from: 2024.5,
+    eol: 2026,
+    chassisId: "nv-hgx-h100-8gy",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 2,
+    cooling: "air",
+    parts: hdr("nv-h200-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw("nv-qm9700")],
+    story: "Same Hopper compute, 141 GB of faster HBM3e: a drop-in for inference, where memory bandwidth and capacity set tokens/s.",
+    variants: [DIY(), OEM("supermicro"), TURNKEY("nvidia", "NVIDIA DGX H200 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08), OEM("hpe", 0.09)]
+  },
+  {
+    key: "hgx-b200",
+    label: "HGX B200 8-GPU (liquid)",
+    from: 2025,
+    chassisId: "nv-hgx-b200-8gy",
+    rackId: "gen-rack-19-48u-dlc",
+    trays: 4,
+    cooling: "dlc",
+    parts: [...hdr("nv-b200-sxm", "amd-epyc-turin", "skh-ddr5-6400-96", 16, "nv-connectx8", 4, "mic-9550-15t36", 6), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
+    extras: [sw("nv-qmx8000")],
+    story: "Blackwell in the HGX form factor: 15 kW per server needs direct liquid cooling, so you need a CDU and liquid-ready racks.",
+    variants: [DIY(), OEM("supermicro"), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA DGX B200 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("hpe", 0.09)]
+  },
+  {
+    key: "hgx-h200-rdhx",
+    label: "HGX H200 8-GPU (rear-door cooled)",
+    from: 2024.5,
+    eol: 2026,
+    chassisId: "nv-hgx-h100-8gy",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 4,
+    cooling: "rdhx",
+    parts: hdr("nv-h200-sxm", "amd-epyc-genoa", "sam-ddr5-5600-64", 16, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw("nv-qm9700")],
+    story: "The same air-cooled Hopper servers, but a chilled-water rear-door heat exchanger on the rack lets you double the density to four servers (~40 kW) without touching the servers.",
+    variants: [OEM("supermicro"), OEM("dell", 0.08), OEM("lenovo", 0.09), OEM("hpe", 0.09)]
+  },
+  {
+    key: "mi300x-rdhx",
+    label: "AMD Instinct MI300X 8-GPU (rear-door cooled)",
+    from: 2023.9,
+    eol: 2026,
+    chassisId: "sm-ubb-oam8-mi300x",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 4,
+    cooling: "rdhx",
+    parts: hdr("amd-mi300x", "amd-epyc-genoa", "sam-ddr5-5600-64", 12, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw("cs-n9364e")],
+    story: "MI300X servers in rear-door-cooled racks: a pragmatic retrofit path for existing air halls that need more kW per rack.",
+    variants: [OEM("supermicro"), DIY("gigabyte")]
+  },
+  {
+    key: "gb200",
+    label: "GB200 NVL72 rack-scale",
+    from: 2024.9,
+    eol: 2026.5,
+    chassisId: "nv-gb200-nvl72-ct",
+    rackId: "fox-nvl72-mgx",
+    trays: 18,
+    cooling: "dlc",
+    parts: [{ slot: "accelerator", itemId: "nv-gb200", count: 2 }, { slot: "nic", itemId: "nv-connectx8", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
+    extras: [sw("nv-nvlink-switch-tray5", 9)],
+    story: "72 Blackwell GPUs in ONE NVLink domain: one 120+ kW liquid-cooled rack acts as a single giant GPU. You cannot DIY this; it ships integrated.",
+    variants: [OEM("foxconn", 0.06), OEM("dell", 0.09), TURNKEY("nvidia", "NVIDIA GB200 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
+  },
+  {
+    key: "gb300",
+    label: "GB300 NVL72 rack-scale",
+    from: 2025.7,
+    chassisId: "nv-gb200-nvl72-ct",
+    rackId: "fox-nvl72-mgx",
+    trays: 18,
+    cooling: "dlc",
+    parts: [{ slot: "accelerator", itemId: "nv-gb300", count: 2 }, { slot: "nic", itemId: "nv-connectx8", count: 4 }, { slot: "nvme", itemId: "sam-pm1743-15t36", count: 2 }],
+    extras: [sw("nv-nvlink-switch-tray5", 9)],
+    story: "Blackwell Ultra NVL72: 288 GB HBM3e per GPU for long-context reasoning inference at rack scale.",
+    variants: [OEM("foxconn", 0.06), TURNKEY("nvidia", "NVIDIA GB300 NVL72 reference rack", 0.14), OEM("quanta", 0.05), OEM("wiwynn", 0.05), OEM("dell", 0.09), OEM("supermicro", 0.07), OEM("hpe", 0.1)]
+  },
+  {
+    key: "mi300x",
+    label: "AMD Instinct MI300X 8-GPU",
+    from: 2023.9,
+    eol: 2026,
+    chassisId: "sm-ubb-oam8-mi300x",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 2,
+    cooling: "air",
+    parts: hdr("amd-mi300x", "amd-epyc-genoa", "sam-ddr5-5600-64", 12, "nv-connectx7", 4, "sam-pm9a3-3t84", 4),
+    extras: [sw("cs-n9364e")],
+    story: "AMD's answer to H100: 192 GB HBM3 per GPU (more than H100/H200) on an 8-GPU OAM board. Ethernet-first scale-out and the ROCm software stack.",
+    variants: [DIY("gigabyte"), OEM("supermicro"), OEM("dell", 0.08), OEM("lenovo", 0.09), OEM("asus", 0.06), OEM("hpe", 0.09)]
+  },
+  {
+    key: "mi355x",
+    label: "AMD Instinct MI355X 8-GPU (liquid)",
+    from: 2025.5,
+    chassisId: "gig-ubb-oam8-lq",
+    rackId: "gen-rack-19-48u-dlc",
+    trays: 4,
+    cooling: "dlc",
+    parts: [...hdr("amd-mi355x", "amd-epyc-turin", "skh-ddr5-6400-96", 12, "nv-connectx7", 4, "mic-9550-15t36", 4), { slot: "coldplate", itemId: "ct-coldplate-80", count: 8 }],
+    extras: [sw("nv-sn5600")],
+    story: "CDNA4 with 288 GB HBM3E and FP4/FP6 support, liquid cooled at 1.4 kW per GPU.",
+    variants: [DIY("gigabyte"), OEM("supermicro", 0.08), OEM("dell", 0.09), OEM("hpe", 0.09), OEM("asus", 0.06), OEM("lenovo", 0.09)]
+  },
+  {
+    key: "gaudi3",
+    label: "Intel Gaudi 3 8-accelerator",
+    from: 2024.7,
+    chassisId: "int-gaudi3-hls",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 2,
+    cooling: "air",
+    parts: [{ slot: "accelerator", itemId: "int-gaudi-3", count: 8 }, { slot: "cpu", itemId: "amd-epyc-genoa", count: 2 }, { slot: "dimm", itemId: "sam-ddr5-5600-64", count: 12 }, { slot: "nvme", itemId: "sam-pm9a3-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-5kw", count: 4 }],
+    extras: [sw("cs-n9364e")],
+    story: "Ethernet-native: each Gaudi 3 has 24x200G RoCE ports on the chip itself, so no separate NICs are needed.",
+    variants: [OEM("supermicro", 0.06), DIY(), OEM("dell", 0.08), OEM("hpe", 0.09)]
+  },
+  {
+    key: "galaxy",
+    label: "Tenstorrent Galaxy (32-chip)",
+    from: 2023.5,
+    chassisId: "tt-galaxy-4u",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 3,
+    cooling: "air",
+    parts: [{ slot: "accelerator", itemId: "tt-galaxy", count: 1 }, { slot: "cpu", itemId: "amd-epyc-genoa", count: 1 }, { slot: "dimm", itemId: "sam-ddr5-5600-64", count: 4 }, { slot: "nic", itemId: "nv-connectx7", count: 1 }, { slot: "psu", itemId: "vt-geist-5kw", count: 4 }],
+    extras: [sw("cs-n9364e")],
+    story: "Open RISC-V architecture: 32 Wormhole chips meshed by Ethernet inside the box and between boxes, no NVLink and no InfiniBand.",
+    variants: [DIY("generic")]
+  },
+  {
+    key: "cs3",
+    label: "Cerebras CS-3 (wafer-scale)",
+    from: 2024.3,
+    chassisId: "cb-cs3-cab",
+    rackId: "gen-rack-19-48u-dlc",
+    trays: 2,
+    cooling: "dlc",
+    parts: [{ slot: "accelerator", itemId: "cb-wse-3", count: 1 }, { slot: "nic", itemId: "nv-connectx7", count: 2 }, { slot: "nvme", itemId: "sam-pm9a3-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-22kw", count: 6 }],
+    extras: [],
+    story: "One 46,000 mm² wafer is the chip: 900k cores with all weights in on-wafer SRAM, so there is no HBM and no GPU-to-GPU network inside the system.",
+    variants: [TURNKEY("cerebras", "Cerebras CS-3 system", 0.1)]
+  }
+];
+const nameOf = (v2) => NAMES[v2] ?? v2[0].toUpperCase() + v2.slice(1);
+const TEMPLATES = PLATFORMS.flatMap((p) => p.variants.map((v2) => {
+  const codex = { summary: `${p.label} - ${v2.label}. ${v2.pitch}`, explain: p.story, tradeoffs: [v2.tradeoff, p.cooling === "air" ? "Air-cooled: simple facility, limited rack density." : "Liquid-cooled: needs a DLC hall with CDUs."], tags: [p.key, v2.tier, p.cooling] };
+  return {
+    id: `tpl-${p.key}-${v2.by}-${v2.tier}`,
+    name: v2.tier === "turnkey" ? v2.label : `${p.label} · ${nameOf(v2.by)} ${v2.tier === "diy" ? "(DIY)" : "rack"}`,
+    integrator: v2.by,
+    tier: v2.tier,
+    platform: p.label,
+    tagline: v2.pitch,
+    availableFrom: p.from,
+    eolAfter: p.eol,
+    tray: { chassisId: p.chassisId, parts: p.parts },
+    rack: { rackId: p.rackId, trayCount: p.trays, extras: p.extras, cooling: p.cooling },
+    premium: v2.premium,
+    leadFactor: v2.lead,
+    audience: v2.audience,
+    codex
+  };
+}));
+const getTemplate = (id) => TEMPLATES.find((t) => t.id === id);
 const trayIdOf = (t) => `tray-${t.id}`;
 const rackIdOf = (t) => `rack-${t.id}`;
 const trayOf = (t) => ({ id: trayIdOf(t), name: `${t.platform} tray`, chassisId: t.tray.chassisId, parts: t.tray.parts });
@@ -7854,355 +8410,297 @@ function templateFacts(t) {
   return { tflopsBf16: bf, accels: rv.stats.accels, kWPerRack: rv.stats.kW, scaleUp: rv.stats.scaleUpDomain, tflopsFp8: per.tflopsFp8 * t.rack.trayCount, memGB: per.memGB * t.rack.trayCount, errors };
 }
 const racksFor = (t, n) => Math.max(1, Math.ceil(n / Math.max(1, templateFacts(t).accels)));
-function createStore(init2) {
-  let state;
-  const subs = /* @__PURE__ */ new Set();
-  const get = () => state;
-  const set = (patch2) => {
-    state = { ...state, ...typeof patch2 === "function" ? patch2(state) : patch2 };
-    subs.forEach((f) => f(state));
+const PART_RATE = {
+  accelerator: 1 / 8e3,
+  psu: 1 / 3e3,
+  nic: 1 / 6e3,
+  nvme: 1 / 6e3,
+  memory: 1 / 2e4,
+  cpu: 1 / 2e4,
+  switch: 1 / 5e3
+};
+const PART_LABEL = {
+  accelerator: "GPU/accelerator",
+  psu: "power supply",
+  nic: "NIC",
+  nvme: "NVMe drive",
+  memory: "DIMM",
+  cpu: "CPU",
+  switch: "ToR switch"
+};
+function rackParts(state, designId) {
+  const out = {};
+  const d = state.racks.find((r) => r.id === designId);
+  const add = (id, n) => {
+    out[id] = (out[id] ?? 0) + n;
   };
-  state = init2(set, get);
-  return { getState: get, setState: set, subscribe: (fn) => (subs.add(fn), () => subs.delete(fn)) };
-}
-const MONTHS_PER_YEAR = 12;
-const BASE_YEAR = 2020;
-const monthToYear = (m) => BASE_YEAR + m / MONTHS_PER_YEAR;
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = a + 1831565813 >>> 0;
-    let t = a;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-const randRange = (rng, lo, hi) => lo + rng() * (hi - lo);
-const randInt = (rng, lo, hi) => Math.floor(lo + rng() * (hi - lo + 1));
-function pick(rng, arr) {
-  return arr[Math.min(arr.length - 1, Math.floor(rng() * arr.length))];
-}
-const MODELS = [
-  { id: "gpt2-xl", name: "GPT-2 1.5B", paramsB: 1.5, activeParamsB: 1.5, layers: 48, kvBytesPerToken: 196608, era: 2020 },
-  { id: "gpt3-175b", name: "GPT-3 175B", paramsB: 175, activeParamsB: 175, layers: 96, kvBytesPerToken: 4718592, era: 2020.3 },
-  { id: "gptj-6b", name: "GPT-J 6B", paramsB: 6, activeParamsB: 6, layers: 28, kvBytesPerToken: 28672, era: 2021.5 },
-  { id: "mtnlg-530b", name: "Megatron-Turing NLG 530B", paramsB: 530, activeParamsB: 530, layers: 105, kvBytesPerToken: 8601600, era: 2022 },
-  { id: "chinchilla-70b", name: "Chinchilla 70B", paramsB: 70, activeParamsB: 70, layers: 80, kvBytesPerToken: 2621440, era: 2022.25 },
-  { id: "palm-540b", name: "PaLM 540B", paramsB: 540, activeParamsB: 540, layers: 118, kvBytesPerToken: 2895872, era: 2022.3 },
-  { id: "gpt35-turbo", name: "GPT-3.5 Turbo", paramsB: 175, activeParamsB: 175, layers: 96, kvBytesPerToken: 393216, era: 2022.9 },
-  { id: "llama-65b", name: "LLaMA 65B", paramsB: 65, activeParamsB: 65, layers: 80, kvBytesPerToken: 2621440, era: 2023.1 },
-  { id: "gpt4", name: "GPT-4", paramsB: 1800, activeParamsB: 280, layers: 120, kvBytesPerToken: 491520, era: 2023.2 },
-  { id: "llama2-70b", name: "Llama 2 70B", paramsB: 70, activeParamsB: 70, layers: 80, kvBytesPerToken: 327680, era: 2023.55 },
-  { id: "mistral-7b", name: "Mistral 7B", paramsB: 7, activeParamsB: 7, layers: 32, kvBytesPerToken: 131072, era: 2023.75 },
-  { id: "mixtral-8x7b", name: "Mixtral 8x7B MoE", paramsB: 46.7, activeParamsB: 12.9, layers: 32, kvBytesPerToken: 131072, era: 2023.9 },
-  { id: "grok-1", name: "Grok-1 314B MoE", paramsB: 314, activeParamsB: 80, layers: 64, kvBytesPerToken: 262144, era: 2024.25 },
-  { id: "llama3-70b", name: "Llama 3 70B", paramsB: 70, activeParamsB: 70, layers: 80, kvBytesPerToken: 327680, era: 2024.3 },
-  { id: "gpt4o", name: "GPT-4o", paramsB: 200, activeParamsB: 200, layers: 88, kvBytesPerToken: 360448, era: 2024.45 },
-  { id: "llama31-405b", name: "Llama 3.1 405B", paramsB: 405, activeParamsB: 405, layers: 126, kvBytesPerToken: 516096, era: 2024.6 },
-  { id: "deepseek-v3", name: "DeepSeek-V3 671B MoE", paramsB: 671, activeParamsB: 37, layers: 61, kvBytesPerToken: 70272, era: 2024.95 },
-  { id: "deepseek-r1", name: "DeepSeek-R1 671B MoE", paramsB: 671, activeParamsB: 37, layers: 61, kvBytesPerToken: 70272, era: 2025.05 },
-  { id: "grok-3", name: "Grok-3", paramsB: 400, activeParamsB: 50, layers: 80, kvBytesPerToken: 327680, era: 2025.15 },
-  { id: "llama4-maverick", name: "Llama 4 Maverick 400B MoE", paramsB: 400, activeParamsB: 17, layers: 128, kvBytesPerToken: 524288, era: 2025.3 },
-  { id: "qwen3-235b", name: "Qwen3 235B-A22B MoE", paramsB: 235, activeParamsB: 22, layers: 94, kvBytesPerToken: 192512, era: 2025.35 },
-  { id: "kimi-k2", name: "Kimi K2 1T MoE", paramsB: 1e3, activeParamsB: 32, layers: 61, kvBytesPerToken: 70272, era: 2025.45 },
-  { id: "glm45", name: "GLM-4.5 355B MoE", paramsB: 355, activeParamsB: 32, layers: 92, kvBytesPerToken: 376832, era: 2025.55 },
-  { id: "gpt5", name: "GPT-5", paramsB: 900, activeParamsB: 120, layers: 120, kvBytesPerToken: 491520, era: 2025.65 },
-  { id: "llama5", name: "Llama 5", paramsB: 1600, activeParamsB: 80, layers: 140, kvBytesPerToken: 161280, era: 2026.4 },
-  { id: "deepseek-v4", name: "DeepSeek-V4 MoE", paramsB: 700, activeParamsB: 40, layers: 64, kvBytesPerToken: 73728, era: 2026.6 },
-  { id: "gemini3-ultra", name: "Gemini 3 Ultra", paramsB: 2500, activeParamsB: 90, layers: 160, kvBytesPerToken: 655360, era: 2026.9 },
-  { id: "gpt6", name: "GPT-6", paramsB: 3e3, activeParamsB: 150, layers: 180, kvBytesPerToken: 737280, era: 2027.4 },
-  { id: "frontier-stargate", name: "Stargate-class frontier run", paramsB: 8e3, activeParamsB: 250, layers: 220, kvBytesPerToken: 905216, era: 2028 }
-];
-const CUSTOMERS = {
-  startup: ["Stealth Labs", "Glyph AI", "Peregrine Models", "Otter Systems", "VectorForge"],
-  lab: ["MIT LIDS", "Flatiron Institute", "CERN OpenLab", "RIKEN AICS", "Turing Institute"],
-  enterprise: ["Acme Retail Media", "Helios Bank", "Nordwind Auto", "MedSyn Pharma", "Skyline Telecom"],
-  sovereign: ["EU Sovereign Cloud", "Emirates AI Council", "Nippon AI Grid", "Sovereign Tech Fund"]
-};
-const lerpCurve$1 = (points, x) => {
-  if (x <= points[0][0]) return points[0][1];
-  for (let i = 1; i < points.length; i++) {
-    if (x <= points[i][0]) {
-      const [x0, y0] = points[i - 1];
-      const [x1, y1] = points[i];
-      return y0 + (x - x0) / (x1 - x0) * (y1 - y0);
-    }
-  }
-  return points[points.length - 1][1];
-};
-const GPU_HOUR_ANCHOR = [
-  [2020, 1.9],
-  [2021, 1.75],
-  [2022, 1.6],
-  [2023.2, 2.9],
-  [2024, 2.6],
-  [2024.6, 3],
-  [2025, 2.8],
-  [2026, 2.6],
-  [2026.8, 3.4],
-  [2027, 3.2],
-  [2028, 3]
-];
-const gpuHourAnchor = (year) => lerpCurve$1(GPU_HOUR_ANCHOR, year);
-const MTOK_DECAY = [
-  [2020, 1],
-  [2021, 0.75],
-  [2022, 0.55],
-  [2023, 0.4],
-  [2024, 0.175],
-  [2025, 0.115],
-  [2026, 0.07],
-  [2027, 0.05],
-  [2028, 0.035]
-];
-const mtokPrice = (activeParamsB, year) => 0.96 * Math.pow(Math.max(1, activeParamsB), 0.8) * lerpCurve$1(MTOK_DECAY, year);
-const ERA_MEM_GB = [
-  [2020, 40],
-  [2022, 80],
-  [2023.7, 141],
-  [2024.8, 192],
-  [2026.2, 288],
-  [2027, 384],
-  [2028, 384]
-];
-const ERA_SCALEOUT_GBPS = [[2020, 6], [2022, 12.5], [2023.5, 25], [2024.5, 50], [2026, 100], [2027, 200], [2028, 200]];
-const ERA_TOKENS_PER_SEC = [
-  [2020, 3e3],
-  [2021, 2e4],
-  [2022, 1e5],
-  [2023, 5e5],
-  [2024, 3e6],
-  [2025, 2e7],
-  [2026, 8e7],
-  [2027, 2e8],
-  [2028, 5e8]
-];
-const ACCEL_BUCKETS = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
-const bucket = (n) => ACCEL_BUCKETS.find((b) => b >= n) ?? ACCEL_BUCKETS[ACCEL_BUCKETS.length - 1];
-const CONTEXT_OPTIONS = [
-  [2022, [1024, 2048]],
-  [2024, [2048, 4096, 8192]],
-  [2026, [8192, 32768, 65536]],
-  [2029, [32768, 131072, 262144]]
-];
-const round2$1 = (x) => Math.round(x * 100) / 100;
-const round3 = (x) => Math.round(x * 1e3) / 1e3;
-const ARCHETYPE_TABLE = {
-  startup: { minRep: 0, weight: 0.38, accelMult: 1, tokenMult: 0.25, priceMult: 0.9, trainDur: [2, 6], inferDur: [3, 9], sla: 0.95, penalty: [4e-3, 8e-3] },
-  lab: { minRep: 20, weight: 0.3, accelMult: 1, tokenMult: 0.6, priceMult: 1, trainDur: [4, 10], inferDur: [6, 12], sla: 0.97, penalty: [5e-3, 0.01] },
-  enterprise: { minRep: 45, weight: 0.22, accelMult: 2, tokenMult: 1, priceMult: 1.1, trainDur: [6, 18], inferDur: [12, 24], sla: 0.98, penalty: [8e-3, 0.015] },
-  sovereign: { minRep: 70, weight: 0.1, accelMult: 4, tokenMult: 2.5, priceMult: 1.15, trainDur: [12, 36], inferDur: [24, 48], sla: 0.995, penalty: [0.01, 0.02] }
-};
-function rollArchetype(rng, reputation) {
-  const eligible = Object.keys(ARCHETYPE_TABLE).map((a) => ({ a, t: ARCHETYPE_TABLE[a] })).filter(({ t }) => reputation >= t.minRep);
-  const total = eligible.reduce((s2, e) => s2 + e.t.weight, 0);
-  let r = rng() * total;
-  for (const e of eligible) {
-    r -= e.t.weight;
-    if (r <= 0) return e.a;
-  }
-  return eligible[0].a;
-}
-function generateContracts(state, month, rng) {
-  const year = monthToYear(month);
-  const eligible = MODELS.filter((m) => m.era <= year + 0.01);
-  if (eligible.length === 0) return [];
-  const out = [];
-  const n = 1 + Math.floor(rng() * 3);
-  for (let i = 0; i < n; i++) {
-    const model = pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
-    const trainP = model.paramsB > 200 ? 0.7 : model.paramsB < 15 ? 0.12 : 0.4;
-    const archetype = rollArchetype(rng, state.reputation);
-    const t = ARCHETYPE_TABLE[archetype];
-    const suffix = String(1e3 + Math.floor(rng() * 9e3));
-    const common = {
-      customer: pick(rng, CUSTOMERS[archetype]),
-      archetype,
-      model,
-      durationMonths: 0,
-      penaltyRate: round3(randRange(rng, t.penalty[0], t.penalty[1])),
-      deadlineMonth: month + randInt(rng, 2, 6),
-      slaAvailability: Math.min(0.999, Math.max(0.9, t.sla + randRange(rng, -5e-3, 5e-3)))
-    };
-    if (rng() < trainP) {
-      const stateGB = 16 * model.paramsB;
-      const memPerAccel = lerpCurve$1(ERA_MEM_GB, year);
-      const raw = stateGB / memPerAccel * randRange(rng, 2, 4.5) * t.accelMult;
-      const minAccelerators = Math.min(32768, Math.max(32, bucket(Math.ceil(raw))));
-      const isMoe = model.activeParamsB < model.paramsB * 0.8;
-      const moeDomain = year >= 2027 ? 128 : year >= 2025.5 ? 64 : year >= 2024 ? 32 : 16;
-      const minScaleUpDomain = Math.min(
-        minAccelerators,
-        isMoe ? moeDomain : year >= 2025 ? 16 : 8
-      );
-      const tier = lerpCurve$1(ERA_SCALEOUT_GBPS, year);
-      const contract = {
-        kind: "training",
-        id: `trn-${month}-${i}-${suffix}`,
-        ...common,
-        durationMonths: randInt(rng, t.trainDur[0], t.trainDur[1]),
-        minAccelerators,
-        minScaleUpDomain,
-        minScaleOutGBsPerAccel: round2$1(model.paramsB < 15 ? tier * 0.75 : tier),
-        minTotalMemGB: Math.ceil(stateGB),
-        pricePerAccelHour: round2$1(
-          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15)
-        )
-      };
-      contract.rampMonths = Math.min(20, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0));
-      out.push(contract);
-    } else {
-      const tps = Math.max(
-        100,
-        Math.round(lerpCurve$1(ERA_TOKENS_PER_SEC, year) * t.tokenMult * randRange(rng, 0.6, 1.8))
-      );
-      const tpotMs = Math.round(randRange(rng, 20, 60) + (model.activeParamsB > 80 ? randRange(rng, 10, 40) : 0));
-      const ctxOpts = CONTEXT_OPTIONS.find(([y]) => year < y)?.[1] ?? [262144];
-      const contract = {
-        kind: "inference",
-        id: `inf-${month}-${i}-${suffix}`,
-        ...common,
-        durationMonths: randInt(rng, t.inferDur[0], t.inferDur[1]),
-        tokensPerSec: tps,
-        tpotMs: Math.max(15, tpotMs),
-        ttftMs: Math.round(randRange(rng, 150, 700) / 10) * 10,
-        contextTokens: pick(rng, ctxOpts),
-        pricePerMTok: Math.max(
-          0.01,
-          round3(
-            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2)
-          )
-        )
-      };
-      contract.rampMonths = randInt(rng, 5, 8);
-      out.push(contract);
-    }
+  for (const it2 of d?.items ?? []) {
+    if (it2.type === "tray") {
+      const t = state.trays.find((x) => x.id === it2.trayId);
+      for (const p of t?.parts ?? []) add(p.itemId, p.count * it2.count);
+    } else if (it2.type === "switch") add(it2.switchId, it2.count);
   }
   return out;
 }
-const scaleOutTier = (year) => lerpCurve$1(ERA_SCALEOUT_GBPS, year);
-const pe = (id) => {
-  const i = getItem(id);
-  return i && i.kind === "power" ? i : void 0;
+const partClass = (id) => {
+  const k2 = getItem(id)?.kind;
+  return k2 && PART_RATE[k2] !== void 0 ? k2 : void 0;
 };
-function hallResilience(hall) {
-  let upsKW = 0, gensetKW = 0, batteryKW = 0, transferKW = 0, gensetCount = 0, flywheelKW = 0, feedB = false, parallel = false;
-  for (const [id, n] of Object.entries(hall.powerEquip)) {
-    const e = pe(id);
-    if (!e || n <= 0) continue;
-    if (/feed-b/.test(id)) feedB = true;
-    if (/paralleling/.test(id)) parallel = true;
-    if (e.powerType === "ups") {
-      upsKW += e.capacityKW * n;
-      if (/rotary|flywheel/.test(id)) flywheelKW += e.capacityKW * n;
-    } else if (e.powerType === "battery") batteryKW += e.capacityKW * n;
-    else if (e.powerType === "genset" || e.powerType === "gas-turbine") {
-      gensetKW += e.capacityKW * n;
-      gensetCount += n;
-    } else if (e.powerType === "switchgear" && /ats|sts|paralleling/.test(id)) transferKW += e.capacityKW * n;
-  }
-  const load = Math.max(1, hall.itPowerKW);
-  const ups2 = upsKW >= load * 0.9 && (batteryKW > 0 || flywheelKW >= load * 0.9);
-  const backup = gensetKW >= load * 1;
-  const transfer = transferKW >= load * 0.9;
-  const gaps = [];
-  if (!ups2) gaps.push(upsKW < load * 0.9 ? "UPS capacity below IT load" : "UPS has no battery string");
-  if (!backup) gaps.push(gensetKW <= 0 ? "no generator: outages longer than battery ride-through take you down" : "generator smaller than IT load");
-  if (!transfer) gaps.push("no automatic transfer switch (ATS/STS or paralleling gear) to move load to the generator");
-  let score = (ups2 ? 0.55 : 0) + (backup ? 0.25 : 0) + (transfer ? 0.12 : 0);
-  const n1 = gensetCount >= 2 && gensetKW - gensetKW / gensetCount >= load && (parallel || gensetCount < 2) || upsKW >= load * 1.8;
-  if (ups2 && backup && transfer && n1) score = 1;
-  else if (ups2 && backup && transfer) score = 0.92;
-  if (feedB && score > 0) score = Math.min(1, score + 0.08);
-  const tier = score >= 1 ? "N+1" : score >= 0.9 ? "N" : score >= 0.5 ? "basic" : "none";
-  return { score, tier, ups: ups2, backup, transfer, upsKW, gensetKW, batteryKW, gensetCount, feedB, gaps };
+function rackRates(state, designId) {
+  return Object.entries(rackParts(state, designId)).flatMap(([id, n]) => {
+    const c = partClass(id);
+    return c ? [{ id, rate: n * PART_RATE[c] }] : [];
+  });
 }
-const up = (id) => {
-  const i = getItem(id);
-  return i && i.kind === "uplink" ? i : void 0;
+function recommendedSpares(state, id) {
+  let total = 0;
+  for (const h of state.halls) for (const p of h.racks) total += rackParts(state, p.designId)[id] ?? 0;
+  const c = partClass(id);
+  if (!c || total === 0) return 0;
+  return Math.max(1, Math.ceil(total * PART_RATE[c] * 3));
+}
+function spareQty(id, qty) {
+  const c = partClass(id);
+  return c ? Math.max(1, Math.ceil(qty * PART_RATE[c] * 6)) : 0;
+}
+const procureActions = (c) => {
+  const { get, commit, logln } = c;
+  return {
+    buy: (itemId, qty, spare = false) => commit((g) => {
+      const item = getItem(itemId);
+      if (!item) return fail(`Unknown item '${itemId}'.`);
+      if (item.kind === "uplink") return fail("Internet circuits are added on Build → Internet.");
+      if (!Number.isFinite(qty) || qty <= 0) return fail("Order quantity must be positive.");
+      const offer = offerAt(item, g.month);
+      if (!offer.available) {
+        return fail(offer.reason ?? "Not purchasable this month.", [
+          { severity: "error", code: "unavailable", message: offer.reason ?? "", learn: item.id }
+        ]);
+      }
+      let n = Math.floor(qty);
+      let note = "";
+      if (offer.qtyCap && n > offer.qtyCap) {
+        n = offer.qtyCap;
+        note = ` Vendor allocation capped the order at ${n}/quarter — everyone is fighting for these parts.`;
+      }
+      const discount = volumeDiscount(item, n, offer.unitPrice);
+      const cost = Math.round(offer.unitPrice * n * (1 - discount));
+      if (cost > g.cash) {
+        return fail(`Insufficient funds: $${usd(cost)} needed, $${usd(g.cash)} in the bank.`);
+      }
+      g.cash -= cost;
+      g.orders.push({
+        id: `ord-${g.month}-${g.orders.length + 1}-${itemId}`,
+        itemId,
+        qty: n,
+        unitPrice: Math.round(offer.unitPrice * (1 - discount)),
+        arriveMonth: g.month + offer.leadMonths,
+        ...spare ? { spare: true } : {}
+      });
+      logln(
+        g,
+        "info",
+        `Ordered ${n} ${spare ? "spare " : ""}× ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ""}; arriving month ${g.month + offer.leadMonths}.${note}`
+      );
+      return ok(`Ordered ${n} × ${item.name}; arrives month ${g.month + offer.leadMonths}.${note}`);
+    }),
+    adoptTemplate: (templateId) => {
+      const t = getTemplate(templateId);
+      if (!t) return { ok: false, message: "Unknown template." };
+      const g = get().game;
+      if (!g.trays.some((x) => x.id === trayIdOf(t))) {
+        const r = get().saveTray(trayOf(t));
+        if (!r.ok) return r;
+      }
+      if (!get().game.racks.some((x) => x.id === rackIdOf(t))) {
+        const r = get().saveRack(rackOf(t));
+        if (!r.ok) return r;
+      }
+      return { ok: true, message: `Saved designs for ${t.name}.` };
+    },
+    buyTemplate: (templateId, racks, spares = true) => {
+      const t = getTemplate(templateId);
+      const nRacks = Math.floor(racks);
+      if (!t) return { ok: false, message: "Unknown template." };
+      if (!(nRacks >= 1)) return { ok: false, message: "Order at least one rack." };
+      const adopted = get().adoptTemplate(templateId);
+      if (!adopted.ok) return adopted;
+      return commit((g) => {
+        const bom = templateBom(t, nRacks);
+        const spareBom = {};
+        if (spares) for (const id of Object.keys(bom)) {
+          const sp = spareQty(id, bom[id]);
+          if (sp) spareBom[id] = sp;
+        }
+        let cost = 0, lead = 1;
+        const lines = [];
+        const wanted = [...Object.entries(bom).map(([i, n]) => [i, n, false]), ...Object.entries(spareBom).map(([i, n]) => [i, n, true])];
+        for (const [itemId, n, isSpare] of wanted) {
+          const item = getItem(itemId);
+          const offer = offerAt(item, g.month);
+          if (!offer.available) return fail(`${item.name} is not purchasable yet: ${offer.reason}`);
+          if (offer.qtyCap && n > offer.qtyCap) return fail(`Allocation: the vendor will only sell ${offer.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`);
+          const unit = Math.round(offer.unitPrice * (1 - volumeDiscount(item, n, offer.unitPrice)) * (1 + t.premium));
+          cost += unit * n;
+          const l = Math.max(1, Math.round(offer.leadMonths * t.leadFactor));
+          lead = Math.max(lead, l);
+          lines.push({ itemId, n, unit, lead: l, spare: isSpare });
+        }
+        if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
+        g.cash -= cost;
+        reserve(g, rackIdOf(t), nRacks);
+        for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
+        logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium). Full bill of materials arrives by month ${g.month + lead}.`);
+        return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.`);
+      });
+    }
+  };
 };
-function uplinkGbps(s2) {
-  if (!s2.uplinks) return Infinity;
-  return Object.entries(s2.uplinks).reduce((n, [id, c]) => n + (up(id)?.gbps ?? 0) * c, 0);
-}
-const uplinkMonthlyUSD = (s2) => Object.entries(s2.uplinks ?? {}).reduce((n, [id, c]) => n + (up(id)?.mrcUSD ?? 0) * c, 0);
-const carrierCount = (s2) => new Set(Object.entries(s2.uplinks ?? {}).filter(([, c]) => c > 0).map(([id]) => up(id)?.carrier).filter(Boolean)).size;
-function contractNeedGbps(c) {
-  return c.kind === "inference" ? Math.max(0.2, (c.tokensPerSec ?? 0) / 5e4) : Math.max(0.2, (c.minAccelerators ?? 0) * 0.02);
-}
-function totalNeedGbps(s2) {
-  return s2.activeContracts.filter((a) => a.clusterIds.length > 0).reduce((n, a) => n + contractNeedGbps(a.contract), 0);
-}
-const BASE_POWER_PRICE = 0.07;
-const onlineRacks = (s2) => s2.halls.flatMap((h) => h.racks).filter((r) => r.status === "online").length;
-function rollEvents(s2, rng, log, graceMonths = 4) {
-  s2.utilityUSDPerKWh = Math.round((s2.utilityUSDPerKWh + (BASE_POWER_PRICE - s2.utilityUSDPerKWh) * 0.05) * 1e4) / 1e4;
-  if (s2.month < 11 + graceMonths) return;
-  if (rng() > 0.28) return;
-  const racks = onlineRacks(s2);
-  const year = 2020 + s2.month / 12;
-  const pool = [];
-  pool.push(() => {
-    s2.utilityUSDPerKWh = Math.min(0.2, Math.round(s2.utilityUSDPerKWh * 1.3 * 1e4) / 1e4);
-    log("bad", `⚡ Energy crisis: utility rate jumps to $${s2.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
-  });
-  if (racks > 0) pool.push(() => {
-    const cut = Math.round(1e6 + rng() * 2e6);
-    s2.cash += cut;
-    log("good", `🏛 Sovereign-AI grant: a regional government pays +$${(cut / 1e6).toFixed(1)}M to bring GPU capacity on-shore. Governments are now a real customer class.`);
-  });
-  pool.push(() => {
-    const extra = generateContracts(s2, s2.month, rng).filter((c) => c.kind === "inference").slice(0, 2);
-    extra.forEach((c) => {
-      if (c.kind === "inference") c.pricePerMTok = Math.round(c.pricePerMTok * 1.25 * 100) / 100;
-    });
-    s2.availableContracts = [...s2.availableContracts, ...extra];
-    log("good", `🚀 A viral model launch floods the market with inference demand${extra.length ? `: ${extra.length} premium (+25%) serving offers posted` : ""}. Memory-bandwidth-rich GPUs earn the most per watt on decode.`);
-  });
-  if (year >= 2021) pool.push(() => {
-    const bill = Math.round(25e3 * Math.max(1, racks));
-    s2.cash -= bill;
-    log("bad", `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1e3).toFixed(0)}k. Lesson: warm-water DLC tolerates hot days — air-cooled halls suffer first.`);
-  });
-  if (racks > 0 && s2.uplinks) {
-    pool.push(() => {
-      if (carrierCount(s2) >= 2) {
-        log("good", "🧵 A backhoe cuts a fiber route, but your second carrier on a diverse path keeps every customer online.");
-        return;
+const designActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    saveTray: (tray) => commit((g) => {
+      const i = g.trays.findIndex((t) => t.id === tray.id);
+      if (i >= 0) g.trays[i] = tray;
+      else g.trays.push(tray);
+      logln(g, "info", `Tray design '${tray.name}' saved.`);
+      return ok("Tray saved.");
+    }),
+    saveRack: (rack) => commit((g) => {
+      const i = g.racks.findIndex((r) => r.id === rack.id);
+      if (i >= 0) g.racks[i] = rack;
+      else g.racks.push(rack);
+      logln(g, "info", `Rack design '${rack.name}' saved.`);
+      return ok("Rack saved.");
+    })
+  };
+};
+const facilityActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    buildHall: (name, coolingClass, rackSlots) => commit((g) => {
+      const slots = Math.floor(rackSlots);
+      if (slots < 4 || slots > 200) return fail("A new hall starts with 4–200 rack slots; buy more floor space later in units.");
+      const cost = 2e6 + 25e4 * slots;
+      if (cost > g.cash) return fail(`This hall costs $${usd(cost)} — not enough cash.`);
+      g.cash -= cost;
+      const id = `hall-${g.halls.length + 1}`;
+      const hall = {
+        id,
+        name: name || id,
+        coolingClass,
+        rackSlots: slots,
+        itPowerKW: 0,
+        coolingKW: 0,
+        pue: 1,
+        powerEquip: {},
+        coolingEquip: {},
+        racks: [],
+        floorLoadKgPerRack: { air: 1500, rdhx: 1800, dlc: 2400, immersion: 3200 }[coolingClass] ?? 1500
+      };
+      g.halls.push(hall);
+      logln(
+        g,
+        "good",
+        `Built ${hall.name}: ${slots} slots, ${coolingClass.toUpperCase()}-ready shell. Install power and cooling plant before racks come in.`
+      );
+      return ok(`${hall.name} built. Install power & cooling next.`);
+    }),
+    expandHall: (hallId, units) => commit((g) => {
+      const hall = g.halls.find((h) => h.id === hallId);
+      if (!hall) return fail(`Hall '${hallId}' not found.`);
+      const n = Math.floor(units);
+      if (!(n >= 1)) return fail("Buy at least one floor unit.");
+      const cost = n * FLOOR_UNIT_COST;
+      if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd(cost)} — not enough cash.`);
+      g.cash -= cost;
+      const readyMonth = g.month + floorCommissionMonths(n);
+      (hall.expansions ??= []).push({ units: n, readyMonth });
+      logln(g, "info", `Ordered ${n * FLOOR_UNIT_SLOTS} more rack positions for ${hall.name} ($${usd(cost)}). Slab, containment and fit-out finish in month ${readyMonth}.`);
+      return ok(`${n * FLOOR_UNIT_SLOTS} slots ordered for ${hall.name}; commissioned ${readyMonth - g.month} months from now.`);
+    }),
+    installPower: (hallId, itemId, qty) => commit((g) => {
+      const hall = g.halls.find((h) => h.id === hallId);
+      if (!hall) return fail(`Hall '${hallId}' not found.`);
+      const item = getItem(itemId);
+      if (!item || item.kind !== "power") return fail("Pick a power-equipment catalog item.");
+      if (item.powerType === "pdu" || item.powerType === "power-shelf") {
+        return fail(`${item.name} is a rack/tray-level part — it gets used when you place a rack, not installed in the hall. Keep it in the warehouse.`);
       }
-      s2.activeContracts.forEach((a) => {
-        a.slaMisses += 1;
-      });
-      s2.reputation = Math.max(0, s2.reputation - 2);
-      log("bad", "🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit. Lesson: buy a second circuit from a different carrier on a diverse path.");
-    });
-  }
-  if (racks > 0) {
-    pool.push(() => {
-      const live = s2.halls.filter((h) => h.racks.some((r) => r.status === "online"));
-      const weakest = live.map(hallResilience).sort((a, b) => a.score - b.score)[0];
-      const score = weakest?.score ?? 0;
-      if (rng() < score) {
-        log("good", `🔌 Utility outage: your ${weakest?.tier} power chain (UPS → generator → transfer switch) carried the halls through with no customer impact.`);
-        return;
+      const n = Math.floor(qty);
+      if (n <= 0) return fail("Quantity must be positive.");
+      const have = g.inventory[itemId] ?? 0;
+      if (have < n) {
+        return fail(`Need ${n} × ${item.name} in inventory (have ${have}). Order them first.`, [
+          { severity: "error", code: "missing-parts", message: `Need ${n}, have ${have}.`, learn: item.id }
+        ]);
       }
-      s2.activeContracts.forEach((a) => {
-        a.slaMisses += 1;
-      });
-      s2.reputation = Math.max(0, s2.reputation - 2);
-      const why = weakest?.gaps[0] ?? "no backup power installed";
-      log("bad", `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + battery + generator + transfer switch, sized N+1, keep training alive.`);
-    });
-    pool.push(() => {
-      const bonus = Math.round(racks * 4e4);
-      s2.cash += bonus;
-      s2.reputation = Math.min(100, s2.reputation + 1);
-      log("good", `📣 A customer publishes a benchmark crediting your cluster's uptime: +${bonus ? "$" + (bonus / 1e3).toFixed(0) + "k" : ""} in spot demand and +1 reputation.`);
-    });
-  }
-  pool[Math.floor(rng() * pool.length)]();
-}
+      g.inventory[itemId] = have - n;
+      if (g.inventory[itemId] <= 0) delete g.inventory[itemId];
+      hall.powerEquip[itemId] = (hall.powerEquip[itemId] ?? 0) + n;
+      const addedKW = POWER_FEED_TYPES.includes(item.powerType) ? n * item.capacityKW : 0;
+      hall.itPowerKW += addedKW;
+      hall.pue = computePUE(hall, getItem);
+      logln(
+        g,
+        "good",
+        `Installed ${n} × ${item.name} in ${hall.name}${addedKW > 0 ? ` (+${usd(addedKW)} kW IT capacity)` : ""}.`
+      );
+      return ok(`Installed in ${hall.name}.`);
+    }),
+    installCooling: (hallId, itemId, qty) => commit((g) => {
+      const hall = g.halls.find((h) => h.id === hallId);
+      if (!hall) return fail(`Hall '${hallId}' not found.`);
+      const item = getItem(itemId);
+      if (!item || item.kind !== "cooling") return fail("Pick a cooling-equipment catalog item.");
+      const n = Math.floor(qty);
+      if (n <= 0) return fail("Quantity must be positive.");
+      const compatible = item.serves === hall.coolingClass || hall.coolingClass === "rdhx" && item.serves === "air" || hall.coolingClass === "immersion" && item.serves === "dlc";
+      if (!compatible) {
+        return fail(
+          `${item.name} serves ${item.serves.toUpperCase()} loads, but ${hall.name} is a ${hall.coolingClass.toUpperCase()} hall.`,
+          [
+            {
+              severity: "error",
+              code: "cooling-mismatch",
+              message: `${item.name} serves ${item.serves}; hall is ${hall.coolingClass}.`,
+              learn: item.id
+            }
+          ]
+        );
+      }
+      const have = g.inventory[itemId] ?? 0;
+      if (have < n) {
+        return fail(`Need ${n} × ${item.name} in inventory (have ${have}). Order them first.`, [
+          { severity: "error", code: "missing-parts", message: `Need ${n}, have ${have}.`, learn: item.id }
+        ]);
+      }
+      g.inventory[itemId] = have - n;
+      if (g.inventory[itemId] <= 0) delete g.inventory[itemId];
+      hall.coolingEquip[itemId] = (hall.coolingEquip[itemId] ?? 0) + n;
+      hall.coolingKW += n * item.capacityKW;
+      hall.pue = computePUE(hall, getItem);
+      logln(g, "good", `Installed ${n} × ${item.name} in ${hall.name} (+${usd(n * item.capacityKW)} kW heat rejection).`);
+      return ok(`Installed in ${hall.name}.`);
+    }),
+    buyUplink: (itemId) => commit((g) => {
+      const item = getItem(itemId);
+      if (!item || item.kind !== "uplink") return fail("Pick an internet circuit.");
+      if (item.availableFrom * 12 - 2020 * 12 > g.month) return fail(`${item.name} is not offered yet.`);
+      if (g.cash < item.priceUSD) return fail(`Install fee is $${usd(item.priceUSD)}; you have $${usd(g.cash)}.`);
+      g.cash -= item.priceUSD;
+      g.uplinks = { ...g.uplinks ?? {}, [itemId]: ((g.uplinks ?? {})[itemId] ?? 0) + 1 };
+      logln(g, "info", `Turned up ${item.name}: $${usd(item.priceUSD)} install, then $${usd(item.mrcUSD)}/month.`);
+      return ok(`${item.name} is live. Billing $${usd(item.mrcUSD)}/month.`);
+    }),
+    dropUplink: (itemId) => commit((g) => {
+      const c2 = g.uplinks?.[itemId] ?? 0;
+      if (c2 <= 0) return fail("You have no such circuit.");
+      g.uplinks = { ...g.uplinks, [itemId]: c2 - 1 };
+      return ok("Circuit cancelled; billing stops next month.");
+    })
+  };
+};
 const ETH_FAMILY = ["eth-100", "eth-200", "eth-400", "eth-800", "eth-1600", "spectrum-x", "uec-eth", "roce"];
 const COPPER_DOMAIN_TECHS = ["nvlink3", "nvlink4", "nvlink5", "nvlink6", "wafer", "groq-chip2chip", "pcie"];
 const r3 = (x) => Math.round(x * 1e3) / 1e3;
@@ -8659,17 +9157,144 @@ const defaultClusterContext = () => ({
   getTray: () => void 0,
   getItem
 });
+const round2 = (x) => Math.round(x * 100) / 100;
+const clusterContextOf = (state) => ({
+  getRack: (id) => {
+    const pid = state.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
+    return state.racks.find((r) => r.id === pid);
+  },
+  getTray: (id) => state.trays.find((t) => t.id === id),
+  getItem
+});
+const rackAccels = (state, designId) => {
+  const design = state.racks.find((r) => r.id === designId);
+  if (!design) return 0;
+  let n = 0;
+  for (const item of design.items) {
+    if (item.type !== "tray") continue;
+    const tray = state.trays.find((t) => t.id === item.trayId);
+    if (!tray) continue;
+    for (const p of tray.parts) if (getItem(p.itemId)?.kind === "accelerator") n += p.count * item.count;
+  }
+  return n;
+};
+const deliveries = {
+  id: "deliveries",
+  run: ({ s: s2, log }) => {
+    const arrived = [];
+    s2.orders = s2.orders.filter((od) => {
+      if (od.arriveMonth <= s2.month) {
+        arrived.push(od);
+        return false;
+      }
+      return true;
+    });
+    for (const od of arrived) {
+      if (od.spare) {
+        s2.spareStock = s2.spareStock ?? {};
+        s2.spareStock[od.itemId] = (s2.spareStock[od.itemId] ?? 0) + od.qty;
+      } else s2.inventory[od.itemId] = (s2.inventory[od.itemId] ?? 0) + od.qty;
+    }
+    if (arrived.length) {
+      const units = arrived.reduce((n, od) => n + od.qty, 0);
+      log("good", `Delivered ${units} unit(s) from ${arrived.length} order(s) into inventory.`);
+    }
+  }
+};
+const floorSpace = {
+  id: "floor-space",
+  run: ({ s: s2, log }) => {
+    for (const hall of s2.halls) {
+      if (!hall.expansions?.length) continue;
+      const due = hall.expansions.filter((e) => e.readyMonth <= s2.month);
+      if (!due.length) continue;
+      const slots = due.reduce((n, e) => n + e.units * 10, 0);
+      hall.rackSlots += slots;
+      hall.expansions = hall.expansions.filter((e) => e.readyMonth > s2.month);
+      log("good", `${hall.name}: ${slots} new rack positions commissioned (${hall.rackSlots} total).`);
+    }
+  }
+};
+const commissioning = {
+  id: "commissioning",
+  run: (c) => {
+    const { s: s2, o: o2, rng, log } = c;
+    c.placed = s2.halls.flatMap((h) => h.racks);
+    c.placedById = new Map(c.placed.map((r) => [r.id, r]));
+    for (const rack of c.placed) {
+      if (rack.status === "installing" && s2.month >= rack.readyMonth - 1) {
+        rack.status = "commissioning";
+      } else if (rack.status === "commissioning" && s2.month >= rack.readyMonth) {
+        if (rng() < o2.commissionFailProb) {
+          rack.status = "failed";
+          rack.readyMonth = s2.month + o2.repairMonths;
+          log("bad", `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
+        } else {
+          rack.status = "online";
+          log("good", `Rack ${rack.id} commissioned and online.`);
+        }
+      } else if (rack.status === "failed" && s2.month >= rack.readyMonth) {
+        rack.status = "online";
+        rack.failedPart = void 0;
+        log("good", `Rack ${rack.id} repaired and back online.`);
+      }
+    }
+  }
+};
+const clusterStats = { id: "cluster-stats", run: (c) => c.refreshStats() };
+const failures = {
+  id: "failures",
+  run: (c) => {
+    const { s: s2, o: o2, rng, log } = c;
+    const onlineKW = s2.clusters.reduce((n, cl) => n + (cl.stats?.powerKW ?? 0), 0);
+    const coolingKW = s2.halls.reduce((n, h) => n + h.coolingKW, 0);
+    const stressed = coolingKW < onlineKW;
+    let failedNow = 0;
+    for (const rack of c.placed) {
+      if (rack.status !== "online") continue;
+      const rates = rackRates(s2, rack.designId);
+      const total = rates.reduce((n, r) => n + r.rate, 0) * (o2.accelFailureProbPerMonth * 8e3);
+      const p = 1 - Math.exp(-total * (stressed ? 3 : 1));
+      if (p > 0 && rng() < p) {
+        let pick2 = rng() * rates.reduce((n, r) => n + r.rate, 0);
+        const part = (rates.find((r) => (pick2 -= r.rate) <= 0) ?? rates[0]).id;
+        const label = PART_LABEL[partClass(part) ?? ""] ?? "part";
+        rack.status = "failed";
+        rack.failedPart = part;
+        if ((s2.spareStock?.[part] ?? 0) > 0) {
+          s2.spareStock[part] -= 1;
+          rack.readyMonth = s2.month + 1;
+          log("info", `${rack.id}: ${label} failed (${getItem(part)?.name}); swapping from your spares — back next month.`);
+        } else {
+          rack.readyMonth = s2.month + o2.repairMonths;
+          log("bad", `${rack.id}: ${label} failed (${getItem(part)?.name}) and you have NO SPARE. Waiting on RMA until month ${rack.readyMonth}. Keep spares in the warehouse.`);
+        }
+        failedNow++;
+      }
+    }
+    if (failedNow) {
+      log("bad", `${failedNow} rack(s) went down${stressed ? " — cooling capacity is below IT load, heat is killing hardware (3x failure rate)" : ""}.`);
+      c.refreshStats();
+    }
+  }
+};
+const pue = {
+  id: "pue",
+  run: ({ s: s2 }) => {
+    for (const hall of s2.halls) hall.pue = computePUE(hall, getItem);
+  }
+};
 const TRAIN_CEILING = 0.62;
 const STRAGGLER = 1.15;
 const PREFILL_MFU = 0.5;
 const FP8_UTIL = 0.75;
 const GB = 1e9;
-const clamp$2 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const peakAt = (a, d) => {
   if (d && a.tflops[d]) return a.tflops[d];
   return a.tflops.bf16 ?? a.tflops.fp16 ?? a.tflops.tf32 ?? Math.max(0, ...Object.values(a.tflops));
 };
-const domainOf = (stats, n) => clamp$2(Math.round(stats.scaleUpDomain) || 1, 1, n);
+const domainOf = (stats, n) => clamp$1(Math.round(stats.scaleUpDomain) || 1, 1, n);
 function trainingTokensPerSec(stats, accel, model, opts = {}) {
   const issues = [];
   const N = Math.max(1, Math.round(stats.accelerators));
@@ -8718,9 +9343,9 @@ function trainingTokensPerSec(stats, accel, model, opts = {}) {
       learn: accel.id
     });
   }
-  const overlap = clamp$2(opts.commOverlap ?? 0.5, 0, 0.9);
+  const overlap = clamp$1(opts.commOverlap ?? 0.5, 0, 0.9);
   const stepSec = tC + (tSu + tSo) * (1 - overlap) * STRAGGLER;
-  const mfu = clamp$2(tC / stepSec * TRAIN_CEILING * accel.softwareMaturity * accel.trainingAffinity, 5e-3, 0.65);
+  const mfu = clamp$1(tC / stepSec * TRAIN_CEILING * accel.softwareMaturity * accel.trainingAffinity, 5e-3, 0.65);
   const tokensPerSec = N * peak * 1e12 * mfu / (6 * Pa * GB);
   return {
     mfu,
@@ -8810,185 +9435,247 @@ function inferenceCapacity(stats, accel, model, opts = {}) {
     issues
   };
 }
-const HOURS_PER_MONTH = 730;
-const STAFF_COST_PER_MONTH = 12e3;
-const SUPPORT_RATE_PER_YEAR = 0.05;
-const DEPRECIATION_YEARS = 5;
-const DEFAULT_APR = 0.07;
-const FALLBACK_PUE = 1.4;
-const clusterPowerKW = (state) => state.clusters.reduce((s2, c) => s2 + (c.stats?.powerKW ?? 0), 0);
-const weightedPue = (state) => {
-  const total = state.halls.reduce((s2, h) => s2 + h.itPowerKW, 0);
-  if (total <= 0) {
-    const ps = state.halls.map((h) => h.pue);
-    return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : FALLBACK_PUE;
-  }
-  return state.halls.reduce((s2, h) => s2 + h.pue * h.itPowerKW, 0) / total;
-};
-function monthlyOpex(state, opts = {}) {
-  const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state));
-  const pue = opts.pue ?? weightedPue(state);
-  const kwh = itPowerKW * pue * HOURS_PER_MONTH;
-  const powerUSD = kwh * state.utilityUSDPerKWh;
-  const staffUSD = state.staff * (opts.staffCostPerMonth ?? STAFF_COST_PER_MONTH);
-  const supportUSD = (opts.capexUSD ?? estimateCapexBasis(state)) * SUPPORT_RATE_PER_YEAR / 12;
-  const networkUSD = uplinkMonthlyUSD(state);
-  return {
-    itPowerKW,
-    pue,
-    kwh,
-    powerUSD,
-    staffUSD,
-    supportUSD,
-    networkUSD,
-    totalUSD: powerUSD + staffUSD + supportUSD + networkUSD
-  };
-}
-const monthlyDepreciation = (capexUSD, years = DEPRECIATION_YEARS) => years > 0 ? capexUSD / (years * 12) : 0;
-const monthlyInterest = (debtUSD, apr = DEFAULT_APR) => debtUSD * apr / 12;
-function trayBomValue(design) {
-  let v2 = getItem(design.chassisId)?.priceUSD ?? 0;
-  return v2 + design.parts.reduce((s2, p) => s2 + (getItem(p.itemId)?.priceUSD ?? 0) * p.count, 0);
-}
-function rackBomValue(state, design) {
-  let v2 = getItem(design.rackId)?.priceUSD ?? 0;
-  for (const item of design.items) {
-    if (item.type === "tray") {
-      const tray = state.trays.find((t) => t.id === item.trayId);
-      v2 += (tray ? trayBomValue(tray) : 0) * item.count;
-    } else {
-      const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
-      v2 += (getItem(id)?.priceUSD ?? 0) * item.count;
+const ARCH_BONUS = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const serveContracts = {
+  id: "serve-contracts",
+  run: (c) => {
+    const { s: s2, log } = c;
+    const completed = [];
+    const defaulted = [];
+    const usedFrac = {};
+    const needGbps = totalNeedGbps(s2);
+    const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s2) / needGbps) : 1;
+    if (netFactor < 1) log("bad", `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s2).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
+    for (const ac of s2.activeContracts) {
+      const k2 = ac.contract;
+      if (ac.clusterIds.length === 0) {
+        const by = ac.deployBy ?? ac.startMonth + 4;
+        if (s2.month > by) defaulted.push(ac);
+        else if (s2.month === by) log("bad", `Last month to bring capacity online for ${k2.customer} (${k2.model.name}) — assign a qualifying cluster now or they walk.`);
+        continue;
+      }
+      for (const id of ac.clusterIds) c.served.add(id);
+      let availability = 0;
+      let accelerators = 0;
+      let tokensPerSec = 0;
+      if (k2.kind === "training") {
+        let total = 0;
+        let eff = 0;
+        for (const id of ac.clusterIds) {
+          const cl = s2.clusters.find((x) => x.id === id);
+          if (!cl) continue;
+          eff += cl.stats?.accelerators ?? 0;
+          total += cl.rackIds.reduce((n, rid) => {
+            const pr = c.placedById.get(rid);
+            return n + (pr ? rackAccels(s2, pr.designId) : 0);
+          }, 0);
+        }
+        availability = total > 0 ? eff / total : 0;
+        accelerators = eff;
+      } else {
+        let capacity = 0;
+        let worstTtftMs = 0;
+        const parts = [];
+        for (const id of ac.clusterIds) {
+          const cl = s2.clusters.find((x) => x.id === id);
+          const stats = cl?.stats;
+          if (!stats || stats.accelerators <= 0) continue;
+          const item = getItem(stats.acceleratorId);
+          if (!item || item.kind !== "accelerator") continue;
+          const accel = item;
+          const cap = inferenceCapacity(stats, accel, k2.model, { contextTokens: k2.contextTokens, tpotMs: k2.tpotMs });
+          const remain = Math.max(0, 1 - (usedFrac[id] ?? 0));
+          parts.push({ id, capTok: cap.tokensPerSec, remain });
+          capacity += cap.tokensPerSec * remain;
+          worstTtftMs = Math.max(worstTtftMs, cap.ttftMs);
+        }
+        const served = Math.min(capacity, k2.tokensPerSec);
+        for (const pt of parts) if (capacity > 0 && pt.capTok > 0) usedFrac[pt.id] = (usedFrac[pt.id] ?? 0) + served * (pt.capTok * pt.remain / capacity) / pt.capTok;
+        const frac = capacity / Math.max(1, k2.tokensPerSec);
+        availability = Math.min(1, frac) * (worstTtftMs <= k2.ttftMs ? 1 : 0.8);
+        tokensPerSec = Math.min(capacity, k2.tokensPerSec);
+      }
+      availability *= netFactor;
+      const res = k2.kind === "training" ? contractRevenue(ac, { accelerators, availability }) : contractRevenue(ac, { tokensPerSec, availability });
+      c.revenue += res.netUSD;
+      if (!res.slaMet) {
+        ac.slaMisses += 1;
+        log("bad", `SLA miss for ${k2.customer} (${k2.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(k2.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
+      }
+      ac.monthsServed += 1;
+      if (ac.monthsServed >= k2.durationMonths) completed.push(ac);
     }
-  }
-  return v2;
-}
-function estimateCapexBasis(state) {
-  let v2 = 0;
-  for (const [id, count] of Object.entries(state.inventory)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
-  for (const hall of state.halls) {
-    for (const [id, count] of Object.entries(hall.powerEquip)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
-    for (const [id, count] of Object.entries(hall.coolingEquip)) v2 += (getItem(id)?.priceUSD ?? 0) * count;
-    for (const rack of hall.racks) {
-      const design = state.racks.find((r) => r.id === rack.designId);
-      if (design) v2 += rackBomValue(state, design);
+    for (const ac of defaulted) {
+      s2.reputation = clamp(s2.reputation - 8, 0, 100);
+      log("bad", `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.`);
     }
-  }
-  return v2;
-}
-function contractRevenue(ac, opts) {
-  const hours = opts.hoursPerMonth ?? HOURS_PER_MONTH;
-  const c = ac.contract;
-  const avail = Math.max(0, Math.min(1, opts.availability));
-  const gross = c.kind === "training" ? (opts.accelerators ?? 0) * c.pricePerAccelHour * hours : (opts.tokensPerSec ?? 0) * hours * 3600 / 1e6 * c.pricePerMTok;
-  const slaMet = avail >= c.slaAvailability;
-  const billable = slaMet ? gross : gross * (avail / Math.max(c.slaAvailability, 1e-9));
-  const rawPenalty = slaMet ? 0 : gross * c.penaltyRate * Math.max(0, c.slaAvailability - avail) * 100;
-  const penalty = Math.min(rawPenalty, gross * 0.25);
-  return { grossUSD: gross, billableUSD: billable, penaltyUSD: penalty, netUSD: billable - penalty, slaMet };
-}
-const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-const r2 = (x) => Math.round(x * 100) / 100;
-const SOURCES = {
-  grid: { names: ["Metro Utility", "Regional Grid Co-op", "StateWide Electric"], priceMWh: [58, 74], term: [12, 36], overdraw: [0.15, 0.3], overage: 1.4, firmness: [0.9, 0.97], lesson: "Utility firm service: reliable and flexible, priced near spot. Overdraw is tolerated until the interconnect trips." },
-  solar: { names: ["SunHarvest PPA", "Helios Renewables", "DesertBright Solar"], priceMWh: [34, 46], term: [60, 120], overdraw: [0, 0.05], overage: 2, firmness: [0.72, 0.82], lesson: "Solar PPA: cheapest energy, but non-firm — nights and clouds mean you fall back to the grid at spot." },
-  gas: { names: ["Cascade Gas Peakers", "Permian Power", "Gulf Coast Generation"], priceMWh: [78, 98], term: [24, 60], overdraw: [0.05, 0.12], overage: 1.8, firmness: [0.96, 0.99], lesson: "Gas generation: dispatchable and firm, but fuel-indexed and expensive. Tight overdraw limits." },
-  hydro: { names: ["Columbia Basin Hydro", "Alpine Hydro Co"], priceMWh: [38, 52], term: [60, 180], overdraw: [0.05, 0.1], overage: 1.6, firmness: [0.9, 0.95], lesson: "Hydro: cheap, low-carbon baseload with long terms — but droughts happen." },
-  nuclear: { names: ["Ridgeline Nuclear", "Harbor Atomic"], priceMWh: [48, 62], term: [120, 240], overdraw: [0, 0.03], overage: 2.5, firmness: [0.985, 0.998], lesson: "Nuclear PPA: the firmest carbon-free power, long take-or-pay terms and almost no overdraw — you must size the commit carefully." }
-};
-const POWER_SOURCES = SOURCES;
-function generatePowerOffers(s2, rng, n = 1) {
-  const out = [];
-  const hallKW = s2.halls.reduce((a, h) => a + h.itPowerKW, 0);
-  for (let i = 0; i < n; i++) {
-    const kinds = Object.keys(SOURCES);
-    const kind = kinds[Math.floor(rng() * kinds.length)];
-    if ((kind === "nuclear" || kind === "hydro") && s2.reputation < 15 && rng() < 0.7) continue;
-    const t = SOURCES[kind];
-    const pick2 = (a) => a[0] + (a[1] - a[0]) * rng();
-    const baseMW = Math.max(1, Math.round(hallKW / 1e3 * (0.4 + rng() * 1.2) * (kind === "nuclear" ? 3 : 1)));
-    out.push({
-      id: `pw-${s2.month}-${Math.floor(rng() * 1e5)}`,
-      supplier: t.names[Math.floor(rng() * t.names.length)],
-      source: kind,
-      mw: baseMW,
-      priceUSDPerMWh: Math.round(pick2(t.priceMWh)),
-      termMonths: Math.round(pick2(t.term)),
-      overdrawPct: r2(pick2(t.overdraw)),
-      overageMult: t.overage,
-      firmness: r2(pick2(t.firmness)),
-      offerUntil: s2.month + 4
+    s2.activeContracts = s2.activeContracts.filter((ac) => {
+      if (defaulted.includes(ac)) return false;
+      if (!completed.includes(ac)) return true;
+      const k2 = ac.contract;
+      const clean = ac.slaMisses === 0;
+      const sloppy = ac.slaMisses > Math.ceil(k2.durationMonths / 3);
+      const gain = 2 + ARCH_BONUS[k2.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
+      s2.reputation = clamp(s2.reputation + gain, 0, 100);
+      log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
+      return false;
     });
   }
-  return out;
-}
-function settlePower(s2, drawMW, rng, log) {
-  const spotMWh = s2.utilityUSDPerKWh * 1e3;
-  const cs = s2.powerContracts ?? [];
-  const live = cs.filter((c) => s2.month >= c.startMonth && s2.month <= c.endMonth);
-  if (!live.length) return { netUSD: drawMW * spotMWh * HOURS_PER_MONTH, contractUSD: 0, overageUSD: 0, spotUSD: drawMW * spotMWh * HOURS_PER_MONTH, resaleUSD: 0, committedMW: 0, capMW: 0, drawMW, avgUSDPerMWh: spotMWh };
-  let contractUSD = 0, committed = 0, cap = 0, overageCap = 0, overagePrice = 0;
-  const delivered = [];
-  for (const c of live) {
-    contractUSD += c.mw * c.priceUSDPerMWh * HOURS_PER_MONTH;
-    const failed = rng() > c.firmness;
-    const frac = failed ? c.source === "solar" ? 0.35 : 0.5 : 1;
-    if (failed) log("bad", `${c.supplier} (${c.source}) curtailed — only ${Math.round(frac * 100)}% delivered this month. You still pay take-or-pay and buy the gap at spot.`);
-    delivered.push({ c, frac });
-    committed += c.mw * frac;
-    cap += c.mw * frac * (1 + c.overdrawPct);
-    overageCap += c.mw * frac * c.overdrawPct;
-    overagePrice = Math.max(overagePrice, c.priceUSDPerMWh * c.overageMult);
+};
+const contractMarket = {
+  id: "contract-market",
+  run: ({ s: s2, o: o2, rng, log }) => {
+    const expired = s2.availableContracts.filter((k2) => k2.deadlineMonth < s2.month);
+    const fresh = generateContracts(s2, s2.month, rng);
+    s2.availableContracts = [...s2.availableContracts.filter((k2) => k2.deadlineMonth >= s2.month), ...fresh].slice(-o2.maxAvailableContracts);
+    if (expired.length) log("info", `${expired.length} contract offer(s) expired unserved.`);
+    if (fresh.length) log("info", `${fresh.length} new contract offer(s) on the market.`);
   }
-  const base2 = delivered.reduce((a, d) => a + d.c.mw * d.frac, 0);
-  let overageUSD = 0, spotUSD = 0, resaleUSD = 0;
-  if (drawMW <= base2) resaleUSD = (base2 - drawMW) * spotMWh * 0.8 * HOURS_PER_MONTH;
-  else {
-    const over = Math.min(drawMW - base2, overageCap);
-    overageUSD = over * overagePrice * HOURS_PER_MONTH;
-    const rest = drawMW - base2 - over;
-    if (rest > 0) spotUSD = rest * spotMWh * HOURS_PER_MONTH;
+};
+const pe = (id) => {
+  const i = getItem(id);
+  return i && i.kind === "power" ? i : void 0;
+};
+function hallResilience(hall) {
+  let upsKW = 0, gensetKW = 0, batteryKW = 0, transferKW = 0, gensetCount = 0, flywheelKW = 0, feedB = false, parallel = false;
+  for (const [id, n] of Object.entries(hall.powerEquip)) {
+    const e = pe(id);
+    if (!e || n <= 0) continue;
+    if (/feed-b/.test(id)) feedB = true;
+    if (/paralleling/.test(id)) parallel = true;
+    if (e.powerType === "ups") {
+      upsKW += e.capacityKW * n;
+      if (/rotary|flywheel/.test(id)) flywheelKW += e.capacityKW * n;
+    } else if (e.powerType === "battery") batteryKW += e.capacityKW * n;
+    else if (e.powerType === "genset" || e.powerType === "gas-turbine") {
+      gensetKW += e.capacityKW * n;
+      gensetCount += n;
+    } else if (e.powerType === "switchgear" && /ats|sts|paralleling/.test(id)) transferKW += e.capacityKW * n;
   }
-  const net = contractUSD + overageUSD + spotUSD - resaleUSD;
-  return { netUSD: net, contractUSD, overageUSD, spotUSD, resaleUSD, committedMW: committed, capMW: cap, drawMW, avgUSDPerMWh: drawMW > 0 ? net / (drawMW * HOURS_PER_MONTH) : 0 };
+  const load = Math.max(1, hall.itPowerKW);
+  const ups2 = upsKW >= load * 0.9 && (batteryKW > 0 || flywheelKW >= load * 0.9);
+  const backup = gensetKW >= load * 1;
+  const transfer = transferKW >= load * 0.9;
+  const gaps = [];
+  if (!ups2) gaps.push(upsKW < load * 0.9 ? "UPS capacity below IT load" : "UPS has no battery string");
+  if (!backup) gaps.push(gensetKW <= 0 ? "no generator: outages longer than battery ride-through take you down" : "generator smaller than IT load");
+  if (!transfer) gaps.push("no automatic transfer switch (ATS/STS or paralleling gear) to move load to the generator");
+  let score = (ups2 ? 0.55 : 0) + (backup ? 0.25 : 0) + (transfer ? 0.12 : 0);
+  const n1 = gensetCount >= 2 && gensetKW - gensetKW / gensetCount >= load && (parallel || gensetCount < 2) || upsKW >= load * 1.8;
+  if (ups2 && backup && transfer && n1) score = 1;
+  else if (ups2 && backup && transfer) score = 0.92;
+  if (feedB && score > 0) score = Math.min(1, score + 0.08);
+  const tier = score >= 1 ? "N+1" : score >= 0.9 ? "N" : score >= 0.5 ? "basic" : "none";
+  return { score, tier, ups: ups2, backup, transfer, upsKW, gensetKW, batteryKW, gensetCount, feedB, gaps };
 }
-function powerMarketTick(s2, rng, log) {
-  s2.powerOffers = (s2.powerOffers ?? []).filter((o2) => o2.offerUntil >= s2.month);
-  const ended = (s2.powerContracts ?? []).filter((c) => s2.month > c.endMonth);
-  for (const c of ended) log("info", `Power contract with ${c.supplier} (${c.mw} MW) has ended. Renegotiate on the Energy screen or you are back on the spot utility rate.`);
-  s2.powerContracts = (s2.powerContracts ?? []).filter((c) => s2.month <= c.endMonth);
-  if (rng() < 0.45) s2.powerOffers = [...s2.powerOffers, ...generatePowerOffers(s2, rng, 1)].slice(-6);
-}
-const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
-function spotUtilization(price, month) {
-  return clamp$1(1.2 - 0.95 * (price / gpuHourAnchor(2020 + month / 12)), 0.12, 0.95);
-}
-function stepSpotPrice(s2, rng) {
-  const anchor = spotAnchor(s2.month);
-  const cur = s2.spotPrice ?? anchor;
-  const shock = (rng() - 0.5) * 0.22 + (rng() < 0.06 ? rng() < 0.5 ? 0.35 : -0.3 : 0);
-  const next = clamp$1(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
-  s2.spotPrice = r2(next);
-  s2.spotHistory = [...s2.spotHistory ?? [], s2.spotPrice].slice(-24);
-}
-function spotRevenue(s2, servedClusterIds, accelsOfDesign = () => 0) {
-  const price = s2.spotPrice ?? spotAnchor(s2.month);
-  if (price < (s2.spotReserve ?? 0)) return { revenue: 0, accels: 0, util: 0 };
-  const util = spotUtilization(price, s2.month);
-  let accels = 0;
-  for (const id of s2.spotClusters ?? []) {
-    if (servedClusterIds.has(id)) continue;
-    accels += s2.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0;
+const BASE_POWER_PRICE = 0.07;
+const onlineRacks = (s2) => s2.halls.flatMap((h) => h.racks).filter((r) => r.status === "online").length;
+function rollEvents(s2, rng, log, graceMonths = 4) {
+  s2.utilityUSDPerKWh = Math.round((s2.utilityUSDPerKWh + (BASE_POWER_PRICE - s2.utilityUSDPerKWh) * 0.05) * 1e4) / 1e4;
+  if (s2.month < 11 + graceMonths) return;
+  if (rng() > 0.28) return;
+  const racks = onlineRacks(s2);
+  const year = 2020 + s2.month / 12;
+  const pool = [];
+  pool.push(() => {
+    s2.utilityUSDPerKWh = Math.min(0.2, Math.round(s2.utilityUSDPerKWh * 1.3 * 1e4) / 1e4);
+    log("bad", `⚡ Energy crisis: utility rate jumps to $${s2.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
+  });
+  if (racks > 0) pool.push(() => {
+    const cut = Math.round(1e6 + rng() * 2e6);
+    s2.cash += cut;
+    log("good", `🏛 Sovereign-AI grant: a regional government pays +$${(cut / 1e6).toFixed(1)}M to bring GPU capacity on-shore. Governments are now a real customer class.`);
+  });
+  pool.push(() => {
+    const extra = generateContracts(s2, s2.month, rng).filter((c) => c.kind === "inference").slice(0, 2);
+    extra.forEach((c) => {
+      if (c.kind === "inference") c.pricePerMTok = Math.round(c.pricePerMTok * 1.25 * 100) / 100;
+    });
+    s2.availableContracts = [...s2.availableContracts, ...extra];
+    log("good", `🚀 A viral model launch floods the market with inference demand${extra.length ? `: ${extra.length} premium (+25%) serving offers posted` : ""}. Memory-bandwidth-rich GPUs earn the most per watt on decode.`);
+  });
+  if (year >= 2021) pool.push(() => {
+    const bill = Math.round(25e3 * Math.max(1, racks));
+    s2.cash -= bill;
+    log("bad", `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1e3).toFixed(0)}k. Lesson: warm-water DLC tolerates hot days — air-cooled halls suffer first.`);
+  });
+  if (racks > 0 && s2.uplinks) {
+    pool.push(() => {
+      if (carrierCount(s2) >= 2) {
+        log("good", "🧵 A backhoe cuts a fiber route, but your second carrier on a diverse path keeps every customer online.");
+        return;
+      }
+      s2.activeContracts.forEach((a) => {
+        a.slaMisses += 1;
+      });
+      s2.reputation = Math.max(0, s2.reputation - 2);
+      log("bad", "🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit. Lesson: buy a second circuit from a different carrier on a diverse path.");
+    });
   }
-  const inClusterSpot = new Set(s2.spotClusters ?? []);
-  for (const id of s2.spotRacks ?? []) {
-    const pr = s2.halls.flatMap((h) => h.racks).find((r) => r.id === id);
-    if (!pr || pr.status !== "online") continue;
-    if (pr.clusterId && (servedClusterIds.has(pr.clusterId) || inClusterSpot.has(pr.clusterId))) continue;
-    accels += accelsOfDesign(pr.designId);
+  if (racks > 0) {
+    pool.push(() => {
+      const live = s2.halls.filter((h) => h.racks.some((r) => r.status === "online"));
+      const weakest = live.map(hallResilience).sort((a, b) => a.score - b.score)[0];
+      const score = weakest?.score ?? 0;
+      if (rng() < score) {
+        log("good", `🔌 Utility outage: your ${weakest?.tier} power chain (UPS → generator → transfer switch) carried the halls through with no customer impact.`);
+        return;
+      }
+      s2.activeContracts.forEach((a) => {
+        a.slaMisses += 1;
+      });
+      s2.reputation = Math.max(0, s2.reputation - 2);
+      const why = weakest?.gaps[0] ?? "no backup power installed";
+      log("bad", `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + battery + generator + transfer switch, sized N+1, keep training alive.`);
+    });
+    pool.push(() => {
+      const bonus = Math.round(racks * 4e4);
+      s2.cash += bonus;
+      s2.reputation = Math.min(100, s2.reputation + 1);
+      log("good", `📣 A customer publishes a benchmark crediting your cluster's uptime: +${bonus ? "$" + (bonus / 1e3).toFixed(0) + "k" : ""} in spot demand and +1 reputation.`);
+    });
   }
-  return { revenue: accels * util * price * HOURS_PER_MONTH, accels, util };
+  pool[Math.floor(rng() * pool.length)]();
 }
+const worldEvents = { id: "world-events", run: ({ s: s2, rng, log }) => rollEvents(s2, rng, log) };
+const spotAndPower = {
+  id: "spot-and-power",
+  run: (c) => {
+    const { s: s2, rng, log } = c;
+    stepSpotPrice(s2, rng);
+    const spot = spotRevenue(s2, c.served, (d) => rackAccels(s2, d));
+    if (spot.revenue > 0) {
+      c.revenue += spot.revenue;
+      log("info", `Spot market: ${Math.round(spot.accels)} idle GPUs sold at $${(s2.spotPrice ?? 0).toFixed(2)}/GPU-hr (${Math.round(spot.util * 100)}% filled) → +$${Math.round(spot.revenue).toLocaleString("en-US")}.`);
+    }
+    powerMarketTick(s2, rng, log);
+  }
+};
+const finances = {
+  id: "finances",
+  run: (c) => {
+    const { s: s2, rng, log } = c;
+    const opex0 = monthlyOpex(s2);
+    const pw2 = settlePower(s2, opex0.itPowerKW * opex0.pue / 1e3, rng, log);
+    c.opexUSD = opex0.totalUSD - opex0.powerUSD + pw2.netUSD;
+    c.depreciation = monthlyDepreciation(estimateCapexBasis(s2));
+    c.interest = monthlyInterest(s2.debt);
+    const prevCash = s2.cash;
+    s2.cash = round2(s2.cash + c.revenue - c.opexUSD - c.interest);
+    if (s2.cash < 0 && prevCash >= 0) log("bad", "Bankruptcy warning: cash is negative. Raise a loan, land contracts, or cut opex before creditors close you down.");
+  }
+};
+const history = {
+  id: "history",
+  run: (c) => {
+    const { s: s2 } = c;
+    const onlineAccels = s2.clusters.reduce((n, cl) => n + (cl.stats?.accelerators ?? 0), 0);
+    const servingAccels = [...c.served].reduce((n, id) => n + (s2.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0), 0);
+    const utilization = onlineAccels > 0 ? Math.min(1, servingAccels / onlineAccels) : 0;
+    s2.history.push({ month: s2.month, revenue: round2(c.revenue), opex: round2(c.opexUSD + c.depreciation + c.interest), cash: s2.cash, utilization: round2(utilization) });
+  }
+};
 const DEFAULT_TICK = {
   accelFailureProbPerMonth: 1 / 8e3,
   commissionFailProb: 0.04,
@@ -8997,866 +9684,55 @@ const DEFAULT_TICK = {
   maxAvailableContracts: 10
 };
 const RACK_READY_LEAD = 2;
-const ARCH_BONUS = {
-  startup: 1,
-  lab: 2,
-  enterprise: 3,
-  sovereign: 5
-};
-const round2 = (x) => Math.round(x * 100) / 100;
-const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-const ctxOf$2 = (state) => ({
-  getRack: (id) => {
-    const pid = state.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
-    return state.racks.find((r) => r.id === pid);
-  },
-  getTray: (id) => state.trays.find((t) => t.id === id),
-  getItem
-});
-const rackAccels = (state, designId) => {
-  const design = state.racks.find((r) => r.id === designId);
-  if (!design) return 0;
-  let n = 0;
-  for (const item of design.items) {
-    if (item.type !== "tray") continue;
-    const tray = state.trays.find((t) => t.id === item.trayId);
-    if (!tray) continue;
-    for (const p of tray.parts) {
-      if (getItem(p.itemId)?.kind === "accelerator") n += p.count * item.count;
-    }
-  }
-  return n;
-};
+const PIPELINE = [
+  deliveries,
+  floorSpace,
+  commissioning,
+  clusterStats,
+  failures,
+  pue,
+  serveContracts,
+  contractMarket,
+  worldEvents,
+  spotAndPower,
+  finances,
+  history
+];
 function advanceMonth(state, opts = {}) {
-  const o2 = { ...DEFAULT_TICK, ...opts };
   const s2 = JSON.parse(JSON.stringify(state));
   const rng = mulberry32((s2.seed ^ Math.imul(s2.month + 1, 2654435769)) >>> 0);
   s2.month += 1;
   const logs = [];
-  const log = (level, text) => logs.push({ month: s2.month, level, text });
-  const arrived = [];
-  s2.orders = s2.orders.filter((od) => {
-    if (od.arriveMonth <= s2.month) {
-      arrived.push(od);
-      return false;
-    }
-    return true;
-  });
-  for (const od of arrived) {
-    if (od.spare) {
-      s2.spareStock = s2.spareStock ?? {};
-      s2.spareStock[od.itemId] = (s2.spareStock[od.itemId] ?? 0) + od.qty;
-    } else s2.inventory[od.itemId] = (s2.inventory[od.itemId] ?? 0) + od.qty;
-  }
-  if (arrived.length) {
-    const units = arrived.reduce((n, od) => n + od.qty, 0);
-    log("good", `Delivered ${units} unit(s) from ${arrived.length} order(s) into inventory.`);
-  }
-  for (const hall of s2.halls) {
-    if (!hall.expansions?.length) continue;
-    const due = hall.expansions.filter((e) => e.readyMonth <= s2.month);
-    if (!due.length) continue;
-    const slots = due.reduce((n, e) => n + e.units * 10, 0);
-    hall.rackSlots += slots;
-    hall.expansions = hall.expansions.filter((e) => e.readyMonth > s2.month);
-    log("good", `${hall.name}: ${slots} new rack positions commissioned (${hall.rackSlots} total).`);
-  }
-  const placed2 = [];
-  for (const hall of s2.halls) placed2.push(...hall.racks);
-  for (const rack of placed2) {
-    if (rack.status === "installing" && s2.month >= rack.readyMonth - 1) {
-      rack.status = "commissioning";
-    } else if (rack.status === "commissioning" && s2.month >= rack.readyMonth) {
-      if (rng() < o2.commissionFailProb) {
-        rack.status = "failed";
-        rack.readyMonth = s2.month + o2.repairMonths;
-        log("bad", `Rack ${rack.id} failed burn-in during commissioning; repair ETA month ${rack.readyMonth}.`);
-      } else {
-        rack.status = "online";
-        log("good", `Rack ${rack.id} commissioned and online.`);
-      }
-    } else if (rack.status === "failed" && s2.month >= rack.readyMonth) {
-      rack.status = "online";
-      rack.failedPart = void 0;
-      log("good", `Rack ${rack.id} repaired and back online.`);
-    }
-  }
-  const placedById = new Map(placed2.map((r) => [r.id, r]));
-  const ctx = ctxOf$2(s2);
-  const onlineIdsOf = (c) => c.rackIds.filter((id) => placedById.get(id)?.status === "online");
-  const refreshStats = () => {
-    for (const c of s2.clusters) c.stats = evaluateCluster({ ...c, rackIds: onlineIdsOf(c) }, ctx);
+  const cluster = clusterContextOf(s2);
+  const c = {
+    s: s2,
+    o: { ...DEFAULT_TICK, ...opts },
+    rng,
+    log: (level, text) => logs.push({ month: s2.month, level, text }),
+    placed: [],
+    placedById: /* @__PURE__ */ new Map(),
+    cluster,
+    refreshStats: () => {
+      const online = (cl) => cl.rackIds.filter((id) => c.placedById.get(id)?.status === "online");
+      for (const cl of s2.clusters) cl.stats = evaluateCluster({ ...cl, rackIds: online(cl) }, cluster);
+    },
+    revenue: 0,
+    served: /* @__PURE__ */ new Set(),
+    opexUSD: 0,
+    depreciation: 0,
+    interest: 0
   };
-  refreshStats();
-  const onlineKW = s2.clusters.reduce((n, c) => n + (c.stats?.powerKW ?? 0), 0);
-  const coolingKW = s2.halls.reduce((n, h) => n + h.coolingKW, 0);
-  const stressed = coolingKW < onlineKW;
-  let failedNow = 0;
-  for (const rack of placed2) {
-    if (rack.status !== "online") continue;
-    const rates = rackRates(s2, rack.designId);
-    const total = rates.reduce((n, r) => n + r.rate, 0) * (o2.accelFailureProbPerMonth * 8e3);
-    const p = 1 - Math.exp(-total * (stressed ? 3 : 1));
-    if (p > 0 && rng() < p) {
-      let pick2 = rng() * rates.reduce((n, r) => n + r.rate, 0);
-      const part = (rates.find((r) => (pick2 -= r.rate) <= 0) ?? rates[0]).id;
-      const label = PART_LABEL[partClass(part) ?? ""] ?? "part";
-      rack.status = "failed";
-      rack.failedPart = part;
-      if ((s2.spareStock?.[part] ?? 0) > 0) {
-        s2.spareStock[part] -= 1;
-        rack.readyMonth = s2.month + 1;
-        log("info", `${rack.id}: ${label} failed (${getItem(part)?.name}); swapping from your spares — back next month.`);
-      } else {
-        rack.readyMonth = s2.month + o2.repairMonths;
-        log("bad", `${rack.id}: ${label} failed (${getItem(part)?.name}) and you have NO SPARE. Waiting on RMA until month ${rack.readyMonth}. Keep spares in the warehouse.`);
-      }
-      failedNow++;
-    }
-  }
-  if (failedNow) {
-    log(
-      "bad",
-      `${failedNow} rack(s) went down${stressed ? " — cooling capacity is below IT load, heat is killing hardware (3x failure rate)" : ""}.`
-    );
-    refreshStats();
-  }
-  for (const hall of s2.halls) hall.pue = computePUE(hall, getItem);
-  let revenueTotal = 0;
-  const servedClusterIds = /* @__PURE__ */ new Set();
-  const completed = [];
-  const defaulted = [];
-  const usedFrac = {};
-  const needGbps = totalNeedGbps(s2);
-  const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s2) / needGbps) : 1;
-  if (netFactor < 1) log("bad", `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s2).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
-  for (const ac of s2.activeContracts) {
-    const c = ac.contract;
-    if (ac.clusterIds.length === 0) {
-      const by = ac.deployBy ?? ac.startMonth + 4;
-      if (s2.month > by) defaulted.push(ac);
-      else if (s2.month === by) log("bad", `Last month to bring capacity online for ${c.customer} (${c.model.name}) — assign a qualifying cluster now or they walk.`);
-      continue;
-    }
-    for (const id of ac.clusterIds) servedClusterIds.add(id);
-    let availability = 0;
-    let accelerators = 0;
-    let tokensPerSec = 0;
-    if (c.kind === "training") {
-      let total = 0;
-      let eff = 0;
-      for (const id of ac.clusterIds) {
-        const cl = s2.clusters.find((x) => x.id === id);
-        if (!cl) continue;
-        eff += cl.stats?.accelerators ?? 0;
-        total += cl.rackIds.reduce((n, rid) => {
-          const pr = placedById.get(rid);
-          return n + (pr ? rackAccels(s2, pr.designId) : 0);
-        }, 0);
-      }
-      availability = total > 0 ? eff / total : 0;
-      accelerators = eff;
-    } else {
-      let capacity = 0;
-      let worstTtftMs = 0;
-      const parts = [];
-      for (const id of ac.clusterIds) {
-        const cl = s2.clusters.find((x) => x.id === id);
-        const stats = cl?.stats;
-        if (!stats || stats.accelerators <= 0) continue;
-        const item = getItem(stats.acceleratorId);
-        if (!item || item.kind !== "accelerator") continue;
-        const accel = item;
-        const cap = inferenceCapacity(stats, accel, c.model, {
-          contextTokens: c.contextTokens,
-          tpotMs: c.tpotMs
-        });
-        const remain = Math.max(0, 1 - (usedFrac[id] ?? 0));
-        parts.push({ id, capTok: cap.tokensPerSec, remain });
-        capacity += cap.tokensPerSec * remain;
-        worstTtftMs = Math.max(worstTtftMs, cap.ttftMs);
-      }
-      const served = Math.min(capacity, c.tokensPerSec);
-      for (const pt of parts) if (capacity > 0 && pt.capTok > 0) usedFrac[pt.id] = (usedFrac[pt.id] ?? 0) + served * (pt.capTok * pt.remain / capacity) / pt.capTok;
-      const frac = capacity / Math.max(1, c.tokensPerSec);
-      availability = Math.min(1, frac) * (worstTtftMs <= c.ttftMs ? 1 : 0.8);
-      tokensPerSec = Math.min(capacity, c.tokensPerSec);
-    }
-    availability *= netFactor;
-    const res = c.kind === "training" ? contractRevenue(ac, { accelerators, availability }) : contractRevenue(ac, { tokensPerSec, availability });
-    revenueTotal += res.netUSD;
-    if (!res.slaMet) {
-      ac.slaMisses += 1;
-      log(
-        "bad",
-        `SLA miss for ${c.customer} (${c.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(c.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`
-      );
-    }
-    ac.monthsServed += 1;
-    if (ac.monthsServed >= c.durationMonths) completed.push(ac);
-  }
-  for (const ac of defaulted) {
-    s2.reputation = clamp(s2.reputation - 8, 0, 100);
-    log("bad", `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.`);
-  }
-  s2.activeContracts = s2.activeContracts.filter((ac) => {
-    if (defaulted.includes(ac)) return false;
-    if (!completed.includes(ac)) return true;
-    const c = ac.contract;
-    const clean = ac.slaMisses === 0;
-    const sloppy = ac.slaMisses > Math.ceil(c.durationMonths / 3);
-    const gain = 2 + ARCH_BONUS[c.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
-    s2.reputation = clamp(s2.reputation + gain, 0, 100);
-    log(
-      "good",
-      `${c.customer} contract complete: ${c.model.name}, ${c.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`
-    );
-    return false;
-  });
-  const expired = s2.availableContracts.filter((c) => c.deadlineMonth < s2.month);
-  const fresh = generateContracts(s2, s2.month, rng);
-  s2.availableContracts = [
-    ...s2.availableContracts.filter((c) => c.deadlineMonth >= s2.month),
-    ...fresh
-  ].slice(-o2.maxAvailableContracts);
-  if (expired.length) log("info", `${expired.length} contract offer(s) expired unserved.`);
-  if (fresh.length) log("info", `${fresh.length} new contract offer(s) on the market.`);
-  rollEvents(s2, rng, log);
-  stepSpotPrice(s2, rng);
-  const spot = spotRevenue(s2, servedClusterIds, (d) => rackAccels(s2, d));
-  if (spot.revenue > 0) {
-    revenueTotal += spot.revenue;
-    log("info", `Spot market: ${Math.round(spot.accels)} idle GPUs sold at $${(s2.spotPrice ?? 0).toFixed(2)}/GPU-hr (${Math.round(spot.util * 100)}% filled) → +$${Math.round(spot.revenue).toLocaleString("en-US")}.`);
-  }
-  powerMarketTick(s2, rng, log);
-  const opex0 = monthlyOpex(s2);
-  const pw2 = settlePower(s2, opex0.itPowerKW * opex0.pue / 1e3, rng, log);
-  const opex = { powerUSD: pw2.netUSD, totalUSD: opex0.totalUSD - opex0.powerUSD + pw2.netUSD };
-  const depreciation = monthlyDepreciation(estimateCapexBasis(s2));
-  const interest = monthlyInterest(s2.debt);
-  const prevCash = s2.cash;
-  s2.cash = round2(s2.cash + revenueTotal - opex.totalUSD - interest);
-  if (s2.cash < 0 && prevCash >= 0) {
-    log("bad", "Bankruptcy warning: cash is negative. Raise a loan, land contracts, or cut opex before creditors close you down.");
-  }
-  const onlineAccels = s2.clusters.reduce((n, c) => n + (c.stats?.accelerators ?? 0), 0);
-  const servingAccels = [...servedClusterIds].reduce(
-    (n, id) => n + (s2.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0),
-    0
-  );
-  const utilization = onlineAccels > 0 ? Math.min(1, servingAccels / onlineAccels) : 0;
-  s2.history.push({
-    month: s2.month,
-    revenue: round2(revenueTotal),
-    opex: round2(opex.totalUSD + depreciation + interest),
-    cash: s2.cash,
-    utilization: round2(utilization)
-  });
+  for (const system of PIPELINE) system.run(c);
   s2.log = [...s2.log, ...logs].slice(-400);
   return s2;
 }
-const G$2 = () => useGame.getState().game;
-const TECH = ["ib-ndr", "ib-xdr", "spectrum-x", "eth-400", "eth-800", "roce", "uec-eth"];
-const TOPO = "fat-tree-rail-optimized";
-const ctxOf$1 = (g) => ({
-  getRack: (id) => {
-    const pid = g.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
-    return g.racks.find((r) => r.id === pid);
-  },
-  getTray: (id) => g.trays.find((t) => t.id === id),
-  getItem
-});
-function autoFabric(g, rackIds, targetGBs = 0) {
-  const sw2 = ITEMS_BY_KIND("switch").filter((s2) => s2.role === "scale-out" && s2.rackUnits > 0 && offerAt(s2, g.month).available);
-  const cables = ITEMS_BY_KIND("cable").filter((c) => offerAt(c, g.month).available);
-  const node = cables.find((c) => c.cableType === "aoc") ?? cables[0], spine = cables.find((c) => c.cableType === "optic-dr") ?? cables[0];
-  if (!sw2.length || !node) return null;
-  let best = null;
-  for (const tech of TECH) for (const leaf of sw2) for (const over of [1, 2, 4]) {
-    const f = { id: "auto", name: "Auto fabric", scaleOutTech: tech, topology: TOPO, oversubscription: over, leafSwitchId: leaf.id, spineSwitchId: leaf.id, nodeToLeafCableId: node.id, leafToSpineCableId: spine?.id };
-    let st2;
-    try {
-      st2 = evaluateCluster({ id: "d", name: "d", rackIds, fabric: f }, ctxOf$1(g));
-    } catch {
-      continue;
-    }
-    if (st2.issues.some((i) => i.severity === "error")) continue;
-    const cost = Object.entries(st2.switchCounts).reduce((n, [id, c]) => n + (getItem(id)?.priceUSD ?? 0) * c, 0) + Object.entries(st2.cableCounts).reduce((n, [id, c]) => n + (getItem(id)?.priceUSD ?? 0) * c, 0);
-    const ok2 = st2.effScaleOutGBs >= targetGBs;
-    if (!best || ok2 && !best.ok || ok2 === best.ok && (ok2 ? cost < best.cost : st2.effScaleOutGBs > best.bw)) best = { f, cost, bw: st2.effScaleOutGBs, ok: ok2 };
-  }
-  if (!best) return null;
-  return { fabric: best.f, note: `${best.f.scaleOutTech.toUpperCase()} · ${best.f.oversubscription}:1 · ${getItem(best.f.leafSwitchId)?.name} → ${best.bw.toFixed(0)} GB/s per accelerator` };
-}
-const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
-function plantChoice(g, hallClass, kind) {
-  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === hallClass).map((i) => offerAt(i, g.month)).filter((o2) => o2.available);
-  cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
-  return cand[0];
-}
-function stepProject(st2, pid) {
-  const g = G$2();
-  const p = (g.projects ?? []).find((x) => x.id === pid);
-  if (!p || p.stage === "done" || p.stage === "failed") return;
-  const t = getTemplate(p.templateId);
-  const hall = g.halls.find((h) => h.id === p.hallId);
-  if (!t || !hall) return st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Template or hall disappeared."] });
-  const f = templateFacts(t);
-  if (!G$2().activeContracts.some((a) => a.contract.id === p.contractId) && p.stage !== "building") {
-    st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Contract was cancelled — the capacity is yours; offer it on spot in Energy."] });
-    return;
-  }
-  const note = (s2) => st2.patchProject(pid, { notes: [...g.projects.find((x) => x.id === pid).notes, `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, "0")}: ${s2}`].slice(-12) });
-  if (p.stage === "building") {
-    for (const pl of p.plant) {
-      const have2 = g.inventory[pl.id] ?? 0;
-      const it2 = getItem(pl.id);
-      if (have2 > 0 && it2) {
-        const inst = (it2.kind === "power" ? hall.powerEquip : hall.coolingEquip)[pl.id] ?? 0;
-        const need = Math.max(0, pl.n - inst);
-        const n = Math.min(have2, need);
-        if (n > 0) {
-          const r = it2.kind === "power" ? st2.installPower(hall.id, pl.id, n) : st2.installCooling(hall.id, pl.id, n);
-          if (r.ok) note(`installed ${n} × ${it2.name}`);
-        }
-      }
-    }
-    const h2 = useStoreHall(st2, hall.id);
-    const load = h2.racks.reduce((n, r) => n + (r.status === "failed" ? 0 : templateFactsOfDesign(G$2(), r.designId)), 0) + f.kWPerRack * (p.racks - p.rackIds.length);
-    const free = h2.rackSlots - h2.racks.length;
-    const designId = rackIdOf(t);
-    const bom = rackBom(G$2(), designId) ?? {};
-    const have = (n) => Object.entries(bom).every(([id, c]) => (G$2().inventory[id] ?? 0) >= c * n);
-    let placed2 = p.rackIds.length;
-    if (load <= h2.itPowerKW && load <= h2.coolingKW) {
-      while (placed2 < p.racks && free - (placed2 - p.rackIds.length) > 0 && have(1)) {
-        const r = st2.placeRack(hall.id, designId);
-        if (!r.ok) {
-          note(`placement blocked: ${r.message}`);
-          break;
-        }
-        placed2++;
-      }
-    }
-    if (placed2 > p.rackIds.length) {
-      const ids = useStoreHall(st2, hall.id).racks.filter((r) => r.designId === designId && !r.clusterId).map((r) => r.id).slice(0, p.racks);
-      note(`deployed ${placed2}/${p.racks} racks`);
-      st2.patchProject(pid, { rackIds: ids, ...placed2 >= p.racks ? { stage: "commissioning" } : {} });
-    }
-  } else if (p.stage === "commissioning") {
-    const racks = useStoreHall(st2, hall.id).racks.filter((r) => p.rackIds.includes(r.id));
-    if (racks.length && racks.every((r) => r.status === "online")) {
-      note("all racks online — designing the fabric");
-      st2.patchProject(pid, { stage: "clustering" });
-      stepProject(st2, pid);
-    }
-  } else if (p.stage === "clustering") {
-    const c = G$2().activeContracts.find((a) => a.contract.id === p.contractId)?.contract;
-    const target = c && c.kind === "training" ? c.minScaleOutGBsPerAccel : 0;
-    const af = autoFabric(G$2(), p.rackIds, target);
-    if (!af) return note("no valid fabric found — build one by hand on the Supercomputer screen");
-    const r = st2.createCluster(p.name, p.rackIds, af.fabric);
-    if (!r.ok) return note(`cluster blocked: ${r.message}`);
-    note(`cluster built: ${af.note}`);
-    st2.patchProject(pid, { stage: "assigning", clusterId: G$2().clusters[G$2().clusters.length - 1].id });
-    stepProject(st2, pid);
-  } else if (p.stage === "assigning") {
-    const cid = p.clusterId ?? G$2().clusters[G$2().clusters.length - 1]?.id;
-    if (!cid) return;
-    const r = st2.assignContract(p.contractId, [cid]);
-    if (r.ok) {
-      note("contract live — revenue starts next month");
-      st2.patchProject(pid, { stage: "done" });
-    } else note(`not qualified yet: ${r.message}`);
-  }
-}
-const useStoreHall = (_st, hid) => G$2().halls.find((h) => h.id === hid);
-const templateFactsOfDesign = (g, designId) => {
-  const d = g.racks.find((r) => r.id === designId);
-  if (!d) return 0;
-  const t = (g.projects ?? []).map((p) => getTemplate(p.templateId)).find((tt) => tt && rackIdOf(tt) === designId);
-  return t ? templateFacts(t).kWPerRack : 30;
-};
-function ensureUplink(st2) {
-  const g = G$2();
-  if (!g.uplinks) return;
-  const live = new Set(g.activeContracts.map((a) => a.contract.id));
-  let need = g.activeContracts.reduce((n, a) => n + contractNeedGbps(a.contract), 0);
-  for (const p of g.projects ?? []) if (p.stage !== "done" && p.stage !== "failed" && !live.has(p.contractId)) {
-    const c = g.availableContracts.find((x) => x.id === p.contractId);
-    if (c) need += contractNeedGbps(c);
-  }
-  const have = uplinkGbps(g);
-  if (have >= need * 1.1) return;
-  const opts = ITEMS_BY_KIND("uplink").filter((u) => u.service === "transit" && u.availableFrom * 12 - 2020 * 12 <= g.month).sort((a, b) => a.mrcUSD / a.gbps - b.mrcUSD / b.gbps);
-  const fit = opts.filter((u) => u.gbps >= need * 1.1 - have).sort((a, b) => a.mrcUSD - b.mrcUSD)[0] ?? opts[opts.length - 1];
-  if (fit) st2.buyUplink(fit.id);
-}
-function stepAllProjects(getSt) {
-  ensureUplink(getSt());
-  for (const p of getSt().game.projects ?? []) stepProject(getSt(), p.id);
-}
-function startProject(st2, contractId, templateId, racks) {
-  const t = getTemplate(templateId);
-  if (!t) return { ok: false, message: "Unknown build." };
-  const g0 = G$2();
-  if (!g0.activeContracts.some((a) => a.contract.id === contractId)) {
-    const a = st2.acceptContract(contractId);
-    if (!a.ok) return a;
-  }
-  const r = st2.buyTemplate(templateId, racks);
-  if (!r.ok) return r;
-  const f = templateFacts(t);
-  let hall = G$2().halls.find((h) => COOL_LEVEL$1[h.coolingClass] >= COOL_LEVEL$1[t.rack.cooling] && h.rackSlots - h.racks.length >= racks);
-  const notes = [`ordered ${racks} × ${t.name}`];
-  if (!hall) {
-    const b = st2.buildHall(`Hall ${String.fromCharCode(65 + G$2().halls.length)}`, t.rack.cooling, Math.max(8, racks + 4));
-    notes.push(b.message);
-    hall = G$2().halls[G$2().halls.length - 1];
-  }
-  const need = f.kWPerRack * racks + hall.racks.length * 0;
-  const plant = [];
-  const g = G$2();
-  const fresh = g.halls.find((h) => h.id === hall.id);
-  const pw2 = plantChoice(g, fresh.coolingClass, "power"), cl = plantChoice(g, fresh.coolingClass, "cooling");
-  const loadNow = fresh.racks.length ? need : need;
-  if (fresh.itPowerKW < loadNow && pw2) {
-    const n = Math.ceil((loadNow - fresh.itPowerKW) / pw2.item.capacityKW);
-    const b = st2.buy(pw2.item.id, n);
-    if (b.ok) {
-      plant.push({ id: pw2.item.id, n });
-      notes.push(`ordered ${n} × ${pw2.item.name} (power)`);
-    } else notes.push(`power plant: ${b.message}`);
-  }
-  if (fresh.coolingKW < loadNow && cl) {
-    const n = Math.ceil((loadNow - fresh.coolingKW) / cl.item.capacityKW);
-    const b = st2.buy(cl.item.id, n);
-    if (b.ok) {
-      plant.push({ id: cl.item.id, n });
-      notes.push(`ordered ${n} × ${cl.item.name} (cooling)`);
-    } else notes.push(`cooling plant: ${b.message}`);
-  }
-  const proj = { id: `pj-${g.month}-${(g.projects ?? []).length + 1}`, contractId, templateId, racks, hallId: fresh.id, name: `Cluster ${g.clusters.length + 1}`, stage: "building", rackIds: [], plant, notes: notes.map((n) => `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, "0")}: ${n}`), startMonth: g.month };
-  st2.addProject(proj);
-  return { ok: true, message: `Easy path started: ${notes.join("; ")}. I will install, deploy, cluster and assign as parts arrive.` };
-}
-function assignFromRacks(st2, contractId, rackIds) {
-  if (!rackIds.length) return { ok: false, message: "Pick at least one online rack." };
-  const g = G$2();
-  const placed2 = g.halls.flatMap((h) => h.racks);
-  const bad = rackIds.filter((id) => placed2.find((p) => p.id === id)?.status !== "online");
-  if (bad.length) return { ok: false, message: "All chosen racks must be online (commissioned)." };
-  if (!g.activeContracts.some((a2) => a2.contract.id === contractId)) {
-    const a2 = st2.acceptContract(contractId);
-    if (!a2.ok) return a2;
-  }
-  const c = G$2().activeContracts.find((a2) => a2.contract.id === contractId).contract;
-  const af = autoFabric(G$2(), rackIds, c.kind === "training" ? c.minScaleOutGBsPerAccel : 0);
-  if (!af) return { ok: false, message: "No valid network fabric found for these racks." };
-  const free = rackIds.filter((id) => !placed2.find((p) => p.id === id)?.clusterId);
-  if (free.length !== rackIds.length) return { ok: false, message: "Some racks already belong to a cluster — assign that cluster instead." };
-  const r = st2.createCluster(`Auto · ${c.customer}`, rackIds, af.fabric);
-  if (!r.ok) return r;
-  const cl = G$2().clusters[G$2().clusters.length - 1];
-  const a = st2.assignContract(contractId, [cl.id]);
-  if (!a.ok) st2.disbandCluster(cl.id);
-  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
-}
-const DEMAND_CURVE = [
-  [2020, 0.2],
-  [2022.4, 0.4],
-  [2023.3, 1],
-  [2024.6, 0.9],
-  [2026, 0.55],
-  [2028, 0.5]
-];
-const lerpCurve = (pts, x) => {
-  if (x <= pts[0][0]) return pts[0][1];
-  for (let i = 1; i < pts.length; i++) {
-    if (x <= pts[i][0]) {
-      const [x0, y0] = pts[i - 1];
-      const [x1, y1] = pts[i];
-      return y0 + (x - x0) / (x1 - x0) * (y1 - y0);
-    }
-  }
-  return pts[pts.length - 1][1];
-};
-const START_MONTH = 11;
-const demandIndex = (year) => lerpCurve(DEMAND_CURVE, year);
-const offerAt = (item, month) => {
-  const year = monthToYear(month);
-  if (year < item.availableFrom) {
-    return {
-      item,
-      available: false,
-      reason: `Not shipping until ${Math.floor(item.availableFrom)} — labs and hyperscalers queue first.`,
-      unitPrice: 0,
-      leadMonths: 0
-    };
-  }
-  if (item.eolAfter && year > item.eolAfter) {
-    return {
-      item,
-      available: false,
-      reason: "End-of-sale: the vendor no longer ships this generation. Look at newer parts.",
-      unitPrice: 0,
-      leadMonths: 0
-    };
-  }
-  const age = year - item.availableFrom;
-  const hype = age < 0.4 ? 1.12 : 1;
-  const decay = Math.max(0.55, 1 - 0.1 * Math.max(0, age - 0.4));
-  const demand = demandIndex(year);
-  const boom = 1 + demand * (item.kind === "accelerator" ? 0.18 : 0.06);
-  const lead = Math.max(
-    1,
-    Math.round(item.leadTimeMonths * (1 + demand * (item.kind === "accelerator" ? 1 : 0.25)))
-  );
+const deployActions = (c) => {
+  const { commit, logln } = c;
   return {
-    item,
-    available: true,
-    unitPrice: Math.round(item.priceUSD * hype * decay * boom),
-    leadMonths: lead,
-    qtyCap: item.allocationPerQuarter
-  };
-};
-const volumeDiscount = (item, qty, unitPrice) => {
-  const vendor = VENDORS.find((v2) => v2.id === item.vendor);
-  if (!vendor || qty <= 0) return 0;
-  const doublings = Math.floor(Math.log2(Math.max(1, unitPrice * qty) / 1e6));
-  if (doublings <= 0) return 0;
-  return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
-};
-const rackBom = (state, designId) => {
-  const design = state.racks.find((r) => r.id === designId);
-  if (!design) return void 0;
-  const need = { [design.rackId]: 1 };
-  for (const item of design.items) {
-    if (item.type === "tray") {
-      const tray = state.trays.find((t) => t.id === item.trayId);
-      if (!tray) return void 0;
-      for (const p of tray.parts) need[p.itemId] = (need[p.itemId] ?? 0) + p.count * item.count;
-    } else {
-      const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
-      need[id] = (need[id] ?? 0) + item.count;
-    }
-  }
-  return need;
-};
-const availableFor = (g, designId) => {
-  const bom = rackBom(g, designId) ?? {};
-  const held = {};
-  for (const [did, n] of Object.entries(g.rackReserve ?? {})) {
-    if (did === designId || !(n > 0)) continue;
-    for (const [p, per] of Object.entries(rackBom(g, did) ?? {})) held[p] = (held[p] ?? 0) + per * n;
-  }
-  const out = {};
-  for (const p of Object.keys(bom)) out[p] = Math.max(0, (g.inventory[p] ?? 0) - (held[p] ?? 0));
-  return out;
-};
-const reserve = (g, designId, n) => {
-  g.rackReserve = { ...g.rackReserve ?? {}, [designId]: Math.max(0, (g.rackReserve?.[designId] ?? 0) + n) };
-  if (!g.rackReserve[designId]) delete g.rackReserve[designId];
-};
-const FLOOR_UNIT_SLOTS = 10;
-const FLOOR_UNIT_COST = 25e4 * FLOOR_UNIT_SLOTS;
-const floorCommissionMonths = (units) => 2 + Math.ceil(units / 5);
-const creditLimit = (state) => 5e6 + estimateCapexBasis(state) * 0.6;
-const selectCapexBasis = estimateCapexBasis;
-const selectNetWorth = (g) => g.cash - g.debt + estimateCapexBasis(g) * 0.5;
-const selectMonthlyPnL = (g) => {
-  const opex = monthlyOpex(g);
-  const depreciation = monthlyDepreciation(estimateCapexBasis(g));
-  const interest = monthlyInterest(g.debt);
-  const revenue = g.activeContracts.reduce((sum2, ac) => {
-    if (ac.clusterIds.length === 0) return sum2;
-    const c = ac.contract;
-    if (c.kind === "training") {
-      const accels = ac.clusterIds.reduce(
-        (n, id) => n + (g.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0),
-        0
-      );
-      return sum2 + accels * c.pricePerAccelHour * HOURS_PER_MONTH;
-    }
-    return sum2 + c.tokensPerSec * HOURS_PER_MONTH * 3600 / 1e6 * c.pricePerMTok;
-  }, 0);
-  return { revenue, opex: opex.totalUSD, depreciation, interest, net: revenue - opex.totalUSD - depreciation - interest };
-};
-const POWER_LESSON = Object.fromEntries(Object.entries(POWER_SOURCES).map(([k2, v2]) => [k2, v2.lesson]));
-const SAVE_KEY = "gigawatt-save-v1";
-const ok = (message = "", issues) => ({ ok: true, message, issues });
-const fail = (message, issues) => ({ ok: false, message, issues });
-const usd = (n) => Math.round(n).toLocaleString("en-US");
-const COOL_LEVEL = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
-const POWER_FEED_TYPES = [
-  "transformer",
-  "ups",
-  "busway",
-  "power-shelf",
-  "solar-ppa",
-  "gas-turbine"
-];
-const useGame = createStore((set, get) => {
-  const commit = (mutate) => {
-    const g = JSON.parse(JSON.stringify(get().game));
-    const res = mutate(g) ?? ok();
-    if (res.ok) set({ game: g });
-    return res;
-  };
-  const logln = (g, level, text) => {
-    g.log.push({ month: g.month, level, text });
-  };
-  return {
-    game: newGameState(0),
-    newGame: (seed = Math.floor(Math.random() * 2 ** 31), mode = "operator") => {
-      const g = newGameState(seed);
-      g.mode = mode;
-      if (mode === "learner") {
-        g.cash = 8e7;
-        g.log.push({ month: g.month, level: "info", text: "🎓 Learner mode: $80M starting cash, explainers everywhere, and the Easy path will do the build steps for you." });
-      }
-      if (mode === "tycoon") {
-        g.cash = 3e7;
-        g.log.push({ month: g.month, level: "info", text: "💼 Tycoon mode: $30M, no hand-holding. Good luck." });
-      }
-      set({ game: g });
-    },
-    patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
-    addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
-    setMode: (m) => set((s2) => ({ game: { ...s2.game, mode: m } })),
-    startEasy: (contractId, templateId, racks) => {
-      const r = startProject(get(), contractId, templateId, racks);
-      if (r.ok) stepAllProjects(get);
-      return r;
-    },
-    stepEasy: () => stepAllProjects(get),
-    buy: (itemId, qty, spare = false) => commit((g) => {
-      const item = getItem(itemId);
-      if (!item) return fail(`Unknown item '${itemId}'.`);
-      if (item.kind === "uplink") return fail("Internet circuits are added on Build → Internet.");
-      if (!Number.isFinite(qty) || qty <= 0) return fail("Order quantity must be positive.");
-      const offer = offerAt(item, g.month);
-      if (!offer.available) {
-        return fail(offer.reason ?? "Not purchasable this month.", [
-          { severity: "error", code: "unavailable", message: offer.reason ?? "", learn: item.id }
-        ]);
-      }
-      let n = Math.floor(qty);
-      let note = "";
-      if (offer.qtyCap && n > offer.qtyCap) {
-        n = offer.qtyCap;
-        note = ` Vendor allocation capped the order at ${n}/quarter — everyone is fighting for these parts.`;
-      }
-      const discount = volumeDiscount(item, n, offer.unitPrice);
-      const cost = Math.round(offer.unitPrice * n * (1 - discount));
-      if (cost > g.cash) {
-        return fail(`Insufficient funds: $${usd(cost)} needed, $${usd(g.cash)} in the bank.`);
-      }
-      g.cash -= cost;
-      g.orders.push({
-        id: `ord-${g.month}-${g.orders.length + 1}-${itemId}`,
-        itemId,
-        qty: n,
-        unitPrice: Math.round(offer.unitPrice * (1 - discount)),
-        arriveMonth: g.month + offer.leadMonths,
-        ...spare ? { spare: true } : {}
-      });
-      logln(
-        g,
-        "info",
-        `Ordered ${n} ${spare ? "spare " : ""}× ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ""}; arriving month ${g.month + offer.leadMonths}.${note}`
-      );
-      return ok(`Ordered ${n} × ${item.name}; arrives month ${g.month + offer.leadMonths}.${note}`);
-    }),
-    adoptTemplate: (templateId) => {
-      const t = getTemplate(templateId);
-      if (!t) return { ok: false, message: "Unknown template." };
-      const g = get().game;
-      if (!g.trays.some((x) => x.id === trayIdOf(t))) {
-        const r = get().saveTray(trayOf(t));
-        if (!r.ok) return r;
-      }
-      if (!get().game.racks.some((x) => x.id === rackIdOf(t))) {
-        const r = get().saveRack(rackOf(t));
-        if (!r.ok) return r;
-      }
-      return { ok: true, message: `Saved designs for ${t.name}.` };
-    },
-    buyTemplate: (templateId, racks, spares = true) => {
-      const t = getTemplate(templateId);
-      const nRacks = Math.floor(racks);
-      if (!t) return { ok: false, message: "Unknown template." };
-      if (!(nRacks >= 1)) return { ok: false, message: "Order at least one rack." };
-      const adopted = get().adoptTemplate(templateId);
-      if (!adopted.ok) return adopted;
-      return commit((g) => {
-        const bom = templateBom(t, nRacks);
-        const spareBom = {};
-        if (spares) for (const id of Object.keys(bom)) {
-          const sp = spareQty(id, bom[id]);
-          if (sp) spareBom[id] = sp;
-        }
-        let cost = 0, lead = 1;
-        const lines = [];
-        const wanted = [...Object.entries(bom).map(([i, n]) => [i, n, false]), ...Object.entries(spareBom).map(([i, n]) => [i, n, true])];
-        for (const [itemId, n, isSpare] of wanted) {
-          const item = getItem(itemId);
-          const offer = offerAt(item, g.month);
-          if (!offer.available) return fail(`${item.name} is not purchasable yet: ${offer.reason}`);
-          if (offer.qtyCap && n > offer.qtyCap) return fail(`Allocation: the vendor will only sell ${offer.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`);
-          const unit = Math.round(offer.unitPrice * (1 - volumeDiscount(item, n, offer.unitPrice)) * (1 + t.premium));
-          cost += unit * n;
-          const l = Math.max(1, Math.round(offer.leadMonths * t.leadFactor));
-          lead = Math.max(lead, l);
-          lines.push({ itemId, n, unit, lead: l, spare: isSpare });
-        }
-        if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
-        g.cash -= cost;
-        reserve(g, rackIdOf(t), nRacks);
-        for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
-        logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium). Full bill of materials arrives by month ${g.month + lead}.`);
-        return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.`);
-      });
-    },
-    saveTray: (tray) => commit((g) => {
-      const i = g.trays.findIndex((t) => t.id === tray.id);
-      if (i >= 0) g.trays[i] = tray;
-      else g.trays.push(tray);
-      logln(g, "info", `Tray design '${tray.name}' saved.`);
-      return ok("Tray saved.");
-    }),
-    saveRack: (rack) => commit((g) => {
-      const i = g.racks.findIndex((r) => r.id === rack.id);
-      if (i >= 0) g.racks[i] = rack;
-      else g.racks.push(rack);
-      logln(g, "info", `Rack design '${rack.name}' saved.`);
-      return ok("Rack saved.");
-    }),
-    expandHall: (hallId, units) => commit((g) => {
-      const hall = g.halls.find((h) => h.id === hallId);
-      if (!hall) return fail(`Hall '${hallId}' not found.`);
-      const n = Math.floor(units);
-      if (!(n >= 1)) return fail("Buy at least one floor unit.");
-      const cost = n * FLOOR_UNIT_COST;
-      if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd(cost)} — not enough cash.`);
-      g.cash -= cost;
-      const readyMonth = g.month + floorCommissionMonths(n);
-      (hall.expansions ??= []).push({ units: n, readyMonth });
-      logln(g, "info", `Ordered ${n * FLOOR_UNIT_SLOTS} more rack positions for ${hall.name} ($${usd(cost)}). Slab, containment and fit-out finish in month ${readyMonth}.`);
-      return ok(`${n * FLOOR_UNIT_SLOTS} slots ordered for ${hall.name}; commissioned ${readyMonth - g.month} months from now.`);
-    }),
     reserveRacks: (designId, racks) => commit((g) => {
       if (!g.racks.some((r) => r.id === designId)) return fail("Unknown rack design.");
       reserve(g, designId, Math.floor(racks));
       return ok(`Reserved ${Math.floor(racks)} rack(s) of this design.`);
-    }),
-    buildHall: (name, coolingClass, rackSlots) => commit((g) => {
-      const slots = Math.floor(rackSlots);
-      if (slots < 4 || slots > 200) return fail("A new hall starts with 4–200 rack slots; buy more floor space later in units.");
-      const cost = 2e6 + 25e4 * slots;
-      if (cost > g.cash) return fail(`This hall costs $${usd(cost)} — not enough cash.`);
-      g.cash -= cost;
-      const id = `hall-${g.halls.length + 1}`;
-      const hall = {
-        id,
-        name: name || id,
-        coolingClass,
-        rackSlots: slots,
-        itPowerKW: 0,
-        coolingKW: 0,
-        pue: 1,
-        powerEquip: {},
-        coolingEquip: {},
-        racks: [],
-        floorLoadKgPerRack: { air: 1500, rdhx: 1800, dlc: 2400, immersion: 3200 }[coolingClass] ?? 1500
-      };
-      g.halls.push(hall);
-      logln(
-        g,
-        "good",
-        `Built ${hall.name}: ${slots} slots, ${coolingClass.toUpperCase()}-ready shell. Install power and cooling plant before racks come in.`
-      );
-      return ok(`${hall.name} built. Install power & cooling next.`);
-    }),
-    buyUplink: (itemId) => commit((g) => {
-      const item = getItem(itemId);
-      if (!item || item.kind !== "uplink") return fail("Pick an internet circuit.");
-      if (item.availableFrom * 12 - 2020 * 12 > g.month) return fail(`${item.name} is not offered yet.`);
-      if (g.cash < item.priceUSD) return fail(`Install fee is $${usd(item.priceUSD)}; you have $${usd(g.cash)}.`);
-      g.cash -= item.priceUSD;
-      g.uplinks = { ...g.uplinks ?? {}, [itemId]: ((g.uplinks ?? {})[itemId] ?? 0) + 1 };
-      logln(g, "info", `Turned up ${item.name}: $${usd(item.priceUSD)} install, then $${usd(item.mrcUSD)}/month.`);
-      return ok(`${item.name} is live. Billing $${usd(item.mrcUSD)}/month.`);
-    }),
-    dropUplink: (itemId) => commit((g) => {
-      const c = g.uplinks?.[itemId] ?? 0;
-      if (c <= 0) return fail("You have no such circuit.");
-      g.uplinks = { ...g.uplinks, [itemId]: c - 1 };
-      return ok("Circuit cancelled; billing stops next month.");
-    }),
-    installPower: (hallId, itemId, qty) => commit((g) => {
-      const hall = g.halls.find((h) => h.id === hallId);
-      if (!hall) return fail(`Hall '${hallId}' not found.`);
-      const item = getItem(itemId);
-      if (!item || item.kind !== "power") return fail("Pick a power-equipment catalog item.");
-      if (item.powerType === "pdu" || item.powerType === "power-shelf") {
-        return fail(`${item.name} is a rack/tray-level part — it gets used when you place a rack, not installed in the hall. Keep it in the warehouse.`);
-      }
-      const n = Math.floor(qty);
-      if (n <= 0) return fail("Quantity must be positive.");
-      const have = g.inventory[itemId] ?? 0;
-      if (have < n) {
-        return fail(`Need ${n} × ${item.name} in inventory (have ${have}). Order them first.`, [
-          { severity: "error", code: "missing-parts", message: `Need ${n}, have ${have}.`, learn: item.id }
-        ]);
-      }
-      g.inventory[itemId] = have - n;
-      if (g.inventory[itemId] <= 0) delete g.inventory[itemId];
-      hall.powerEquip[itemId] = (hall.powerEquip[itemId] ?? 0) + n;
-      const addedKW = POWER_FEED_TYPES.includes(item.powerType) ? n * item.capacityKW : 0;
-      hall.itPowerKW += addedKW;
-      hall.pue = computePUE(hall, getItem);
-      logln(
-        g,
-        "good",
-        `Installed ${n} × ${item.name} in ${hall.name}${addedKW > 0 ? ` (+${usd(addedKW)} kW IT capacity)` : ""}.`
-      );
-      return ok(`Installed in ${hall.name}.`);
-    }),
-    installCooling: (hallId, itemId, qty) => commit((g) => {
-      const hall = g.halls.find((h) => h.id === hallId);
-      if (!hall) return fail(`Hall '${hallId}' not found.`);
-      const item = getItem(itemId);
-      if (!item || item.kind !== "cooling") return fail("Pick a cooling-equipment catalog item.");
-      const n = Math.floor(qty);
-      if (n <= 0) return fail("Quantity must be positive.");
-      const compatible = item.serves === hall.coolingClass || hall.coolingClass === "rdhx" && item.serves === "air" || hall.coolingClass === "immersion" && item.serves === "dlc";
-      if (!compatible) {
-        return fail(
-          `${item.name} serves ${item.serves.toUpperCase()} loads, but ${hall.name} is a ${hall.coolingClass.toUpperCase()} hall.`,
-          [
-            {
-              severity: "error",
-              code: "cooling-mismatch",
-              message: `${item.name} serves ${item.serves}; hall is ${hall.coolingClass}.`,
-              learn: item.id
-            }
-          ]
-        );
-      }
-      const have = g.inventory[itemId] ?? 0;
-      if (have < n) {
-        return fail(`Need ${n} × ${item.name} in inventory (have ${have}). Order them first.`, [
-          { severity: "error", code: "missing-parts", message: `Need ${n}, have ${have}.`, learn: item.id }
-        ]);
-      }
-      g.inventory[itemId] = have - n;
-      if (g.inventory[itemId] <= 0) delete g.inventory[itemId];
-      hall.coolingEquip[itemId] = (hall.coolingEquip[itemId] ?? 0) + n;
-      hall.coolingKW += n * item.capacityKW;
-      hall.pue = computePUE(hall, getItem);
-      logln(g, "good", `Installed ${n} × ${item.name} in ${hall.name} (+${usd(n * item.capacityKW)} kW heat rejection).`);
-      return ok(`Installed in ${hall.name}.`);
     }),
     placeRack: (hallId, designId) => commit((g) => {
       const hall = g.halls.find((h) => h.id === hallId);
@@ -9866,7 +9742,7 @@ const useGame = createStore((set, get) => {
       if (hall.racks.length >= hall.rackSlots) {
         return fail(`${hall.name} is full (${hall.rackSlots} slots). Build another hall.`);
       }
-      if (COOL_LEVEL[design.coolingInterface] > COOL_LEVEL[hall.coolingClass]) {
+      if (COOL_LEVEL$1[design.coolingInterface] > COOL_LEVEL$1[hall.coolingClass]) {
         return fail(
           `${design.name} needs ${design.coolingInterface.toUpperCase()} cooling; ${hall.name} is only ${hall.coolingClass.toUpperCase()}.`,
           [
@@ -9940,7 +9816,12 @@ const useGame = createStore((set, get) => {
         `Placed ${design.name} in ${hall.name} slot ${rack.slot}; install + commissioning, online ~month ${rack.readyMonth}.`
       );
       return ok(`Rack placed; online ~month ${rack.readyMonth}.`, warns);
-    }),
+    })
+  };
+};
+const clustersActions = (c) => {
+  const { get, set, commit, logln } = c;
+  return {
     createCluster: (name, rackIds, fabric) => commit((g) => {
       const ids = [...new Set(rackIds)];
       if (!ids.length) return fail("Pick at least one placed rack.");
@@ -9950,7 +9831,7 @@ const useGame = createStore((set, get) => {
       if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(", ")}.`);
       const claimed = ids.filter((id) => placed2.get(id)?.clusterId);
       if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(", ")}.`);
-      const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, "")) || 0), 0)) + 1;
+      const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m, c2) => Math.max(m, parseInt(c2.id.replace(/\D/g, "")) || 0), 0)) + 1;
       g.clusterSeq = nextN;
       const cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
       const stats = evaluateCluster(cluster, {
@@ -9973,8 +9854,234 @@ const useGame = createStore((set, get) => {
       );
       return ok(`Cluster '${name}' created.`);
     }),
+    disbandCluster: (clusterId) => commit((g) => {
+      const cl = g.clusters.find((c2) => c2.id === clusterId);
+      if (!cl) return fail("Unknown cluster.");
+      for (const h of g.halls) for (const r of h.racks) if (r.clusterId === clusterId) r.clusterId = void 0;
+      for (const ac of g.activeContracts) {
+        if (!ac.clusterIds.includes(clusterId)) continue;
+        ac.clusterIds = ac.clusterIds.filter((x) => x !== clusterId);
+        if (!ac.clusterIds.length) ac.deployBy = Math.max(ac.deployBy ?? g.month, g.month + 2);
+      }
+      g.clusters = g.clusters.filter((c2) => c2.id !== clusterId);
+      g.spotClusters = (g.spotClusters ?? []).filter((x) => x !== clusterId);
+      logln(g, "info", `Cluster '${cl.name}' disbanded — its racks are free to re-cluster.`);
+      return ok(`Cluster '${cl.name}' disbanded; racks are free again.`);
+    })
+  };
+};
+const G$3 = () => useGame.getState().game;
+const TECH = ["ib-ndr", "ib-xdr", "spectrum-x", "eth-400", "eth-800", "roce", "uec-eth"];
+const TOPO = "fat-tree-rail-optimized";
+const ctxOf$1 = (g) => ({
+  getRack: (id) => {
+    const pid = g.halls.flatMap((h) => h.racks).find((p) => p.id === id)?.designId ?? id;
+    return g.racks.find((r) => r.id === pid);
+  },
+  getTray: (id) => g.trays.find((t) => t.id === id),
+  getItem
+});
+function autoFabric(g, rackIds, targetGBs = 0) {
+  const sw2 = ITEMS_BY_KIND("switch").filter((s2) => s2.role === "scale-out" && s2.rackUnits > 0 && offerAt(s2, g.month).available);
+  const cables = ITEMS_BY_KIND("cable").filter((c) => offerAt(c, g.month).available);
+  const node = cables.find((c) => c.cableType === "aoc") ?? cables[0], spine = cables.find((c) => c.cableType === "optic-dr") ?? cables[0];
+  if (!sw2.length || !node) return null;
+  let best = null;
+  for (const tech of TECH) for (const leaf of sw2) for (const over of [1, 2, 4]) {
+    const f = { id: "auto", name: "Auto fabric", scaleOutTech: tech, topology: TOPO, oversubscription: over, leafSwitchId: leaf.id, spineSwitchId: leaf.id, nodeToLeafCableId: node.id, leafToSpineCableId: spine?.id };
+    let st2;
+    try {
+      st2 = evaluateCluster({ id: "d", name: "d", rackIds, fabric: f }, ctxOf$1(g));
+    } catch {
+      continue;
+    }
+    if (st2.issues.some((i) => i.severity === "error")) continue;
+    const cost = Object.entries(st2.switchCounts).reduce((n, [id, c]) => n + (getItem(id)?.priceUSD ?? 0) * c, 0) + Object.entries(st2.cableCounts).reduce((n, [id, c]) => n + (getItem(id)?.priceUSD ?? 0) * c, 0);
+    const ok2 = st2.effScaleOutGBs >= targetGBs;
+    if (!best || ok2 && !best.ok || ok2 === best.ok && (ok2 ? cost < best.cost : st2.effScaleOutGBs > best.bw)) best = { f, cost, bw: st2.effScaleOutGBs, ok: ok2 };
+  }
+  if (!best) return null;
+  return { fabric: best.f, note: `${best.f.scaleOutTech.toUpperCase()} · ${best.f.oversubscription}:1 · ${getItem(best.f.leafSwitchId)?.name} → ${best.bw.toFixed(0)} GB/s per accelerator` };
+}
+const COOL_LEVEL = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+function plantChoice(g, hallClass, kind) {
+  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === hallClass).map((i) => offerAt(i, g.month)).filter((o2) => o2.available);
+  cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
+  return cand[0];
+}
+function stepProject(st2, pid) {
+  const g = G$3();
+  const p = (g.projects ?? []).find((x) => x.id === pid);
+  if (!p || p.stage === "done" || p.stage === "failed") return;
+  const t = getTemplate(p.templateId);
+  const hall = g.halls.find((h) => h.id === p.hallId);
+  if (!t || !hall) return st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Template or hall disappeared."] });
+  const f = templateFacts(t);
+  if (!G$3().activeContracts.some((a) => a.contract.id === p.contractId) && p.stage !== "building") {
+    st2.patchProject(pid, { stage: "failed", notes: [...p.notes, "Contract was cancelled — the capacity is yours; offer it on spot in Energy."] });
+    return;
+  }
+  const note = (s2) => st2.patchProject(pid, { notes: [...g.projects.find((x) => x.id === pid).notes, `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, "0")}: ${s2}`].slice(-12) });
+  if (p.stage === "building") {
+    for (const pl of p.plant) {
+      const have2 = g.inventory[pl.id] ?? 0;
+      const it2 = getItem(pl.id);
+      if (have2 > 0 && it2) {
+        const inst = (it2.kind === "power" ? hall.powerEquip : hall.coolingEquip)[pl.id] ?? 0;
+        const need = Math.max(0, pl.n - inst);
+        const n = Math.min(have2, need);
+        if (n > 0) {
+          const r = it2.kind === "power" ? st2.installPower(hall.id, pl.id, n) : st2.installCooling(hall.id, pl.id, n);
+          if (r.ok) note(`installed ${n} × ${it2.name}`);
+        }
+      }
+    }
+    const h2 = useStoreHall(st2, hall.id);
+    const load = h2.racks.reduce((n, r) => n + (r.status === "failed" ? 0 : templateFactsOfDesign(G$3(), r.designId)), 0) + f.kWPerRack * (p.racks - p.rackIds.length);
+    const free = h2.rackSlots - h2.racks.length;
+    const designId = rackIdOf(t);
+    const bom = rackBom(G$3(), designId) ?? {};
+    const have = (n) => Object.entries(bom).every(([id, c]) => (G$3().inventory[id] ?? 0) >= c * n);
+    let placed2 = p.rackIds.length;
+    if (load <= h2.itPowerKW && load <= h2.coolingKW) {
+      while (placed2 < p.racks && free - (placed2 - p.rackIds.length) > 0 && have(1)) {
+        const r = st2.placeRack(hall.id, designId);
+        if (!r.ok) {
+          note(`placement blocked: ${r.message}`);
+          break;
+        }
+        placed2++;
+      }
+    }
+    if (placed2 > p.rackIds.length) {
+      const ids = useStoreHall(st2, hall.id).racks.filter((r) => r.designId === designId && !r.clusterId).map((r) => r.id).slice(0, p.racks);
+      note(`deployed ${placed2}/${p.racks} racks`);
+      st2.patchProject(pid, { rackIds: ids, ...placed2 >= p.racks ? { stage: "commissioning" } : {} });
+    }
+  } else if (p.stage === "commissioning") {
+    const racks = useStoreHall(st2, hall.id).racks.filter((r) => p.rackIds.includes(r.id));
+    if (racks.length && racks.every((r) => r.status === "online")) {
+      note("all racks online — designing the fabric");
+      st2.patchProject(pid, { stage: "clustering" });
+      stepProject(st2, pid);
+    }
+  } else if (p.stage === "clustering") {
+    const c = G$3().activeContracts.find((a) => a.contract.id === p.contractId)?.contract;
+    const target = c && c.kind === "training" ? c.minScaleOutGBsPerAccel : 0;
+    const af = autoFabric(G$3(), p.rackIds, target);
+    if (!af) return note("no valid fabric found — build one by hand on the Supercomputer screen");
+    const r = st2.createCluster(p.name, p.rackIds, af.fabric);
+    if (!r.ok) return note(`cluster blocked: ${r.message}`);
+    note(`cluster built: ${af.note}`);
+    st2.patchProject(pid, { stage: "assigning", clusterId: G$3().clusters[G$3().clusters.length - 1].id });
+    stepProject(st2, pid);
+  } else if (p.stage === "assigning") {
+    const cid = p.clusterId ?? G$3().clusters[G$3().clusters.length - 1]?.id;
+    if (!cid) return;
+    const r = st2.assignContract(p.contractId, [cid]);
+    if (r.ok) {
+      note("contract live — revenue starts next month");
+      st2.patchProject(pid, { stage: "done" });
+    } else note(`not qualified yet: ${r.message}`);
+  }
+}
+const useStoreHall = (_st, hid) => G$3().halls.find((h) => h.id === hid);
+const templateFactsOfDesign = (g, designId) => {
+  const d = g.racks.find((r) => r.id === designId);
+  if (!d) return 0;
+  const t = (g.projects ?? []).map((p) => getTemplate(p.templateId)).find((tt) => tt && rackIdOf(tt) === designId);
+  return t ? templateFacts(t).kWPerRack : 30;
+};
+function ensureUplink(st2) {
+  const g = G$3();
+  if (!g.uplinks) return;
+  const live = new Set(g.activeContracts.map((a) => a.contract.id));
+  let need = g.activeContracts.reduce((n, a) => n + contractNeedGbps(a.contract), 0);
+  for (const p of g.projects ?? []) if (p.stage !== "done" && p.stage !== "failed" && !live.has(p.contractId)) {
+    const c = g.availableContracts.find((x) => x.id === p.contractId);
+    if (c) need += contractNeedGbps(c);
+  }
+  const have = uplinkGbps(g);
+  if (have >= need * 1.1) return;
+  const opts = ITEMS_BY_KIND("uplink").filter((u) => u.service === "transit" && u.availableFrom * 12 - 2020 * 12 <= g.month).sort((a, b) => a.mrcUSD / a.gbps - b.mrcUSD / b.gbps);
+  const fit = opts.filter((u) => u.gbps >= need * 1.1 - have).sort((a, b) => a.mrcUSD - b.mrcUSD)[0] ?? opts[opts.length - 1];
+  if (fit) st2.buyUplink(fit.id);
+}
+function stepAllProjects(getSt) {
+  ensureUplink(getSt());
+  for (const p of getSt().game.projects ?? []) stepProject(getSt(), p.id);
+}
+function startProject(st2, contractId, templateId, racks) {
+  const t = getTemplate(templateId);
+  if (!t) return { ok: false, message: "Unknown build." };
+  const g0 = G$3();
+  if (!g0.activeContracts.some((a) => a.contract.id === contractId)) {
+    const a = st2.acceptContract(contractId);
+    if (!a.ok) return a;
+  }
+  const r = st2.buyTemplate(templateId, racks);
+  if (!r.ok) return r;
+  const f = templateFacts(t);
+  let hall = G$3().halls.find((h) => COOL_LEVEL[h.coolingClass] >= COOL_LEVEL[t.rack.cooling] && h.rackSlots - h.racks.length >= racks);
+  const notes = [`ordered ${racks} × ${t.name}`];
+  if (!hall) {
+    const b = st2.buildHall(`Hall ${String.fromCharCode(65 + G$3().halls.length)}`, t.rack.cooling, Math.max(8, racks + 4));
+    notes.push(b.message);
+    hall = G$3().halls[G$3().halls.length - 1];
+  }
+  const need = f.kWPerRack * racks + hall.racks.length * 0;
+  const plant = [];
+  const g = G$3();
+  const fresh = g.halls.find((h) => h.id === hall.id);
+  const pw2 = plantChoice(g, fresh.coolingClass, "power"), cl = plantChoice(g, fresh.coolingClass, "cooling");
+  const loadNow = fresh.racks.length ? need : need;
+  if (fresh.itPowerKW < loadNow && pw2) {
+    const n = Math.ceil((loadNow - fresh.itPowerKW) / pw2.item.capacityKW);
+    const b = st2.buy(pw2.item.id, n);
+    if (b.ok) {
+      plant.push({ id: pw2.item.id, n });
+      notes.push(`ordered ${n} × ${pw2.item.name} (power)`);
+    } else notes.push(`power plant: ${b.message}`);
+  }
+  if (fresh.coolingKW < loadNow && cl) {
+    const n = Math.ceil((loadNow - fresh.coolingKW) / cl.item.capacityKW);
+    const b = st2.buy(cl.item.id, n);
+    if (b.ok) {
+      plant.push({ id: cl.item.id, n });
+      notes.push(`ordered ${n} × ${cl.item.name} (cooling)`);
+    } else notes.push(`cooling plant: ${b.message}`);
+  }
+  const proj = { id: `pj-${g.month}-${(g.projects ?? []).length + 1}`, contractId, templateId, racks, hallId: fresh.id, name: `Cluster ${g.clusters.length + 1}`, stage: "building", rackIds: [], plant, notes: notes.map((n) => `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, "0")}: ${n}`), startMonth: g.month };
+  st2.addProject(proj);
+  return { ok: true, message: `Easy path started: ${notes.join("; ")}. I will install, deploy, cluster and assign as parts arrive.` };
+}
+function assignFromRacks(st2, contractId, rackIds) {
+  if (!rackIds.length) return { ok: false, message: "Pick at least one online rack." };
+  const g = G$3();
+  const placed2 = g.halls.flatMap((h) => h.racks);
+  const bad = rackIds.filter((id) => placed2.find((p) => p.id === id)?.status !== "online");
+  if (bad.length) return { ok: false, message: "All chosen racks must be online (commissioned)." };
+  if (!g.activeContracts.some((a2) => a2.contract.id === contractId)) {
+    const a2 = st2.acceptContract(contractId);
+    if (!a2.ok) return a2;
+  }
+  const c = G$3().activeContracts.find((a2) => a2.contract.id === contractId).contract;
+  const af = autoFabric(G$3(), rackIds, c.kind === "training" ? c.minScaleOutGBsPerAccel : 0);
+  if (!af) return { ok: false, message: "No valid network fabric found for these racks." };
+  const free = rackIds.filter((id) => !placed2.find((p) => p.id === id)?.clusterId);
+  if (free.length !== rackIds.length) return { ok: false, message: "Some racks already belong to a cluster — assign that cluster instead." };
+  const r = st2.createCluster(`Auto · ${c.customer}`, rackIds, af.fabric);
+  if (!r.ok) return r;
+  const cl = G$3().clusters[G$3().clusters.length - 1];
+  const a = st2.assignContract(contractId, [cl.id]);
+  if (!a.ok) st2.disbandCluster(cl.id);
+  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
+}
+const contractsActions = (c) => {
+  const { get, set, commit, logln } = c;
+  return {
     acceptContract: (contractId) => commit((g) => {
-      const i = g.availableContracts.findIndex((c) => c.id === contractId);
+      const i = g.availableContracts.findIndex((c2) => c2.id === contractId);
       if (i < 0) return fail("Offer not found.");
       const contract = g.availableContracts[i];
       if (g.month > contract.deadlineMonth) return fail("This offer already expired.");
@@ -9998,8 +10105,8 @@ const useGame = createStore((set, get) => {
       const ac = g.activeContracts.find((a) => a.contract.id === contractId);
       if (!ac) return fail("Active contract not found.");
       const ids = [...new Set(clusterIds)];
-      const clusters = ids.map((id) => g.clusters.find((c) => c.id === id));
-      if (clusters.some((c) => !c)) return fail("Unknown cluster in the list.");
+      const clusters = ids.map((id) => g.clusters.find((c2) => c2.id === id));
+      if (clusters.some((c2) => !c2)) return fail("Unknown cluster in the list.");
       const contract = ac.contract;
       const issues = [];
       if (contract.kind === "training") {
@@ -10098,20 +10205,37 @@ const useGame = createStore((set, get) => {
       logln(g, "info", `${ac.contract.customer}: cluster released. Re-assign a qualifying cluster by ${g.month + 2 >= (ac.deployBy ?? 0) ? "month " + ac.deployBy : "the deadline"} or they walk.`);
       return ok("Cluster released; the contract is awaiting deployment again (2 months grace).");
     }),
-    disbandCluster: (clusterId) => commit((g) => {
-      const cl = g.clusters.find((c) => c.id === clusterId);
-      if (!cl) return fail("Unknown cluster.");
-      for (const h of g.halls) for (const r of h.racks) if (r.clusterId === clusterId) r.clusterId = void 0;
-      for (const ac of g.activeContracts) {
-        if (!ac.clusterIds.includes(clusterId)) continue;
-        ac.clusterIds = ac.clusterIds.filter((x) => x !== clusterId);
-        if (!ac.clusterIds.length) ac.deployBy = Math.max(ac.deployBy ?? g.month, g.month + 2);
+    assignRacks: (contractId, rackIds) => assignFromRacks(get(), contractId, rackIds),
+    startEasy: (contractId, templateId, racks) => {
+      const r = startProject(get(), contractId, templateId, racks);
+      if (r.ok) stepAllProjects(get);
+      return r;
+    },
+    stepEasy: () => stepAllProjects(get)
+  };
+};
+const financeActions = (c) => {
+  const { commit, logln } = c;
+  return {
+    takeLoan: (amountUSD) => commit((g) => {
+      const amt = Math.floor(amountUSD);
+      if (!Number.isFinite(amt) || amt <= 0) return fail("Loan amount must be positive.");
+      const limit = creditLimit(g);
+      if (g.debt + amt > limit) {
+        return fail(
+          `Credit limit is $${usd(limit)} (fixed line + collateral against installed assets). Borrow less or build more first.`
+        );
       }
-      g.clusters = g.clusters.filter((c) => c.id !== clusterId);
-      g.spotClusters = (g.spotClusters ?? []).filter((x) => x !== clusterId);
-      logln(g, "info", `Cluster '${cl.name}' disbanded — its racks are free to re-cluster.`);
-      return ok(`Cluster '${cl.name}' disbanded; racks are free again.`);
-    }),
+      g.debt += amt;
+      g.cash += amt;
+      logln(g, "info", `Drew a $${usd(amt)} loan at 7% APR — interest hits monthly. Principal due on refinancing.`);
+      return ok(`$${usd(amt)} borrowed.`);
+    })
+  };
+};
+const energyActions = (c) => {
+  const { set, commit, logln } = c;
+  return {
     signPower: (offerId, mwOverride) => commit((g) => {
       const i = (g.powerOffers ?? []).findIndex((o22) => o22.id === offerId);
       if (i < 0) return fail("Offer not found or expired.");
@@ -10123,7 +10247,7 @@ const useGame = createStore((set, get) => {
       return ok(`Signed ${mw} MW with ${o2.supplier}; starts next month.`);
     }),
     setSpot: (clusterId, on) => commit((g) => {
-      if (!g.clusters.some((c) => c.id === clusterId)) return fail("Unknown cluster.");
+      if (!g.clusters.some((c2) => c2.id === clusterId)) return fail("Unknown cluster.");
       const set2 = new Set(g.spotClusters ?? []);
       if (on) set2.add(clusterId);
       else set2.delete(clusterId);
@@ -10138,25 +10262,31 @@ const useGame = createStore((set, get) => {
       g.spotRacks = [...set2];
       return ok(on ? "Rack offered on spot when online." : "Rack withdrawn from spot.");
     }),
-    assignRacks: (contractId, rackIds) => assignFromRacks(get(), contractId, rackIds),
     setSpotReserve: (usd2) => commit((g) => {
       g.spotReserve = Math.max(0, usd2);
       return ok(`Reserve price $${Math.max(0, usd2).toFixed(2)}/GPU-hr.`);
-    }),
-    takeLoan: (amountUSD) => commit((g) => {
-      const amt = Math.floor(amountUSD);
-      if (!Number.isFinite(amt) || amt <= 0) return fail("Loan amount must be positive.");
-      const limit = creditLimit(g);
-      if (g.debt + amt > limit) {
-        return fail(
-          `Credit limit is $${usd(limit)} (fixed line + collateral against installed assets). Borrow less or build more first.`
-        );
+    })
+  };
+};
+const sessionActions = (c) => {
+  const { get, set } = c;
+  return {
+    newGame: (seed = Math.floor(Math.random() * 2 ** 31), mode = "operator") => {
+      const g = newGameState(seed);
+      g.mode = mode;
+      if (mode === "learner") {
+        g.cash = 8e7;
+        g.log.push({ month: g.month, level: "info", text: "🎓 Learner mode: $80M starting cash, explainers everywhere, and the Easy path will do the build steps for you." });
       }
-      g.debt += amt;
-      g.cash += amt;
-      logln(g, "info", `Drew a $${usd(amt)} loan at 7% APR — interest hits monthly. Principal due on refinancing.`);
-      return ok(`$${usd(amt)} borrowed.`);
-    }),
+      if (mode === "tycoon") {
+        g.cash = 3e7;
+        g.log.push({ month: g.month, level: "info", text: "💼 Tycoon mode: $30M, no hand-holding. Good luck." });
+      }
+      set({ game: g });
+    },
+    setMode: (m) => set((s2) => ({ game: { ...s2.game, mode: m } })),
+    patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
+    addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
     nextMonth: () => {
       set({ game: advanceMonth(get().game) });
       stepAllProjects(get);
@@ -10190,64 +10320,45 @@ const useGame = createStore((set, get) => {
       }
     }
   };
-});
-function newGameState(seed) {
-  const hall = {
-    id: "hall-1",
-    name: "Hall A",
-    coolingClass: "air",
-    rackSlots: 40,
-    itPowerKW: 500,
-    coolingKW: 600,
-    pue: 1,
-    powerEquip: { "et-padmount-2500": 1, "se-galaxy-vs-500": 1 },
-    coolingEquip: { "vt-crah-100": 6 },
-    racks: [],
-    floorLoadKgPerRack: 1500
-  };
-  hall.pue = computePUE(hall, getItem);
-  const g = {
-    month: START_MONTH,
-    seed,
-    cash: 5e7,
-    debt: 0,
-    reputation: 10,
-    halls: [hall],
-    trays: [],
-    racks: [],
-    clusters: [],
-    inventory: {},
-    orders: [],
-    availableContracts: [],
-    activeContracts: [],
-    log: [],
-    staff: 2,
-    utilityUSDPerKWh: 0.07,
-    uplinks: { "transit-10g-a": 1 },
-    codexSeen: [],
-    missionsDone: [],
-    history: [],
-    powerOffers: [],
-    powerContracts: [],
-    spotClusters: [],
-    spotReserve: 0
-  };
-  g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
-  g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));
-  g.log.push({
-    month: START_MONTH,
-    level: "info",
-    text: "GIGAWATT day one: $50M cash, Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh."
-  });
-  g.log.push({
-    month: START_MONTH,
-    level: "info",
-    text: "Order parts, design a tray and rack, then place racks — contracts on the market pay once a cluster serves them."
-  });
-  return g;
-}
-const st$2 = () => useGame.getState();
-const G$1 = () => st$2().game;
+};
+const DOMAINS = {
+  procure: procureActions,
+  design: designActions,
+  facility: facilityActions,
+  deploy: deployActions,
+  clusters: clustersActions,
+  contracts: contractsActions,
+  finance: financeActions,
+  energy: energyActions,
+  session: sessionActions
+};
+const composeActions = (c) => Object.assign({}, ...Object.values(DOMAINS).map((f) => f(c)));
+const selectCapexBasis = estimateCapexBasis;
+const selectNetWorth = (g) => g.cash - g.debt + estimateCapexBasis(g) * 0.5;
+const selectMonthlyPnL = (g) => {
+  const opex = monthlyOpex(g);
+  const depreciation = monthlyDepreciation(estimateCapexBasis(g));
+  const interest = monthlyInterest(g.debt);
+  const revenue = g.activeContracts.reduce((sum2, ac) => {
+    if (ac.clusterIds.length === 0) return sum2;
+    const c = ac.contract;
+    if (c.kind === "training") {
+      const accels = ac.clusterIds.reduce(
+        (n, id) => n + (g.clusters.find((x) => x.id === id)?.stats?.accelerators ?? 0),
+        0
+      );
+      return sum2 + accels * c.pricePerAccelHour * HOURS_PER_MONTH;
+    }
+    return sum2 + c.tokensPerSec * HOURS_PER_MONTH * 3600 / 1e6 * c.pricePerMTok;
+  }, 0);
+  return { revenue, opex: opex.totalUSD, depreciation, interest, net: revenue - opex.totalUSD - depreciation - interest };
+};
+const useGame = createStore((set, get) => ({
+  game: newGameState(0),
+  ...composeActions(makeCtx(get, set))
+}));
+const st$3 = () => useGame.getState();
+const G$2 = () => st$3().game;
 function stable(v2) {
   if (v2 === null || typeof v2 !== "object") return JSON.stringify(v2);
   if (Array.isArray(v2)) return "[" + v2.map(stable).join(",") + "]";
@@ -10263,7 +10374,7 @@ function hashState(g) {
   return h.toString(16).padStart(8, "0");
 }
 function observe() {
-  const g = G$1();
+  const g = G$2();
   const pnl = selectMonthlyPnL(g);
   const racks = g.halls.flatMap((h) => h.racks);
   const by = (f) => racks.reduce((m, r) => {
@@ -10313,25 +10424,25 @@ let broke = 0;
 function reset(opts = {}) {
   scenario = opts.scenario ?? null;
   const seed = opts.seed ?? scenario?.seed ?? 1;
-  st$2().newGame(seed, opts.mode ?? "operator");
+  st$3().newGame(seed, opts.mode ?? "operator");
   scenario?.setup?.();
-  t0 = G$1().month;
+  t0 = G$2().month;
   broke = 0;
   return observe();
 }
 function step(a) {
-  const before = selectNetWorth(G$1());
-  const fn = st$2()[a.name];
+  const before = selectNetWorth(G$2());
+  const fn = st$3()[a.name];
   if (typeof fn !== "function") return { obs: observe(), reward: -0.01, done: false, truncated: false, info: { ok: false, message: "unknown action " + a.name, issues: [] } };
   const r = fn(...a.args ?? []);
   const res = r && typeof r === "object" && "ok" in r ? r : { ok: true, message: "" };
   let reward = res.ok ? 0 : -0.01;
   if (a.name === "nextMonth") {
-    const g2 = G$1();
+    const g2 = G$2();
     reward += (selectNetWorth(g2) - before) / 1e6;
     broke = g2.cash < 0 ? broke + 1 : 0;
   }
-  const g = G$1();
+  const g = G$2();
   const horizon = scenario?.horizonMonths ?? 120;
   const bankrupt = broke >= 2;
   const truncated = g.month - t0 >= horizon;
@@ -10339,8 +10450,8 @@ function step(a) {
   return { obs: observe(), reward, done: bankrupt, truncated, info: { ok: !!res.ok, message: res.message ?? "", issues: res.issues ?? [], ...bankrupt ? { terminalReason: "bankrupt (cash<0 for 2 months)" } : {} } };
 }
 function probe(a) {
-  const snap = G$1();
-  const fn = st$2()[a.name];
+  const snap = G$2();
+  const fn = st$3()[a.name];
   try {
     const r = fn(...a.args ?? []);
     return !r || typeof r !== "object" || !("ok" in r) || !!r.ok;
@@ -10351,7 +10462,7 @@ function probe(a) {
   }
 }
 function legalActions(opts = {}) {
-  const g = G$1();
+  const g = G$2();
   const out = [{ name: "nextMonth", desc: "Advance one month" }];
   const add = (a, desc) => {
     if (probe(a)) out.push({ ...a, desc });
@@ -10372,8 +10483,8 @@ function legalActions(opts = {}) {
   }
   return out;
 }
-const hash = () => hashState(G$1());
-const st$1 = () => useGame.getState();
+const hash = () => hashState(G$2());
+const st$2 = () => useGame.getState();
 const patch = (f) => useGame.setState((s2) => {
   const g = JSON.parse(JSON.stringify(s2.game));
   f(g);
@@ -10381,20 +10492,20 @@ const patch = (f) => useGame.setState((s2) => {
 });
 function plantUnit(kind, cls0) {
   const cls = cls0 === "rdhx" ? "air" : cls0;
-  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === cls && !["cold-plate-loop", "rdhx"].includes(i.coolingType)).map((i) => offerAt(i, st$1().game.month)).filter((o2) => o2.available);
+  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === cls && !["cold-plate-loop", "rdhx"].includes(i.coolingType)).map((i) => offerAt(i, st$2().game.month)).filter((o2) => o2.available);
   cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
   return cand[0];
 }
 const advance = (n) => {
-  for (let i = 0; i < n; i++) st$1().nextMonth();
+  for (let i = 0; i < n; i++) st$2().nextMonth();
 };
 function stressFill(racksPerTemplate, hallsPerClass = 1) {
   const report = { halls: [], skipped: [] };
   const classes = ["air", "rdhx", "dlc", "immersion"];
   const hallOf = {};
   for (const c of classes) for (let k2 = 0; k2 < hallsPerClass; k2++) {
-    const r = st$1().buildHall(`${c.toUpperCase()}-${k2 + 1}`, c, 200);
-    if (r.ok) (hallOf[c] ??= []).push(st$1().game.halls[st$1().game.halls.length - 1].id);
+    const r = st$2().buildHall(`${c.toUpperCase()}-${k2 + 1}`, c, 200);
+    if (r.ok) (hallOf[c] ??= []).push(st$2().game.halls[st$2().game.halls.length - 1].id);
   }
   const load = {};
   const plan = [];
@@ -10408,10 +10519,10 @@ function stressFill(racksPerTemplate, hallsPerClass = 1) {
       continue;
     }
     const hall = halls[rr++ % halls.length];
-    let n = racksPerTemplate, r = st$1().buyTemplate(t.id, n, false);
+    let n = racksPerTemplate, r = st$2().buyTemplate(t.id, n, false);
     while (!r.ok && n > 1 && /llocation/.test(r.message)) {
       n = Math.max(1, Math.floor(n / 2));
-      r = st$1().buyTemplate(t.id, n, false);
+      r = st$2().buyTemplate(t.id, n, false);
     }
     if (!r.ok) {
       report.skipped.push(`${t.id}: ${r.message.slice(0, 90)}`);
@@ -10422,7 +10533,7 @@ function stressFill(racksPerTemplate, hallsPerClass = 1) {
   }
   const bought = {};
   for (const [hallId, kw] of Object.entries(load)) {
-    const h = st$1().game.halls.find((x) => x.id === hallId);
+    const h = st$2().game.halls.find((x) => x.id === hallId);
     for (const kind of ["power", "cooling"]) {
       const u = plantUnit(kind, h.coolingClass);
       if (!u) {
@@ -10430,32 +10541,32 @@ function stressFill(racksPerTemplate, hallsPerClass = 1) {
         continue;
       }
       const n = Math.ceil(kw * 1.15 / (u.item.capacityKW || 1));
-      const b = st$1().buy(u.item.id, n);
+      const b = st$2().buy(u.item.id, n);
       if (!b.ok) report.skipped.push(`${hallId} ${kind}: ${b.message.slice(0, 80)}`);
       else (bought[hallId] ??= []).push({ id: u.item.id, n, kind });
     }
   }
   for (const { t, n } of plan) {
-    const did = st$1().game.racks.find((r) => r.id.includes(t.id))?.id;
+    const did = st$2().game.racks.find((r) => r.id.includes(t.id))?.id;
     if (!did) continue;
-    for (const [id, c] of Object.entries(rackBom(st$1().game, did) ?? {})) {
-      const need = c * n - (st$1().game.inventory[id] ?? 0);
+    for (const [id, c] of Object.entries(rackBom(st$2().game, did) ?? {})) {
+      const need = c * n - (st$2().game.inventory[id] ?? 0);
       if (need > 0) {
-        const b = st$1().buy(id, need);
+        const b = st$2().buy(id, need);
         if (!b.ok) report.skipped.push(`${t.id} part ${id}: ${b.message.slice(0, 70)}`);
       }
     }
   }
-  for (let i = 0; i < 16 && st$1().game.orders.length; i++) advance(1);
+  for (let i = 0; i < 16 && st$2().game.orders.length; i++) advance(1);
   for (const [hallId, list] of Object.entries(bought)) for (const p of list) {
-    const ir = p.kind === "power" ? st$1().installPower(hallId, p.id, p.n) : st$1().installCooling(hallId, p.id, p.n);
+    const ir = p.kind === "power" ? st$2().installPower(hallId, p.id, p.n) : st$2().installCooling(hallId, p.id, p.n);
     if (!ir.ok) report.skipped.push(`${hallId} install ${p.id}: ${ir.message.slice(0, 90)}`);
   }
   for (const { t, hall, n: cnt } of plan) {
-    const designId = `rk-${t.id}`.length ? st$1().game.racks.find((r) => r.id.includes(t.id))?.id ?? "" : "";
+    const designId = `rk-${t.id}`.length ? st$2().game.racks.find((r) => r.id.includes(t.id))?.id ?? "" : "";
     let placed2 = 0;
     if (designId) for (let i = 0; i < cnt; i++) {
-      const r = st$1().placeRack(hall, designId);
+      const r = st$2().placeRack(hall, designId);
       if (!r.ok) {
         report.skipped.push(`${t.id} place ${i}: ${r.message}`);
         break;
@@ -10465,7 +10576,7 @@ function stressFill(racksPerTemplate, hallsPerClass = 1) {
     report[t.id] = placed2;
   }
   advance(6);
-  report.halls = st$1().game.halls.map((h) => ({ id: h.id, class: h.coolingClass, racks: h.racks.length, kW: h.itPowerKW, coolKW: h.coolingKW, pue: h.pue }));
+  report.halls = st$2().game.halls.map((h) => ({ id: h.id, class: h.coolingClass, racks: h.racks.length, kW: h.itPowerKW, coolKW: h.coolingKW, pue: h.pue }));
   return report;
 }
 const SCENARIOS = [
@@ -10651,6 +10762,209 @@ const CONCEPTS = [
     }
   }
 ];
+function ledger(g) {
+  const rows = /* @__PURE__ */ new Map();
+  const row = (id) => {
+    let r = rows.get(id);
+    if (!r) {
+      const it2 = getItem(id);
+      r = { id, name: it2?.name ?? id, kind: it2?.kind ?? "?", vendor: it2?.vendor ?? "", warehouse: 0, onOrder: 0, deployed: 0 };
+      rows.set(id, r);
+    }
+    return r;
+  };
+  for (const [id, n] of Object.entries(g.inventory)) if (n > 0) row(id).warehouse += n;
+  for (const [id, n] of Object.entries(g.spareStock ?? {})) if (n > 0) row(id).spares = (row(id).spares ?? 0) + n;
+  for (const o2 of g.orders) {
+    const r = row(o2.itemId);
+    r.onOrder += o2.qty;
+    r.nextEta = Math.min(r.nextEta ?? 1e9, o2.arriveMonth);
+  }
+  for (const h of g.halls) {
+    for (const [id, n] of Object.entries({ ...h.powerEquip, ...h.coolingEquip })) row(id).deployed += n;
+    for (const p of h.racks) for (const [id, n] of Object.entries(rackBom(g, p.designId) ?? {})) row(id).deployed += n;
+  }
+  return [...rows.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+}
+function rackReadiness(g, designId, racks = 1) {
+  const bom = rackBom(g, designId);
+  if (!bom) return void 0;
+  const free = availableFor(g, designId);
+  const lines = Object.entries(bom).map(([id, per2]) => {
+    const need = per2 * racks, have = free[id] ?? 0;
+    const onOrder = g.orders.filter((o22) => o22.itemId === id && !o22.spare).reduce((n, o22) => n + o22.qty, 0);
+    const it2 = getItem(id);
+    const o2 = it2 ? offerAt(it2, g.month) : void 0;
+    return { id, name: it2?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o2?.available, unitPrice: o2?.unitPrice ?? 0, leadMonths: o2?.leadMonths ?? 0, reason: o2?.reason };
+  });
+  Object.values(bom);
+  const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((free[id] ?? 0) / n)));
+  const toBuy = lines.filter((l) => l.short - l.onOrder > 0);
+  const cost = toBuy.reduce((n, l) => {
+    const q = l.short - l.onOrder;
+    return n + Math.round(l.unitPrice * q * (1 - (it(l.id) ? volumeDiscount(it(l.id), q, l.unitPrice) : 0)));
+  }, 0);
+  const blocked = toBuy.filter((l) => !l.buyable);
+  const eta = Math.max(0, ...lines.filter((l) => l.short > 0).map((l) => l.onOrder >= l.short ? Math.max(0, (g.orders.filter((o2) => o2.itemId === l.id).map((o2) => o2.arriveMonth).sort((a, b) => b - a)[0] ?? g.month) - g.month) : l.leadMonths));
+  return { lines, buildableNow, complete: lines.every((l) => l.short === 0), toBuy, blocked, cost, etaMonths: eta };
+}
+const it = (id) => getItem(id);
+function machineLedger(g) {
+  const rows = [];
+  const spot = /* @__PURE__ */ new Set([...g.spotClusters ?? []]), spotRacks = new Set(g.spotRacks ?? []);
+  let n = 0;
+  for (const h of g.halls) for (const r of h.racks) {
+    n++;
+    const d = g.racks.find((x) => x.id === r.designId);
+    const st2 = d ? validateRack(d, g.trays, getItem).stats : void 0;
+    const cl = r.clusterId ? g.clusters.find((c) => c.id === r.clusterId) : void 0;
+    const ac = cl ? g.activeContracts.find((a) => a.clusterIds.includes(cl.id)) : void 0;
+    let role = "unassigned";
+    if (r.status !== "online") role = r.status === "failed" ? "failed — awaiting repair" : r.status;
+    else if (ac) role = ac.contract.kind === "training" ? "training" : "serving";
+    else if (cl && spot.has(cl.id) || spotRacks.has(r.id)) role = "spot market";
+    else if (cl) role = "clustered, idle";
+    rows.push({
+      serial: `RK-${String(r.serial ?? n).padStart(4, "0")}`,
+      id: r.id,
+      hallId: h.id,
+      hall: h.name,
+      slot: r.slot,
+      design: d?.name ?? r.designId,
+      status: r.status,
+      readyMonth: r.readyMonth,
+      clusterId: cl?.id,
+      cluster: cl?.name,
+      role,
+      customer: ac?.contract.customer,
+      model: ac?.contract.model.name,
+      accels: st2?.accels ?? 0,
+      kW: st2?.kW ?? 0
+    });
+  }
+  return rows;
+}
+const st$1 = () => useGame.getState();
+const G$1 = () => st$1().game;
+const ctxOf = (g) => {
+  const placed2 = g.halls.flatMap((h) => h.racks);
+  return { getRack: (id) => {
+    const pid = placed2.find((p) => p.id === id)?.designId ?? id;
+    return g.racks.find((r) => r.id === pid);
+  }, getTray: (id) => g.trays.find((t) => t.id === id), getItem };
+};
+const tpl = (id) => TEMPLATES.find((t) => t.id === id);
+const designQueries = {
+  validateTray: (tray) => validateTray(tray, getItem),
+  validateRack: (rack, trays) => validateRack(rack, trays ?? G$1().trays, getItem),
+  validateHall: (hallId) => {
+    const g = G$1();
+    const hall = g.halls.find((h) => h.id === hallId);
+    return validateHall(hall, hall.racks.map((p) => ({ design: g.racks.find((r) => r.id === p.designId), trays: g.trays })), getItem);
+  },
+  hallStats: (hallId) => {
+    const g = G$1();
+    const hall = g.halls.find((h) => h.id === hallId);
+    const kw = hall.racks.reduce((n, p) => {
+      const d = g.racks.find((r) => r.id === p.designId);
+      return n + (d ? validateRack(d, g.trays, getItem).stats.kW : 0);
+    }, 0);
+    return { kw, pue: computePUE(hall, getItem), resilience: hallResilience(hall) };
+  },
+  rackStatsAll: () => {
+    const g = G$1();
+    return Object.fromEntries(g.racks.map((d) => [d.id, validateRack(d, g.trays, getItem).stats]));
+  },
+  partFitsSlot: (slot, itemId) => partFitsSlot(slot, getItem(itemId)),
+  slotOptions: (chassisId, kind) => {
+    const ch = getItem(chassisId);
+    if (!ch) return [];
+    const slot = ch.slots.find((s2) => s2.kind === kind);
+    return ALL_ITEMS.filter((i) => partFitsSlot({ kind, accepts: slot?.accepts }, i)).map((i) => offerAt(i, G$1().month)).sort((a, b) => Number(b.available) - Number(a.available) || b.item.availableFrom - a.item.availableFrom);
+  },
+  traySizing: (design) => {
+    const g = G$1();
+    const month = g.month;
+    const utility = g.utilityUSDPerKWh;
+    const ch = getItem(design.chassisId);
+    if (!ch) return null;
+    const v2 = validateTray(design, getItem);
+    const year = 2020 + month / 12;
+    const parts = design.parts.map((p) => ({ ...p, it: getItem(p.itemId) })).filter((p) => p.it);
+    const n = (k2) => parts.filter((p) => p.it.kind === k2).reduce((a, p) => a + p.count, 0);
+    const gpus = v2.stats.accels || 0;
+    const draw = v2.stats.watts + ch.overheadW;
+    const psus = parts.filter((p) => p.slot === "psu");
+    const psuW = psus.reduce((a, p) => a + (p.it.capacityKW ?? 0) * 1e3 * p.count, 0), psuCount = psus.reduce((a, p) => a + p.count, 0);
+    const unitW = psuCount ? psuW / psuCount : 0, need = unitW ? Math.ceil(draw / (unitW * 0.9)) : 0;
+    const redundantOK = psuCount >= 2 && psuW - unitW >= draw * 0.9;
+    const cpu2 = parts.find((p) => p.it.kind === "cpu");
+    const cpuItem = cpu2?.it;
+    const cpuN = cpu2?.count ?? 0;
+    const lanesAvail = Math.min(ch.pcieLanesAvail, (cpuItem?.pcieLanes ?? 0) * cpuN || ch.pcieLanesAvail);
+    const dimms = n("memory");
+    const channels = (cpuItem?.memChannels ?? 0) * cpuN;
+    const nics = parts.filter((p) => p.it.kind === "nic");
+    const nicGbps = nics.reduce((a, p) => a + p.it.gbps * p.count, 0);
+    const perGpu = gpus ? nicGbps / 8 / gpus : 0, tier = scaleOutTier(year);
+    const bestNic = ITEMS_BY_KIND("nic").filter((x) => x.nicClass === "nic" && offerAt(x, month).available).sort((a, b) => b.gbps - a.gbps)[0];
+    const nicNeed = bestNic && gpus ? Math.ceil(tier * 8 * gpus / bestNic.gbps) : 0;
+    const hbm = v2.stats.memGB, hostRam = parts.filter((p) => p.it.kind === "memory").reduce((a, p) => a + p.it.capacityGB * p.count, 0);
+    const capex = v2.stats.costUSD;
+    const powerMo = draw / 1e3 * 1.3 * 730 * utility;
+    const hours = 5 * 8760;
+    const costHr = gpus ? (capex / hours + powerMo * 12 * 5 / hours) / gpus : 0;
+    const price = gpuHourAnchor(year);
+    const cpuOpt = ITEMS_BY_KIND("cpu").filter((c) => offerAt(c, month).available && c.arch === (cpuItem?.arch ?? "x86")).sort((a, b) => b.availableFrom - a.availableFrom)[0];
+    return {
+      gpus,
+      draw,
+      psuW,
+      psuCount,
+      unitW,
+      need,
+      redundantOK,
+      chassisMaxW: ch.maxPowerW,
+      lanesUsed: v2.stats.pcieLanesUsed,
+      lanesAvail: lanesAvail || ch.pcieLanesAvail,
+      chassisLanes: ch.pcieLanesAvail,
+      cpuN,
+      cpuLanes: cpuItem?.pcieLanes ?? 0,
+      cpuHint: cpuOpt ? { name: cpuOpt.name, lanes: cpuOpt.pcieLanes, channels: cpuOpt.memChannels, tdp: cpuOpt.tdpW, price: cpuOpt.priceUSD } : null,
+      dimms,
+      channels,
+      nicCount: nics.reduce((a, p) => a + p.count, 0),
+      nicGbps,
+      perGpu,
+      tier,
+      year,
+      bestNic: bestNic ? { name: bestNic.name, gbps: bestNic.gbps, lanes: bestNic.pcieLanes } : null,
+      nicNeed,
+      hbm,
+      hostRam,
+      capex,
+      powerMo,
+      costHr,
+      price
+    };
+  },
+  rackBom: (designId) => rackBom(G$1(), designId),
+  rackReadiness: (designId, racks) => rackReadiness(G$1(), designId, racks ?? 1),
+  failureRates: (designId) => rackRates(G$1(), designId),
+  rackParts: (designId) => rackParts(G$1(), designId),
+  spareQty: (id, qty) => spareQty(id, qty),
+  spares: () => {
+    const g = G$1();
+    return { shelf: g.spareStock ?? {}, rec: Object.fromEntries(Object.keys(g.inventory).map((id) => [id, recommendedSpares(g, id)])) };
+  },
+  sparesView: () => {
+    const g = G$1();
+    const ids = /* @__PURE__ */ new Set();
+    g.halls.forEach((h) => h.racks.forEach((p) => Object.keys(rackParts(g, p.designId)).forEach((id) => partClass(id) && ids.add(id))));
+    const failed = g.halls.flatMap((h) => h.racks).filter((p) => p.status === "failed").map((p) => ({ id: p.id, part: p.failedPart ? getItem(p.failedPart)?.name ?? "" : "burn-in failure", readyMonth: p.readyMonth }));
+    return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o2) => o2.spare && o2.itemId === id).reduce((n, o2) => n + o2.qty, 0), adv: recommendedSpares(g, id) })) };
+  }
+};
 function quote(t, racks, month) {
   const lines = [];
   const unavailable = [];
@@ -10688,6 +11002,30 @@ function hallChecks(g, t, racks) {
     { ok: used + racks <= (h?.rackSlots ?? 0), label: `Floor space: ${racks} rack slot${racks > 1 ? "s" : ""}`, detail: `${used}/${h?.rackSlots ?? 0} slots used.` }
   ];
 }
+const catalogQueries = {
+  offer: (itemId) => {
+    const it2 = getItem(itemId);
+    return it2 ? offerAt(it2, G$1().month) : null;
+  },
+  offersAll: () => Object.fromEntries(ALL_ITEMS.map((i) => [i.id, offerAt(i, G$1().month)])),
+  volumeDiscount: (itemId, n, unit) => volumeDiscount(getItem(itemId), n, unit),
+  quote: (tid, racks) => quote(tpl(tid), racks, G$1().month),
+  hallChecks: (tid, racks) => hallChecks(G$1(), tpl(tid), racks),
+  templateFacts: (tid) => templateFacts(tpl(tid)),
+  templatesAll: () => TEMPLATES.map((t) => ({ ...templateFacts(t), id: t.id, racksFor1: 1, quote1: quote(t, 1, G$1().month) })),
+  templateBom: (tid, racks) => templateBom(tpl(tid), racks),
+  racksFor: (tid, n) => racksFor(tpl(tid), n)
+};
+const facilityQueries = {
+  ledger: () => ledger(G$1()),
+  machineLedger: () => machineLedger(G$1()),
+  floorQuote: (n) => ({ units: n, slots: n * FLOOR_UNIT_SLOTS, cost: n * FLOOR_UNIT_COST, months: floorCommissionMonths(n) }),
+  resilience: (hallId) => hallResilience(G$1().halls.find((h) => h.id === hallId)),
+  internet: () => {
+    const g = G$1();
+    return { have: uplinkGbps(g), need: totalNeedGbps(g), carriers: carrierCount(g), mrc: uplinkMonthlyUSD(g) };
+  }
+};
 const k = (n) => n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : `${Math.round(n)}`;
 function pipeline(g) {
   const clustered = new Set(g.clusters.flatMap((c) => c.rackIds));
@@ -10861,333 +11199,161 @@ function buildOptions(g, c, signedAt) {
   }
   return picked;
 }
-function ledger(g) {
-  const rows = /* @__PURE__ */ new Map();
-  const row = (id) => {
-    let r = rows.get(id);
-    if (!r) {
-      const it2 = getItem(id);
-      r = { id, name: it2?.name ?? id, kind: it2?.kind ?? "?", vendor: it2?.vendor ?? "", warehouse: 0, onOrder: 0, deployed: 0 };
-      rows.set(id, r);
-    }
-    return r;
-  };
-  for (const [id, n] of Object.entries(g.inventory)) if (n > 0) row(id).warehouse += n;
-  for (const [id, n] of Object.entries(g.spareStock ?? {})) if (n > 0) row(id).spares = (row(id).spares ?? 0) + n;
-  for (const o2 of g.orders) {
-    const r = row(o2.itemId);
-    r.onOrder += o2.qty;
-    r.nextEta = Math.min(r.nextEta ?? 1e9, o2.arriveMonth);
-  }
-  for (const h of g.halls) {
-    for (const [id, n] of Object.entries({ ...h.powerEquip, ...h.coolingEquip })) row(id).deployed += n;
-    for (const p of h.racks) for (const [id, n] of Object.entries(rackBom(g, p.designId) ?? {})) row(id).deployed += n;
-  }
-  return [...rows.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
-}
-function rackReadiness(g, designId, racks = 1) {
-  const bom = rackBom(g, designId);
-  if (!bom) return void 0;
-  const free = availableFor(g, designId);
-  const lines = Object.entries(bom).map(([id, per2]) => {
-    const need = per2 * racks, have = free[id] ?? 0;
-    const onOrder = g.orders.filter((o22) => o22.itemId === id && !o22.spare).reduce((n, o22) => n + o22.qty, 0);
-    const it2 = getItem(id);
-    const o2 = it2 ? offerAt(it2, g.month) : void 0;
-    return { id, name: it2?.name ?? id, need, have, short: Math.max(0, need - have), onOrder, buyable: !!o2?.available, unitPrice: o2?.unitPrice ?? 0, leadMonths: o2?.leadMonths ?? 0, reason: o2?.reason };
-  });
-  Object.values(bom);
-  const buildableNow = Math.min(...Object.entries(bom).map(([id, n]) => Math.floor((free[id] ?? 0) / n)));
-  const toBuy = lines.filter((l) => l.short - l.onOrder > 0);
-  const cost = toBuy.reduce((n, l) => {
-    const q = l.short - l.onOrder;
-    return n + Math.round(l.unitPrice * q * (1 - (it(l.id) ? volumeDiscount(it(l.id), q, l.unitPrice) : 0)));
-  }, 0);
-  const blocked = toBuy.filter((l) => !l.buyable);
-  const eta = Math.max(0, ...lines.filter((l) => l.short > 0).map((l) => l.onOrder >= l.short ? Math.max(0, (g.orders.filter((o2) => o2.itemId === l.id).map((o2) => o2.arriveMonth).sort((a, b) => b - a)[0] ?? g.month) - g.month) : l.leadMonths));
-  return { lines, buildableNow, complete: lines.every((l) => l.short === 0), toBuy, blocked, cost, etaMonths: eta };
-}
-const it = (id) => getItem(id);
-function machineLedger(g) {
-  const rows = [];
-  const spot = /* @__PURE__ */ new Set([...g.spotClusters ?? []]), spotRacks = new Set(g.spotRacks ?? []);
-  let n = 0;
-  for (const h of g.halls) for (const r of h.racks) {
-    n++;
-    const d = g.racks.find((x) => x.id === r.designId);
-    const st2 = d ? validateRack(d, g.trays, getItem).stats : void 0;
-    const cl = r.clusterId ? g.clusters.find((c) => c.id === r.clusterId) : void 0;
-    const ac = cl ? g.activeContracts.find((a) => a.clusterIds.includes(cl.id)) : void 0;
-    let role = "unassigned";
-    if (r.status !== "online") role = r.status === "failed" ? "failed — awaiting repair" : r.status;
-    else if (ac) role = ac.contract.kind === "training" ? "training" : "serving";
-    else if (cl && spot.has(cl.id) || spotRacks.has(r.id)) role = "spot market";
-    else if (cl) role = "clustered, idle";
-    rows.push({
-      serial: `RK-${String(r.serial ?? n).padStart(4, "0")}`,
-      id: r.id,
-      hallId: h.id,
-      hall: h.name,
-      slot: r.slot,
-      design: d?.name ?? r.designId,
-      status: r.status,
-      readyMonth: r.readyMonth,
-      clusterId: cl?.id,
-      cluster: cl?.name,
-      role,
-      customer: ac?.contract.customer,
-      model: ac?.contract.model.name,
-      accels: st2?.accels ?? 0,
-      kW: st2?.kW ?? 0
-    });
-  }
-  return rows;
-}
-const mem = /* @__PURE__ */ new Map();
-globalThis.localStorage = { getItem: (k2) => mem.get(k2) ?? null, setItem: (k2, v2) => void mem.set(k2, v2), removeItem: (k2) => void mem.delete(k2) };
-const st = () => useGame.getState();
-const G = () => st().game;
-const ctxOf = (g) => {
-  const placed2 = g.halls.flatMap((h) => h.racks);
-  return { getRack: (id) => {
-    const pid = placed2.find((p) => p.id === id)?.designId ?? id;
-    return g.racks.find((r) => r.id === pid);
-  }, getTray: (id) => g.trays.find((t) => t.id === id), getItem };
-};
-const tpl = (id) => TEMPLATES.find((t) => t.id === id);
-const Q = {
-  validateTray: (tray) => validateTray(tray, getItem),
-  validateRack: (rack, trays) => validateRack(rack, trays ?? G().trays, getItem),
-  validateHall: (hallId) => {
-    const g = G();
-    const hall = g.halls.find((h) => h.id === hallId);
-    return validateHall(hall, hall.racks.map((p) => ({ design: g.racks.find((r) => r.id === p.designId), trays: g.trays })), getItem);
-  },
-  hallStats: (hallId) => {
-    const g = G();
-    const hall = g.halls.find((h) => h.id === hallId);
-    const kw = hall.racks.reduce((n, p) => {
-      const d = g.racks.find((r) => r.id === p.designId);
-      return n + (d ? validateRack(d, g.trays, getItem).stats.kW : 0);
-    }, 0);
-    return { kw, pue: computePUE(hall, getItem), resilience: hallResilience(hall) };
-  },
-  rackStatsAll: () => {
-    const g = G();
-    return Object.fromEntries(g.racks.map((d) => [d.id, validateRack(d, g.trays, getItem).stats]));
-  },
-  partFitsSlot: (slot, itemId) => partFitsSlot(slot, getItem(itemId)),
-  offer: (itemId) => {
-    const it2 = getItem(itemId);
-    return it2 ? offerAt(it2, G().month) : null;
-  },
-  offersAll: () => Object.fromEntries(ALL_ITEMS.map((i) => [i.id, offerAt(i, G().month)])),
-  volumeDiscount: (itemId, n, unit) => volumeDiscount(getItem(itemId), n, unit),
-  quote: (tid, racks) => quote(tpl(tid), racks, G().month),
-  hallChecks: (tid, racks) => hallChecks(G(), tpl(tid), racks),
-  templateFacts: (tid) => templateFacts(tpl(tid)),
-  templatesAll: () => TEMPLATES.map((t) => ({ ...templateFacts(t), id: t.id, racksFor1: 1, quote1: quote(t, 1, G().month) })),
-  templateBom: (tid, racks) => templateBom(tpl(tid), racks),
-  racksFor: (tid, n) => racksFor(tpl(tid), n),
-  rackBom: (designId) => rackBom(G(), designId),
-  rackReadiness: (designId, racks) => rackReadiness(G(), designId, racks ?? 1),
-  ledger: () => ledger(G()),
-  machineLedger: () => machineLedger(G()),
-  floorQuote: (n) => ({ units: n, slots: n * FLOOR_UNIT_SLOTS, cost: n * FLOOR_UNIT_COST, months: floorCommissionMonths(n) }),
-  pnl: () => selectMonthlyPnL(G()),
-  netWorth: () => selectNetWorth(G()),
-  capexBasis: () => selectCapexBasis(G()),
-  opex: () => monthlyOpex(G()),
-  resilience: (hallId) => hallResilience(G().halls.find((h) => h.id === hallId)),
-  internet: () => {
-    const g = G();
-    return { have: uplinkGbps(g), need: totalNeedGbps(g), carriers: carrierCount(g), mrc: uplinkMonthlyUSD(g) };
-  },
+const contractsQueries = {
   contractNeed: (cid) => {
-    const g = G();
+    const g = G$1();
     const c = g.availableContracts.find((x) => x.id === cid) ?? g.activeContracts.find((a) => a.contract.id === cid)?.contract;
     return c ? contractNeedGbps(c) : 0;
   },
-  evaluateCluster: (cluster) => evaluateCluster(cluster, ctxOf(G())),
+  evaluateCluster: (cluster) => evaluateCluster(cluster, ctxOf(G$1())),
   clusterPerf: (cluster, modelId, ctxTokens = 4096) => {
-    const g = G();
+    const g = G$1();
     const stats = evaluateCluster(cluster, ctxOf(g));
     const accel = getItem(stats.acceleratorId);
     const m = MODELS.find((x) => x.id === modelId);
     return { stats, train: accel ? trainingTokensPerSec(stats, accel, m) : null, infer: accel ? inferenceCapacity(stats, accel, m, { contextTokens: ctxTokens }) : null };
   },
-  models: () => {
-    const y = 2020 + G().month / 12;
-    return { all: MODELS, tier: scaleOutTier(y), anchor: gpuHourAnchor(y) };
-  },
-  autoFabric: (rackIds, target) => autoFabric(G(), rackIds, target),
+  autoFabric: (rackIds, target) => autoFabric(G$1(), rackIds, target),
   contractFit: (cid) => {
-    const g = G();
+    const g = G$1();
     const c = g.availableContracts.find((x) => x.id === cid) ?? g.activeContracts.find((a) => a.contract.id === cid)?.contract;
     return c ? contractFit(g, c) : null;
   },
   buildOptions: (cid, signedAt) => {
-    const g = G();
+    const g = G$1();
     const c = g.availableContracts.find((x) => x.id === cid) ?? g.activeContracts.find((a) => a.contract.id === cid)?.contract;
     return c ? buildOptions(g, c, signedAt ?? void 0) : [];
   },
-  pipeline: () => pipeline(G()),
+  pipeline: () => pipeline(G$1())
+};
+const economyQueries = {
+  pnl: () => selectMonthlyPnL(G$1()),
+  netWorth: () => selectNetWorth(G$1()),
+  capexBasis: () => selectCapexBasis(G$1()),
+  opex: () => monthlyOpex(G$1()),
   powerPreview: () => {
-    const g = G();
+    const g = G$1();
     const o2 = monthlyOpex(g);
     const drawMW = o2.itPowerKW * o2.pue / 1e3;
     return { drawMW, opex: o2, settle: settlePower(g, drawMW, () => 0.5, () => {
     }), spotAnchor: spotAnchor(g.month), spotPrice: g.spotPrice ?? spotAnchor(g.month), spotUtil: spotUtilization(g.spotPrice ?? spotAnchor(g.month), g.month), hours: HOURS_PER_MONTH };
   },
   spotRevenue: () => {
-    const g = G();
+    const g = G$1();
     return spotRevenue(g, new Set(g.activeContracts.flatMap((a) => a.clusterIds)), (d) => {
       const rd = g.racks.find((r) => r.id === d);
       return rd ? validateRack(rd, g.trays, getItem).stats.accels : 0;
     });
   },
-  powerSources: () => POWER_SOURCES,
-  spares: () => {
-    const g = G();
-    return { shelf: g.spareStock ?? {}, rec: Object.fromEntries(Object.keys(g.inventory).map((id) => [id, recommendedSpares(g, id)])) };
-  },
-  sparesView: () => {
-    const g = G();
-    const ids = /* @__PURE__ */ new Set();
-    g.halls.forEach((h) => h.racks.forEach((p) => Object.keys(rackParts(g, p.designId)).forEach((id) => partClass(id) && ids.add(id))));
-    const failed = g.halls.flatMap((h) => h.racks).filter((p) => p.status === "failed").map((p) => ({ id: p.id, part: p.failedPart ? getItem(p.failedPart)?.name ?? "" : "burn-in failure", readyMonth: p.readyMonth }));
-    return { failed, rows: [...ids].map((id) => ({ id, name: getItem(id).name, label: PART_LABEL[partClass(id)], have: (g.spareStock?.[id] ?? 0) + g.orders.filter((o2) => o2.spare && o2.itemId === id).reduce((n, o2) => n + o2.qty, 0), adv: recommendedSpares(g, id) })) };
-  },
-  slotOptions: (chassisId, kind) => {
-    const ch = getItem(chassisId);
-    if (!ch) return [];
-    const slot = ch.slots.find((s2) => s2.kind === kind);
-    return ALL_ITEMS.filter((i) => partFitsSlot({ kind, accepts: slot?.accepts }, i)).map((i) => offerAt(i, G().month)).sort((a, b) => Number(b.available) - Number(a.available) || b.item.availableFrom - a.item.availableFrom);
-  },
-  traySizing: (design) => {
-    const g = G();
-    const month = g.month;
-    const utility = g.utilityUSDPerKWh;
-    const ch = getItem(design.chassisId);
-    if (!ch) return null;
-    const v2 = validateTray(design, getItem);
-    const year = 2020 + month / 12;
-    const parts = design.parts.map((p) => ({ ...p, it: getItem(p.itemId) })).filter((p) => p.it);
-    const n = (k2) => parts.filter((p) => p.it.kind === k2).reduce((a, p) => a + p.count, 0);
-    const gpus = v2.stats.accels || 0;
-    const draw = v2.stats.watts + ch.overheadW;
-    const psus = parts.filter((p) => p.slot === "psu");
-    const psuW = psus.reduce((a, p) => a + (p.it.capacityKW ?? 0) * 1e3 * p.count, 0), psuCount = psus.reduce((a, p) => a + p.count, 0);
-    const unitW = psuCount ? psuW / psuCount : 0, need = unitW ? Math.ceil(draw / (unitW * 0.9)) : 0;
-    const redundantOK = psuCount >= 2 && psuW - unitW >= draw * 0.9;
-    const cpu2 = parts.find((p) => p.it.kind === "cpu");
-    const cpuItem = cpu2?.it;
-    const cpuN = cpu2?.count ?? 0;
-    const lanesAvail = Math.min(ch.pcieLanesAvail, (cpuItem?.pcieLanes ?? 0) * cpuN || ch.pcieLanesAvail);
-    const dimms = n("memory");
-    const channels = (cpuItem?.memChannels ?? 0) * cpuN;
-    const nics = parts.filter((p) => p.it.kind === "nic");
-    const nicGbps = nics.reduce((a, p) => a + p.it.gbps * p.count, 0);
-    const perGpu = gpus ? nicGbps / 8 / gpus : 0, tier = scaleOutTier(year);
-    const bestNic = ITEMS_BY_KIND("nic").filter((x) => x.nicClass === "nic" && offerAt(x, month).available).sort((a, b) => b.gbps - a.gbps)[0];
-    const nicNeed = bestNic && gpus ? Math.ceil(tier * 8 * gpus / bestNic.gbps) : 0;
-    const hbm = v2.stats.memGB, hostRam = parts.filter((p) => p.it.kind === "memory").reduce((a, p) => a + p.it.capacityGB * p.count, 0);
-    const capex = v2.stats.costUSD;
-    const powerMo = draw / 1e3 * 1.3 * 730 * utility;
-    const hours = 5 * 8760;
-    const costHr = gpus ? (capex / hours + powerMo * 12 * 5 / hours) / gpus : 0;
-    const price = gpuHourAnchor(year);
-    const cpuOpt = ITEMS_BY_KIND("cpu").filter((c) => offerAt(c, month).available && c.arch === (cpuItem?.arch ?? "x86")).sort((a, b) => b.availableFrom - a.availableFrom)[0];
-    return {
-      gpus,
-      draw,
-      psuW,
-      psuCount,
-      unitW,
-      need,
-      redundantOK,
-      chassisMaxW: ch.maxPowerW,
-      lanesUsed: v2.stats.pcieLanesUsed,
-      lanesAvail: lanesAvail || ch.pcieLanesAvail,
-      chassisLanes: ch.pcieLanesAvail,
-      cpuN,
-      cpuLanes: cpuItem?.pcieLanes ?? 0,
-      cpuHint: cpuOpt ? { name: cpuOpt.name, lanes: cpuOpt.pcieLanes, channels: cpuOpt.memChannels, tdp: cpuOpt.tdpW, price: cpuOpt.priceUSD } : null,
-      dimms,
-      channels,
-      nicCount: nics.reduce((a, p) => a + p.count, 0),
-      nicGbps,
-      perGpu,
-      tier,
-      year,
-      bestNic: bestNic ? { name: bestNic.name, gbps: bestNic.gbps, lanes: bestNic.pcieLanes } : null,
-      nicNeed,
-      hbm,
-      hostRam,
-      capex,
-      powerMo,
-      costHr,
-      price
-    };
-  },
-  failureRates: (designId) => rackRates(G(), designId),
-  rackParts: (designId) => rackParts(G(), designId),
-  spareQty: (id, qty) => spareQty(id, qty),
-  concepts: () => CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G()) })),
-  missions: () => MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go, done: m.done(G()) }))
+  powerSources: () => POWER_SOURCES
 };
-const ACTIONS = ["newGame", "setMode", "buy", "buyTemplate", "adoptTemplate", "saveTray", "saveRack", "buildHall", "installPower", "installCooling", "placeRack", "createCluster", "acceptContract", "assignContract", "unassignContract", "disbandCluster", "takeLoan", "nextMonth", "save", "load", "signPower", "buyUplink", "dropUplink", "setSpot", "setSpotReserve", "setSpotRack", "assignRacks", "startEasy", "stepEasy"];
+const knowledgeQueries = {
+  models: () => {
+    const y = 2020 + G$1().month / 12;
+    return { all: MODELS, tier: scaleOutTier(y), anchor: gpuHourAnchor(y) };
+  },
+  concepts: () => CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G$1()) })),
+  missions: () => MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go, done: m.done(G$1()) }))
+};
+const PARTS = { design: designQueries, catalog: catalogQueries, facility: facilityQueries, contracts: contractsQueries, economy: economyQueries, knowledge: knowledgeQueries };
+const QUERIES = {};
+for (const [domain, qs] of Object.entries(PARTS)) for (const [name, fn] of Object.entries(qs)) {
+  if (name in QUERIES) throw new Error(`duplicate query '${name}' (domain ${domain})`);
+  QUERIES[name] = fn;
+}
+const st = () => useGame.getState();
+const G = () => st().game;
+const INTERNAL = /* @__PURE__ */ new Set(["game", "patchProject", "addProject"]);
+const ACTIONS = Object.keys(st()).filter((k2) => typeof st()[k2] === "function" && !INTERNAL.has(k2));
 function snapshot() {
   const g = JSON.parse(JSON.stringify(G()));
   g.log = g.log.slice(-150);
   return g;
 }
 function init() {
-  return { items: ALL_ITEMS, vendors: VENDORS, templates: TEMPLATES, models: MODELS, missions: MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go })), concepts: CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go })), actions: ACTIONS };
+  return {
+    items: ALL_ITEMS,
+    vendors: VENDORS,
+    templates: TEMPLATES,
+    models: MODELS,
+    missions: MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go })),
+    concepts: CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go })),
+    actions: ACTIONS
+  };
 }
-const rl = createInterface({ input: process.stdin });
-rl.on("line", (line) => {
+function claim() {
+  const done = [];
+  for (const m of MISSIONS) {
+    const g = G();
+    if (g.missionsDone.includes(m.id) || !m.done(g)) continue;
+    useGame.setState((s2) => ({ game: {
+      ...s2.game,
+      cash: s2.game.cash + m.reward,
+      missionsDone: [...s2.game.missionsDone, m.id],
+      log: [...s2.game.log, { month: s2.game.month, level: "good", text: `★ Mission complete: ${m.title} (+$${Math.round(m.reward).toLocaleString("en-US")}). ${m.lesson}` }]
+    } }));
+    done.push({ id: m.id, title: m.title, reward: m.reward });
+    break;
+  }
+  return done;
+}
+function env(name, a) {
+  const sc = (id) => id ? SCENARIOS.find((x) => x.id === id) : void 0;
+  switch (name) {
+    case "reset":
+      return reset({ seed: a[0]?.seed, mode: a[0]?.mode, scenario: sc(a[0]?.scenario) });
+    case "step":
+      return step(a[0]);
+    case "obs":
+      return observe();
+    case "text":
+      return describe();
+    case "actions":
+      return legalActions(a[0] ?? {});
+    case "hash":
+      return hash();
+    case "scenarios":
+      return SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed }));
+    default:
+      return void 0;
+  }
+}
+function handle(req) {
+  const base2 = { id: req.id };
+  try {
+    switch (req.fn) {
+      case "init":
+        return { ...base2, ok: true, result: init(), game: snapshot() };
+      case "act": {
+        if (!req.name || !ACTIONS.includes(req.name)) return { ...base2, ok: false, error: "unknown action " + req.name };
+        const r = st()[req.name](...req.args ?? []);
+        return { ...base2, ok: true, result: r ?? null, game: snapshot() };
+      }
+      case "q": {
+        const f = req.name ? QUERIES[req.name] : void 0;
+        return f ? { ...base2, ok: true, result: f(...req.args ?? []) } : { ...base2, ok: false, error: "unknown query " + req.name };
+      }
+      case "claim":
+        return { ...base2, ok: true, result: claim(), game: snapshot() };
+      case "env": {
+        const r = env(req.name, req.args ?? []);
+        return r === void 0 ? { ...base2, ok: false, error: "unknown env fn " + req.name } : { ...base2, ok: true, result: r, game: snapshot() };
+      }
+      case "ping":
+        return { ...base2, ok: true, result: "pong" };
+      default:
+        return { ...base2, ok: false, error: "unknown fn" };
+    }
+  } catch (e) {
+    return { ...base2, ok: false, error: String(e?.stack ?? e) };
+  }
+}
+createInterface({ input: process.stdin }).on("line", (line) => {
   let req;
   try {
     req = JSON.parse(line);
   } catch {
     return;
   }
-  const out = (o2) => process.stdout.write(JSON.stringify({ id: req.id, ...o2 }) + "\n");
-  try {
-    if (req.fn === "init") return out({ ok: true, result: init(), game: snapshot() });
-    if (req.fn === "act") {
-      if (!ACTIONS.includes(req.name)) return out({ ok: false, error: "unknown action " + req.name });
-      const r = st()[req.name](...req.args ?? []);
-      return out({ ok: true, result: r ?? null, game: snapshot() });
-    }
-    if (req.fn === "q") {
-      const f = Q[req.name];
-      if (!f) return out({ ok: false, error: "unknown query " + req.name });
-      return out({ ok: true, result: f(...req.args ?? []) });
-    }
-    if (req.fn === "claim") {
-      const done = [];
-      for (const m of MISSIONS) {
-        const g = G();
-        if (!g.missionsDone.includes(m.id) && m.done(g)) {
-          useGame.setState((s2) => ({ game: { ...s2.game, cash: s2.game.cash + m.reward, missionsDone: [...s2.game.missionsDone, m.id], log: [...s2.game.log, { month: s2.game.month, level: "good", text: `★ Mission complete: ${m.title} (+$${Math.round(m.reward).toLocaleString("en-US")}). ${m.lesson}` }] } }));
-          done.push({ id: m.id, title: m.title, reward: m.reward });
-          break;
-        }
-      }
-      return out({ ok: true, result: done, game: snapshot() });
-    }
-    if (req.fn === "env") {
-      const a = req.args ?? [];
-      const sc = (id) => id ? SCENARIOS.find((x) => x.id === id) : void 0;
-      const r = req.name === "reset" ? reset({ seed: a[0]?.seed, mode: a[0]?.mode, scenario: sc(a[0]?.scenario) }) : req.name === "step" ? step(a[0]) : req.name === "obs" ? observe() : req.name === "text" ? describe() : req.name === "actions" ? legalActions(a[0] ?? {}) : req.name === "hash" ? hash() : req.name === "scenarios" ? SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed })) : void 0;
-      if (r === void 0) return out({ ok: false, error: "unknown env fn " + req.name });
-      return out({ ok: true, result: r, game: snapshot() });
-    }
-    if (req.fn === "ping") return out({ ok: true, result: "pong" });
-    out({ ok: false, error: "unknown fn" });
-  } catch (e) {
-    out({ ok: false, error: String(e?.stack ?? e) });
-  }
+  process.stdout.write(JSON.stringify(handle(req)) + "\n");
 });
