@@ -213,6 +213,15 @@ func _rack_label(p: Vector3, r: Dictionary) -> void:
 	l.rotation = Vector3(-PI / 2, PI / 2, 0); l.position = p + Vector3(0, RH + 0.25, 0); l.no_depth_test = true; l.shaded = false; l.double_sided = true; l.line_spacing = -4
 	dyn.add_child(l)
 
+## Controller camera: left stick pans, right stick orbits, triggers zoom.
+func pad_move(pan: Vector2, orbit: Vector2, zoom: float, dt: float) -> void:
+	if pan == Vector2.ZERO and orbit == Vector2.ZERO and zoom == 0.0: return
+	auto_orbit = false
+	if pan != Vector2.ZERO: _pan(pan * dt * dist * 0.9)
+	if orbit != Vector2.ZERO: yaw -= orbit.x * dt * 1.8; pitch = clampf(pitch + orbit.y * dt * 1.2, 0.03, 1.45)
+	if zoom != 0.0: dist = clampf(dist * (1.0 - zoom * dt * 1.4), 2.5, 60.0)
+	_update_cam()
+
 func set_cover(px: float) -> void:
 	cover_px = px; _update_cam()
 

@@ -40,6 +40,12 @@ static func rich(t: String, size := 15) -> RichTextLabel:
 	r.add_theme_font_size_override("normal_font_size", size); r.add_theme_font_size_override("bold_font_size", size); r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE; return r
 
+static var pad_mode := false       # set by Pad: true while the player is using a controller
+static func focus_mode() -> int: return Control.FOCUS_ALL if pad_mode else Control.FOCUS_NONE
+## Bright outline drawn on the focused button in pad mode.
+static func focus_sb() -> StyleBoxFlat:
+	var s := StyleBoxFlat.new(); s.draw_center = false; s.border_color = Color(1, 0.96, 0.5); s.set_border_width_all(4); s.set_corner_radius_all(6); s.set_expand_margin_all(3); return s
+
 static var accent := CY          # colour of the drawer being built (set by the app shell before a screen rebuilds)
 ## Frame for a drawer / workshop: thick accent edge on the side facing the hall, hard offset shadow.
 static func drawer_sb(acc: Color, full: bool) -> StyleBoxFlat:
@@ -50,7 +56,7 @@ static func drawer_sb(acc: Color, full: bool) -> StyleBoxFlat:
 
 ## Dock button: chunky tab with a coloured underline and a hotkey badge.
 static func dock_btn(t: String, key: String, col: Color, cb: Callable) -> Button:
-	var b := Button.new(); b.text = "%s\n[%s]" % [t, key]; b.focus_mode = Control.FOCUS_NONE; b.custom_minimum_size = Vector2(138, 58)
+	var b := Button.new(); b.text = "%s\n[%s]" % [t, key]; b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.custom_minimum_size = Vector2(138, 58)
 	b.add_theme_font_size_override("font_size", 14); b.add_theme_font_override("font", Fonts.bold)
 	b.set_meta("col", col); dock_set(b, false); b.pressed.connect(cb); return b
 
@@ -67,7 +73,7 @@ static func dock_set(b: Button, on: bool) -> void:
 
 ## Tab inside a drawer header.
 static func tab_btn(t: String, on: bool, col: Color, cb: Callable) -> Button:
-	var b := Button.new(); b.text = t.to_upper(); b.focus_mode = Control.FOCUS_NONE; b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
+	var b := Button.new(); b.text = t.to_upper(); b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
 	var base := col if on else Color(0.07, 0.1, 0.14)
 	for st in ["normal", "hover", "pressed"]:
 		var s := sb(base if st != "hover" else base.lightened(0.12), Color(0.02, 0.03, 0.05), 3, 3, 10); s.shadow_color = Color(0, 0, 0, 0.6); s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
@@ -86,20 +92,21 @@ static func _styles(kind: String) -> Dictionary:
 	elif kind == "danger": base = Color(0.9, 0.28, 0.36); edge = Color(0.02, 0.03, 0.05); ink = Color(0.1, 0.02, 0.03)
 	var mk := func(bg: Color, off: Vector2) -> StyleBoxFlat:
 		var s := sb(bg, edge, 4, 2, 10); s.shadow_color = Color(0, 0, 0, 0.7); s.shadow_size = 1; s.shadow_offset = off; return s
-	var st := {"normal": mk.call(base, Vector2(3, 3)), "hover": mk.call(base.lightened(0.14), Vector2(3, 3)), "pressed": mk.call(base.darkened(0.12), Vector2(1, 1)), "disabled": mk.call(Color(0.06, 0.08, 0.1), Vector2(0, 0)), "ink": ink}
+	var st := {"normal": mk.call(base, Vector2(3, 3)), "hover": mk.call(base.lightened(0.14), Vector2(3, 3)), "pressed": mk.call(base.darkened(0.12), Vector2(1, 1)), "disabled": mk.call(Color(0.06, 0.08, 0.1), Vector2(0, 0)), "ink": ink, "focus": focus_sb()}
 	st.disabled.border_color = Color(0.12, 0.16, 0.2)
 	_btn_styles[kind] = st; return st
 
 static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
-	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.add_theme_font_override("font", Fonts.bold); b.focus_mode = Control.FOCUS_NONE
+	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.add_theme_font_override("font", Fonts.bold); b.focus_mode = focus_mode()
 	var st := _styles(kind)
+	b.add_theme_stylebox_override("focus", st.focus)
 	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
 	b.add_theme_stylebox_override("pressed", st.pressed); b.add_theme_stylebox_override("disabled", st.disabled)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, st.ink)
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.pressed.connect(cb); return b
 
 static func link(text: String, cb: Callable, size := 14) -> Button:
-	var b := Button.new(); b.text = text; b.flat = true; b.focus_mode = Control.FOCUS_NONE; b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.add_theme_font_size_override("font_size", size)
+	var b := Button.new(); b.text = text; b.flat = true; b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.add_theme_font_size_override("font_size", size)
 	b.add_theme_color_override("font_color", CY); b.add_theme_color_override("font_hover_color", Color.WHITE); b.pressed.connect(cb); return b
 
 static func tabs(parent: Control, names: Array, current: String, cb: Callable) -> HBoxContainer:
@@ -138,12 +145,12 @@ static func panel(title := "", glow := false, parent: Control = null) -> Array:
 
 ## Two-column screens become ONE column inside a drawer (both names point at the same scrolling list): left content first, then right.
 static func cols2(root: Control) -> Array:
-	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); root.add_child(sc)
 	return [v, v]
 
 static func column(parent: Control, min_w := 0.0, expand := true) -> VBoxContainer:
-	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
 	if expand: sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.custom_minimum_size = Vector2(min_w, 0)
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); parent.add_child(sc); return v
@@ -320,13 +327,20 @@ static func confirm(host: Node, text: String, on_yes: Callable, yes_label := "Co
 static func rebuild_keep(node: Control, rebuild: Callable) -> void:
 	var vals := []
 	for sc in node.find_children("*", "ScrollContainer", true, false): vals.append((sc as ScrollContainer).scroll_vertical)
+	var fi := -1   # in pad mode keep the controller focus on "the same" button after the screen is rebuilt
+	if pad_mode and node.is_inside_tree():
+		var fo := node.get_viewport().gui_get_focus_owner()
+		if fo != null and node.is_ancestor_of(fo): fi = node.find_children("*", "BaseButton", true, false).find(fo)
 	rebuild.call()
-	if vals.is_empty() or not node.is_inside_tree(): return
+	if (vals.is_empty() and fi < 0) or not node.is_inside_tree(): return
 	var tree := node.get_tree()
 	await tree.process_frame; await tree.process_frame
 	if not is_instance_valid(node): return
 	var scs := node.find_children("*", "ScrollContainer", true, false)
 	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
+	if fi >= 0 and pad_mode:
+		var bs := node.find_children("*", "BaseButton", true, false).filter(func(b): return b.is_visible_in_tree() and b.focus_mode == Control.FOCUS_ALL)
+		if not bs.is_empty(): bs[mini(fi, bs.size() - 1)].grab_focus()
 
 ## True when the mouse is over an interactive UI panel (so the 3D view must not react).
 static func over_ui(node: Node) -> bool:

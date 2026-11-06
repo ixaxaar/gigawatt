@@ -2,7 +2,7 @@
 
 **Build an AI datacenter from 2020 to 2028.** Buy real GPUs, NICs and switches, design your own server trays and racks, power and cool a hall, wire a fat-tree fabric into a supercomputer, and lease it to customers who want to **train** and **serve** frontier models — all while the price of electricity, the hardware roadmap and the odd backhoe conspire against you.
 
-The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-model datacenter). Every rule — physics of power and cooling, fabric bisection, MFU, inference capacity, contracts, markets, incidents — runs in the **same deterministic TypeScript engine** as the original web build, driven by Godot through a headless Node sidecar. One source of truth, no re-implemented rules.
+The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-model datacenter). Every rule — physics of power and cooling, fabric bisection, MFU, inference capacity, contracts, markets, incidents — runs in a deterministic TypeScript engine that Godot drives through a headless Node sidecar.
 
 ![The hall](docs/screenshots/hall.png)
 
@@ -104,7 +104,7 @@ godot/                 Godot 4 front-end (GDScript)
   sidecar/bridge.mjs   built TS engine (committed)
   world/hall_view.gd   realistic 3D hall: shader-drawn racks, raised floor, containment, cluster markers
   ui/                  every screen, Kit (widgets), tray/rack boards, topology view
-src/                   the TypeScript engine (types, data catalog, sim, store) + web UI
+src/                   the TypeScript engine (types, data catalog, sim, store)
 src/bridge.ts          actions, read-only queries and the agent API exposed to Godot / Python
 src/env/               agent environment: env, scenarios, reference agents, determinism + stress tests
 python/                Gymnasium-style client
@@ -118,12 +118,11 @@ pnpm install
 ./node_modules/.bin/vitest run                            # engine tests
 ```
 
-The original web version still lives in `src/ui` (`vite` dev server); see [`docs/WEB_README.md`](docs/WEB_README.md) and [`SCOPE.md`](SCOPE.md). Parity status of the Godot screens: [`godot/PARITY.md`](godot/PARITY.md).
 
 ## Data quality
 
-The catalogue spans NVIDIA/AMD/Intel accelerators, 20+ switch and NIC vendors, the major power and cooling OEMs (Eaton, Schneider, Vertiv, Cat, Cummins, MTU, Trane, Carrier, Daikin, ...), storage (DDN, VAST, WEKA, Pure, NetApp, ...) and server integrators (Dell, Supermicro, HPE, Lenovo, Quanta, Wiwynn, ASUS, Cisco, ...). It is broad, not guaranteed SKU-complete: about 96 entries are tagged `unverified` (recalled from memory, not checked against a datasheet), and prices are typical street figures. Accelerator and CPU specs drive the performance model and were hand-checked earlier; the expansion rounds were machine-assisted and then audited for units, ranges and physical plausibility. Corrections welcome.
+The catalogue spans NVIDIA/AMD/Intel accelerators, 20+ switch and NIC vendors, the major power and cooling OEMs (Eaton, Schneider, Vertiv, Cat, Cummins, MTU, Trane, Carrier, Daikin, ...), storage (DDN, VAST, WEKA, Pure, NetApp, ...) and server integrators (Dell, Supermicro, HPE, Lenovo, Quanta, Wiwynn, ASUS, Cisco, ...). It is broad, not guaranteed SKU-complete: about 96 entries are tagged `unverified` (recalled from memory, not checked against a datasheet), and prices are typical street figures. Accelerator and CPU specs drive the performance model and are hand-checked; the rest are audited for units, ranges and physical plausibility. Corrections welcome.
 
 ## Status
 
-Early but playable; full screen parity with the web build is done and being polished. Known gaps: advisor bubble, per-mode tip toggling, part art, drag-and-drop in the Design Lab, objectives/incident cards in the Godot layer.
+Early but playable. Known gaps: advisor bubble, per-mode tip toggling, part art, drag-and-drop in the Design Lab, objectives/incident cards in the Godot layer.

@@ -10,12 +10,14 @@ static var quality := 1
 const PATH := "user://settings.cfg"
 
 static func load_all() -> void:
+	# first run on a small screen (Steam Deck, 1280x800): scale the UI up so 12 px text stays readable
+	if DisplayServer.window_get_size().x < 1500 and not FileAccess.file_exists(PATH): ui_scale = 1.75
 	if OS.has_environment("GW_QUALITY"): quality = clampi(int(OS.get_environment("GW_QUALITY")), 0, 2)
 	var c := ConfigFile.new()
 	if c.load(PATH) != OK: return
 	var qenv := OS.has_environment("GW_QUALITY")
 	volume = clampf(float(c.get_value("a", "volume", 0.8)), 0.0, 1.0)
-	ui_scale = clampf(float(c.get_value("a", "ui_scale", 1.0)), 0.8, 1.5)
+	ui_scale = clampf(float(c.get_value("a", "ui_scale", ui_scale)), 0.8, 2.0)
 	colorblind = bool(c.get_value("a", "colorblind", false))
 	reduced_motion = bool(c.get_value("a", "reduced_motion", false))
 	if not qenv: quality = clampi(int(c.get_value("a", "quality", 1)), 0, 2)

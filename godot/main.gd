@@ -17,7 +17,7 @@ func accent_of(id: String) -> Color:
 	return Kit.CY
 func drawer_w(id := "") -> float:
 	var w := get_viewport().get_visible_rect().size.x
-	return clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0)
+	return minf(clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0), w - 300.0)
 const SECS := [0.0, 4.0, 1.6, 0.6]
 
 var b: Bridge
@@ -53,6 +53,7 @@ func _ready() -> void:
 	var th := Theme.new(); th.default_font_size = 17; th.default_font = Fonts.regular; th.set_font("bold_font", "RichTextLabel", Fonts.bold); th.set_font("normal_font", "RichTextLabel", Fonts.regular); root.theme = th
 	ui.add_child(root)
 	_build_shell(); _title()
+	pad = Pad.new(); pad.app = self; add_child(pad)
 	b.changed.connect(_on_changed)
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s) else: _inspect(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
@@ -191,6 +192,7 @@ func sfx(k: String) -> void: audio.play(k)
 
 ## Click a rack in the hall: a small inspector with what it is, who uses it, and what you can do with it.
 var inspector: PanelContainer
+var pad: Pad
 func _inspect(slot: int) -> void:
 	if inspector != null: inspector.queue_free(); inspector = null
 	var hall_d: Dictionary = b.g.halls[clampi(hall.hall_i, 0, b.g.halls.size() - 1)]
@@ -221,6 +223,18 @@ func _inspect(slot: int) -> void:
 		row.add_child(Kit.btn("Spot market: " + ("ON" if spot else "off"), func(): b.act("setSpotRack", [rk.id, not spot]); _inspect(slot), "pri" if spot else "", 12))
 	row.add_child(Kit.btn("Decommission", func(): Kit.confirm(self, "Decommission %s? It is sold at 85%% of residual value." % m.serial, func(): var r := b.act("decommissionRack", [rk.id]); toast(str(r.get("message", "")), "good" if r.get("ok", false) else "bad"); hall.rebuild(), "Sell"), "danger", 12))
 	root.add_child(inspector)
+
+## The topmost overlay that should capture controller focus (null while playing).
+func modal() -> Control:
+	var t := root.get_node_or_null("slots")
+	if t != null and is_instance_valid(t) and not t.is_queued_for_deletion(): return t
+	if menu_ui != null and is_instance_valid(menu_ui): return menu_ui
+	if settings_ui != null and is_instance_valid(settings_ui): return settings_ui
+	if end_ui != null and is_instance_valid(end_ui): return end_ui
+	if guide != null and guide.visible: return guide
+	var tt := root.get_node_or_null("title")
+	if tt != null and not started: return tt
+	return null
 
 func _top_sb(acc: Color) -> StyleBoxFlat:
 	var t := Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Color(0.02, 0.03, 0.05), 0, 0, 14); t.border_width_bottom = 5; t.border_color = acc
@@ -364,12 +378,18 @@ func _smoke() -> void:
 			print("SOAK year=%d month=%d status=%s racks=%d clusters=%d" % [y + 1, int(b.g.month), str(b.g.get("status", "")), b.g.halls.reduce(func(n, h): return n + h.racks.size(), 0), b.g.clusters.size()])
 			if b.g.get("status", "playing") != "playing": break
 	for sl in 40: _inspect(sl)
+	pad.set_active(true); await get_tree().process_frame
+	for i in DOCK.size() + 1: pad._drawer(1); await get_tree().process_frame; await get_tree().process_frame; pad.ensure_focus(false)
+	hall.pad_move(Vector2(0.5, 0.3), Vector2(0.4, -0.2), 0.5, 0.1); pad.inspect(); pad._back(); pad._back()
+	var fo := get_viewport().gui_get_focus_owner()
+	print("PAD OK focus=", fo.get_class() if fo != null else "none", " cur=", cur)
+	pad.set_active(false)
 	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
 	b.stop(); get_tree().quit()
 
 # ---------- settings + controls ----------
 var settings_ui: Control
-const CONTROLS := "[b]Space[/b] next month   [b]1-9, 0[/b] screens   [b]T[/b] thermal view   [b]Esc[/b] menu   [b]F1[/b] this panel\n[b]Left-drag[/b] or [b]WASD[/b] pan   [b]Right-drag[/b] orbit   [b]Wheel[/b] zoom   [b]Q/E[/b] rotate   [b]V[/b] top view   [b]L[/b] rack labels   [b]Ctrl+Q[/b] quit\n[b]Speed buttons[/b] pause / 1x / 2x / 3x auto-advance"
+const CONTROLS := "[b]Space[/b] next month   [b]1-9, 0[/b] screens   [b]T[/b] thermal view   [b]Esc[/b] menu   [b]F1[/b] this panel\n[b]Left-drag[/b] or [b]WASD[/b] pan   [b]Right-drag[/b] orbit   [b]Wheel[/b] zoom   [b]Q/E[/b] rotate   [b]V[/b] top view   [b]L[/b] rack labels   [b]Ctrl+Q[/b] quit\n[b]Speed buttons[/b] pause / 1x / 2x / 3x auto-advance\n[b]Controller:[/b] A select · B back · X inspect rack · Y next month · LB/RB drawers · LT/RT zoom · L-stick pan · R-stick orbit · D-pad navigate · Start menu · View speed"
 func _settings() -> void:
 	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
@@ -379,7 +399,7 @@ func _settings() -> void:
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
 	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
 	var vol := _slider_row(vb, "Volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
-	var scl := _slider_row(vb, "UI scale", 0.8, 1.5, Settings.ui_scale, func(v): Settings.ui_scale = snappedf(v, 0.05); Settings.apply(get_window()); Settings.save_all())
+	var scl := _slider_row(vb, "UI scale", 0.8, 2.0, Settings.ui_scale, func(v): Settings.ui_scale = snappedf(v, 0.05); Settings.apply(get_window()); Settings.save_all())
 	var cb := CheckBox.new(); cb.text = "Colour-blind-safe cluster palette"; cb.button_pressed = Settings.colorblind; cb.toggled.connect(func(on): Settings.colorblind = on; Settings.save_all(); hall.rebuild()); vb.add_child(cb)
 	var rm := CheckBox.new(); rm.text = "Reduced motion (no auto-orbit camera)"; rm.button_pressed = Settings.reduced_motion; rm.toggled.connect(func(on): Settings.reduced_motion = on; Settings.save_all()); vb.add_child(rm)
 	var qr := HBoxContainer.new(); qr.add_theme_constant_override("separation", 14); vb.add_child(qr)
