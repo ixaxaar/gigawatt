@@ -3,7 +3,21 @@ extends Node
 
 const SCREENS := [["dash", "", "Datacenter"], ["shop", "", "Procure"], ["design", "", "Design Lab"], ["facility", "", "Build"], ["stock", "", "Warehouse"], ["energy", "", "Energy"], ["network", "", "Supercomputer"], ["contracts", "", "Customers"], ["ops", "", "Operations"], ["codex", "", "Codex"]]
 const SCRIPTS := {"dash": "res://ui/screens/dash.gd", "shop": "res://ui/screens/procure.gd", "stock": "res://ui/screens/stock.gd", "contracts": "res://ui/screens/contracts.gd", "facility": "res://ui/screens/facility.gd", "ops": "res://ui/screens/ops.gd", "codex": "res://ui/screens/codex.gd", "energy": "res://ui/screens/energy.gd", "network": "res://ui/screens/network.gd", "design": "res://ui/screens/design.gd"}
-const OVERLAY := ["dash", "facility"]
+const OVERLAY := ["dash", "facility"]   # narrow right column drawers that leave the hall clickable
+## Dock: what the player sees. Supply and Facility are drawers with tabs; Design Lab, Supercomputer and Codex are full-screen workshops.
+const DOCK := [["dash", "OVERVIEW", Color("#9b6bff")], ["contracts", "CUSTOMERS", Color("#ff3d8b")], ["shop", "SUPPLY", Color("#ffd23f")], ["facility", "FACILITY", Color("#35d0ff")], ["ops", "OPERATIONS", Color("#3ddc97")], ["design", "DESIGN LAB", Color("#ff8a3d")], ["network", "SUPERCOMPUTER", Color("#c792ea")], ["codex", "CODEX", Color("#9fb4c8")]]
+const GROUPS := {"shop": [["shop", "Procure"], ["stock", "Warehouse"]], "facility": [["facility", "Build"], ["energy", "Energy"]]}
+const DRAWER_KEY := {"shop": "shop", "stock": "shop", "facility": "facility", "energy": "facility"}
+const FULL := ["design", "network", "codex"]
+var last_tab := {}
+func dock_key(id: String) -> String: return DRAWER_KEY.get(id, id)
+func accent_of(id: String) -> Color:
+	for d in DOCK:
+		if d[0] == dock_key(id): return d[2]
+	return Kit.CY
+func drawer_w(id := "") -> float:
+	var w := get_viewport().get_visible_rect().size.x
+	return clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0)
 const SECS := [0.0, 4.0, 1.6, 0.6]
 
 var b: Bridge
@@ -40,7 +54,7 @@ func _ready() -> void:
 	ui.add_child(root)
 	_build_shell(); _title()
 	b.changed.connect(_on_changed)
-	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s))
+	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s) else: _inspect(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
 	if OS.get_environment("GW_SMOKE") != "": _smoke(); return
@@ -49,6 +63,7 @@ func _ready() -> void:
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
+	if OS.get_environment("GW_INSPECT") != "": get_tree().create_timer(0.8).timeout.connect(func(): _inspect(int(OS.get_environment("GW_INSPECT"))))
 	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
 
 func _fatal(msg: String) -> void:
@@ -56,12 +71,12 @@ func _fatal(msg: String) -> void:
 
 # ---------- shell ----------
 func _build_shell() -> void:
-	top = PanelContainer.new(); top.set_anchors_preset(Control.PRESET_TOP_WIDE); top.offset_bottom = 66; top.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.94), Kit.LINE, 0, 1, 14)); root.add_child(top)
+	top = PanelContainer.new(); top.set_anchors_preset(Control.PRESET_TOP_WIDE); top.offset_bottom = 66; top.add_theme_stylebox_override("panel", _top_sb(Kit.CY)); root.add_child(top)
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 20); top.add_child(hb)
-	hb.add_child(Kit.label("GIGAWATT", 24, Kit.CY))
+	hb.add_child(Kit.label("GIGAWATT", 26, Color("#ffd23f")))
 	var dv := VBoxContainer.new(); dv.custom_minimum_size = Vector2(110, 0); lbl.date = Kit.label("", 20); bar_month = Kit.bar(0, 1); dv.add_child(lbl.date); dv.add_child(bar_month); hb.add_child(dv)
 	for p in [["CASH", "cash"], ["DEBT", "debt"], ["NET WORTH", "nw"], ["REPUTATION", "rep"]]:
-		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 19); v.add_child(lbl[p[1]]); hb.add_child(v)
+		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 22); v.add_child(lbl[p[1]]); hb.add_child(v)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
 	lbl.mode = Kit.btn("", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); hb.add_child(lbl.mode)
 	hb.add_child(Kit.btn("How to play", func(): guide.visible = true; guide.open(), "", 14))
@@ -73,10 +88,10 @@ func _build_shell() -> void:
 	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
 	hb.add_child(Kit.btn("QUIT ✕", func(): _menu_do("quit"), "danger", 14))
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
-	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -560; dock.offset_right = 560; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
-	for i in SCREENS.size():
-		var s: Array = SCREENS[i]
-		var d := Kit.btn("%s [%d]" % [s[2], (i + 1) % 10], func(): show_screen(s[0]), "", 14); d.custom_minimum_size = Vector2(118, 60); dock.add_child(d); dock_btns[s[0]] = d
+	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -600; dock.offset_right = 600; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
+	for i in DOCK.size():
+		var dk: Array = DOCK[i]
+		var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock.add_child(d); dock_btns[dk[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
 	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1, 0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
 	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
@@ -144,7 +159,7 @@ func _begin() -> void:
 func _on_changed() -> void:
 	if not started: return
 	var g := b.g
-	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(19, Kit.GR if g.cash >= 0 else Kit.RD)
+	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(22, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
 	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
 	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == speed else Color.WHITE
@@ -174,14 +189,75 @@ func toast(text: String, level := "info") -> void:
 
 func sfx(k: String) -> void: audio.play(k)
 
+## Click a rack in the hall: a small inspector with what it is, who uses it, and what you can do with it.
+var inspector: PanelContainer
+func _inspect(slot: int) -> void:
+	if inspector != null: inspector.queue_free(); inspector = null
+	var hall_d: Dictionary = b.g.halls[clampi(hall.hall_i, 0, b.g.halls.size() - 1)]
+	var rk := {}
+	for r in hall_d.racks:
+		if int(r.slot) == slot: rk = r
+	if rk.is_empty(): return
+	var m := {}
+	for x in b.q("machineLedger"): if x.id == rk.id: m = x
+	if m.is_empty(): return
+	var acc := Color("#ff8a3d")
+	inspector = PanelContainer.new(); inspector.add_theme_stylebox_override("panel", Kit.card_sb(acc, Kit.PANEL_FILL, 3, 14))
+	inspector.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); inspector.offset_left = 18; inspector.offset_bottom = -98; inspector.offset_top = -300; inspector.offset_right = 400; inspector.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); inspector.add_child(v)
+	var hb := HBoxContainer.new(); v.add_child(hb); hb.add_child(Kit.chip("RACK " + str(m.serial), acc, 14))
+	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
+	hb.add_child(Kit.btn("✕", func(): inspector.queue_free(); inspector = null, "", 12))
+	v.add_child(Kit.label(str(m.design), 15, Kit.TX, true))
+	var role: String = m.role
+	if m.get("customer") != null: role += " · " + str(m.customer)
+	elif m.get("cluster") != null: role += " · " + str(m.cluster)
+	v.add_child(Kit.label("%s · slot %d · %s" % [m.hall, int(m.slot) + 1, str(m.status).to_upper() + ("" if m.status == "online" else " → " + Kit.date_of(m.readyMonth))], 12, Kit.DIM, true))
+	v.add_child(Kit.label(role, 14, Kit.GR if m.get("customer") != null else Kit.AM, true))
+	v.add_child(Kit.stats([["Accelerators", Kit.num(m.accels)], ["Power", "%s kW" % Kit.num(m.kW, 1)]], 2))
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
+	var spot: bool = b.g.get("spotRacks", []).has(rk.id)
+	if m.status == "online" and rk.get("clusterId") == null:
+		row.add_child(Kit.btn("Spot market: " + ("ON" if spot else "off"), func(): b.act("setSpotRack", [rk.id, not spot]); _inspect(slot), "pri" if spot else "", 12))
+	row.add_child(Kit.btn("Decommission", func(): Kit.confirm(self, "Decommission %s? It is sold at 85%% of residual value." % m.serial, func(): var r := b.act("decommissionRack", [rk.id]); toast(str(r.get("message", "")), "good" if r.get("ok", false) else "bad"); hall.rebuild(), "Sell"), "danger", 12))
+	root.add_child(inspector)
+
+func _top_sb(acc: Color) -> StyleBoxFlat:
+	var t := Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Color(0.02, 0.03, 0.05), 0, 0, 14); t.border_width_bottom = 5; t.border_color = acc
+	t.shadow_color = Color(0, 0, 0, 0.5); t.shadow_size = 8; t.shadow_offset = Vector2(0, 4); return t
+
+func _dock(key: String) -> void:
+	if dock_key(cur) == key and key != "dash": show_screen("dash")   # clicking the open drawer closes it
+	else: show_screen(last_tab.get(key, key))
+
 func show_screen(id: String) -> void:
-	for s in screens.values(): s.visible = false
-	cur = id
-	hall.visible = OVERLAY.has(id)
+	for sc in screens.values(): sc.visible = false
+	cur = id; last_tab[dock_key(id)] = id
+	Kit.accent = accent_of(id)
+	if top != null: top.add_theme_stylebox_override("panel", _top_sb(Kit.accent))
+	hall.visible = not FULL.has(id)
+	var cover := 0.0
+	if OVERLAY.has(id): cover = 520.0
+	elif not FULL.has(id): cover = drawer_w()
+	hall.set_cover(cover)
 	if not screens.has(id): screens[id] = _make_screen(id); holder.add_child(screens[id])
-	screens[id].visible = true
-	if screens[id].has_method("refresh"): screens[id].refresh()
-	for k in dock_btns: dock_btns[k].modulate = Color(0.5, 1.0, 0.9) if k == id else Color.WHITE
+	var scr: Control = screens[id]
+	if scr is ScreenWrap:   # (re)apply the inner margins: some screens reset their own anchors in _ready()
+		var inn: Control = (scr as ScreenWrap).inner
+		inn.set_anchors_preset(Control.PRESET_FULL_RECT); inn.offset_left = 18; inn.offset_right = -18; inn.offset_bottom = -14
+		inn.offset_top = 58 if (GROUPS.has(dock_key(id)) and not FULL.has(id)) else 14
+	if not OVERLAY.has(id) and not FULL.has(id): scr.offset_left = -drawer_w(id)
+	scr.visible = true
+	if scr.has_method("refresh"): scr.refresh()
+	for k in dock_btns: Kit.dock_set(dock_btns[k], k == dock_key(id))
+
+## Tab strip for a drawer that groups several screens (Procure|Warehouse, Build|Energy).
+func tab_strip(id: String) -> Control:
+	var grp: Array = GROUPS.get(dock_key(id), [])
+	if grp.is_empty(): return Control.new()
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 6)
+	for t in grp: hb.add_child(Kit.tab_btn(t[1], t[0] == id, accent_of(id), func(): show_screen(t[0])))
+	return hb
 
 func go(id: String) -> void: show_screen(id)
 
@@ -196,9 +272,15 @@ func _make_screen(id: String) -> Control:
 		c = Control.new(); c.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var l := Kit.label("%s — coming next in the Godot port." % id, 22, Kit.DIM); l.position = Vector2(40, 40); c.add_child(l)
 	if not OVERLAY.has(id):
-		var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 1.0), Kit.LINE, 12, 1, 14)); bg.mouse_filter = Control.MOUSE_FILTER_STOP
-		c.set_anchors_preset(Control.PRESET_FULL_RECT); c.offset_left = 16; c.offset_top = 14; c.offset_right = -16; c.offset_bottom = -14
-		var w := ScreenWrap.new(); w.set_anchors_preset(Control.PRESET_FULL_RECT); w.add_child(bg); w.add_child(c); w.inner = c; return w
+		var full := FULL.has(id); var acc := accent_of(id)
+		var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.add_theme_stylebox_override("panel", Kit.drawer_sb(acc, full)); bg.mouse_filter = Control.MOUSE_FILTER_STOP
+		c.set_anchors_preset(Control.PRESET_FULL_RECT); c.offset_left = 18; c.offset_top = 14; c.offset_right = -18; c.offset_bottom = -14
+		var w := ScreenWrap.new(); w.add_child(bg)
+		if full: w.set_anchors_preset(Control.PRESET_FULL_RECT)
+		else:
+			w.set_anchors_preset(Control.PRESET_RIGHT_WIDE); w.offset_left = -drawer_w(id)
+			if GROUPS.has(dock_key(id)): var ts := tab_strip(id); ts.set_anchors_preset(Control.PRESET_TOP_WIDE); ts.offset_left = 20; ts.offset_top = 12; ts.offset_right = -20; w.add_child(ts); c.offset_top = 58
+		w.add_child(c); w.inner = c; return w
 	return c
 
 func set_speed(v: int) -> void: speed = v; clock = 0.0; _on_changed()
@@ -229,7 +311,7 @@ func _input(e: InputEvent) -> void:
 var tip_panel: PanelContainer
 var tip_lbl: RichTextLabel
 func _on_rack_hover(slot: int, rk: Dictionary) -> void:
-	if slot < 0 or rk.is_empty() or cur != "dash": tip_panel.visible = false; return
+	if slot < 0 or rk.is_empty() or FULL.has(cur): tip_panel.visible = false; return
 	var dn := ""; for d in b.g.racks:
 		if d.id == rk.designId: dn = d.name
 	var ci: Dictionary = hall.cluster_info(rk)
@@ -250,7 +332,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 		return
 	if e.keycode == KEY_F1: _settings(); return
 	if e.keycode == KEY_SPACE: next_month(); return
-	if e.keycode >= KEY_1 and e.keycode <= KEY_9: show_screen(SCREENS[e.keycode - KEY_1][0])
+	if e.keycode >= KEY_1 and e.keycode <= KEY_9 and e.keycode - KEY_1 < DOCK.size(): _dock(DOCK[e.keycode - KEY_1][0])
 	elif e.keycode == KEY_0: show_screen("codex")
 	elif e.keycode == KEY_V: hall.top_view()
 	elif e.keycode == KEY_L: hall.labels_on = not hall.labels_on; hall.rebuild()
@@ -281,6 +363,7 @@ func _smoke() -> void:
 			hall.hall_i = 0; hall.rebuild(); await get_tree().process_frame
 			print("SOAK year=%d month=%d status=%s racks=%d clusters=%d" % [y + 1, int(b.g.month), str(b.g.get("status", "")), b.g.halls.reduce(func(n, h): return n + h.racks.size(), 0), b.g.clusters.size()])
 			if b.g.get("status", "playing") != "playing": break
+	for sl in 40: _inspect(sl)
 	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
 	b.stop(); get_tree().quit()
 

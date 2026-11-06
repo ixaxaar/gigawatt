@@ -39,6 +39,7 @@ func _rebuild() -> void:
 	# ---- right column
 	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -500; rp.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var rv := VBoxContainer.new(); rv.add_theme_constant_override("separation", 8); rp.add_child(rv)
+	rv.add_child(app.tab_strip("facility"))
 	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 6); rv.add_child(hd); hd.add_child(Kit.label("BUILD", 22, Kit.CY))
 	for i in g.halls.size(): hd.add_child(Kit.btn("%s · %s" % [g.halls[i].name, g.halls[i].coolingClass], func(): app.hall.hall_i = i; app.hall.rebuild(); refresh(), "pri" if i == hi else "", 13))
 	var col := Kit.column(rv, 0, true)

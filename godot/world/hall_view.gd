@@ -54,6 +54,7 @@ func _ready() -> void:
 	_update_cam()
 
 var _env: Environment
+var cover_px := 0.0   # screen pixels covered by a drawer on the right; the hall is re-centred in what's left
 var _key: DirectionalLight3D
 ## Apply Settings.quality: low = no screen-space effects/fog/shadows/MSAA; balanced = SSAO + glow, FXAA;
 ## high = everything (SSIL, SSR, volumetric fog, 2x MSAA).
@@ -211,6 +212,9 @@ func _rack_label(p: Vector3, r: Dictionary) -> void:
 	var l := Label3D.new(); l.text = nm + "\n" + who; l.font_size = 40; l.pixel_size = 0.0034; l.modulate = col; l.outline_size = 10; l.outline_modulate = Color(0, 0, 0, 0.9)
 	l.rotation = Vector3(-PI / 2, PI / 2, 0); l.position = p + Vector3(0, RH + 0.25, 0); l.no_depth_test = true; l.shaded = false; l.double_sided = true; l.line_spacing = -4
 	dyn.add_child(l)
+
+func set_cover(px: float) -> void:
+	cover_px = px; _update_cam()
 
 ## Camera straight down, whole hall in frame.
 func top_view() -> void:
@@ -388,6 +392,8 @@ func _update_cam() -> void:
 	if cam == null: return
 	var off := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * dist
 	cam.position = target + off; cam.look_at(target)
+	var vh := maxf(1.0, get_viewport().get_visible_rect().size.y)
+	cam.h_offset = cover_px * 0.5 * (2.0 * dist * tan(deg_to_rad(cam.fov * 0.5)) / vh)
 	if _over != null and is_instance_valid(_over): _over.visible = pitch < 1.0
 	for l in _lamps:
 		if is_instance_valid(l): l.visible = pitch < 1.0
@@ -432,7 +438,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	if b == null: return
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
-		if mb.pressed and Kit.over_ui(self): return
+		if (mb.pressed or mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN) and Kit.over_ui(self): return
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP: dist = maxf(2.5, dist * 0.9); auto_orbit = false; _update_cam()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN: dist = minf(60.0, dist * 1.1); auto_orbit = false; _update_cam()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT: _drag = (2 if Input.is_key_pressed(KEY_SHIFT) else 1) if mb.pressed else 0

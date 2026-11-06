@@ -27,7 +27,7 @@ func _rebuild() -> void:
 	hd.add_child(Kit.label("OPERATIONS", 26, Kit.CY))
 	hd.add_child(Kit.label("People, money and end-of-life hardware." + ("  " + msg if msg != "" else ""), 13, Kit.RD if msg_bad else Kit.DIM, true))
 	var sc := Kit.column(root, 0, true)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 12); sc.add_child(top)
+	var top := VBoxContainer.new(); top.add_theme_constant_override("separation", 12); sc.add_child(top)
 	# --- team
 	var s: Dictionary = b.q("staffing")
 	var tp := Kit.panel("Team", true, top)

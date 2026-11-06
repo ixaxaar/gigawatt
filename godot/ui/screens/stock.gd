@@ -66,8 +66,7 @@ func _rebuild() -> void:
 	hd.add_child(Kit.label("WAREHOUSE & ASSEMBLY", 26, Kit.CY))
 	hd.add_child(Kit.label("Parts live in one of three states: on order (paid, in transit) → warehouse (arrived) → deployed (racked on the floor or installed in a hall).", 13, Kit.DIM, true))
 	if msg != "": root.add_child(Kit.label(msg, 14, Kit.CY, true))
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
-	var left := Kit.column(cols, 0, true); var right := Kit.column(cols, 0, true)
+	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
 	left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
 	var ra := Kit.panel("Rack assembly — your designs", true, left)
 	if g.racks.is_empty(): ra[1].add_child(Kit.label("No rack designs yet. Buy a system in Procure (it saves its design automatically) or build one in the Design Lab.", 14, Kit.DIM, true))

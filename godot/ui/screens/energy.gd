@@ -25,7 +25,7 @@ func _rebuild() -> void:
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
 	hd.add_child(Kit.label("ENERGY & SPOT MARKET", 26, Kit.CY)); hd.add_child(Kit.label("Buy power on take-or-pay contracts (cheap, but paid even if unused) or stay on spot." + ("  " + msg if msg != "" else ""), 13, Kit.DIM, true))
 	var sc := Kit.column(root, 0, true)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 12); sc.add_child(top)
+	var top := VBoxContainer.new(); top.add_theme_constant_override("separation", 12); sc.add_child(top)
 	# power position
 	var p1 := Kit.panel("Power position", true, top)
 	p1[1].add_child(Kit.stats([["Facility draw", "%.2f MW" % draw_mw], ["Spot utility", "$%.0f/MWh" % spot_mwh], ["Committed (firm)", "%.1f MW" % committed], ["Max incl. overdraw", "%.1f MW" % cap]], 2))

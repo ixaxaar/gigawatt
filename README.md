@@ -72,7 +72,7 @@ cd godot
 
 `run.sh` points Vulkan at the NVIDIA ICD and forces `forward_plus`; on hybrid AMD+NVIDIA laptops the default loader otherwise falls back to OpenGL compatibility. Edit it for your GPU, or just run `godot --path godot`.
 
-**Controls:** `1`–`9`, `0` switch screens · `Space` next month · right-drag orbit · wheel zoom · `WASD` pan · `Q/E` rotate · `T` thermal view · `Esc` menu · `Ctrl+Q` quit.
+**Controls:** `1`–`8` open a drawer (Overview, Customers, Supply, Facility, Operations) or workshop (Design Lab, Supercomputer, Codex); press the same key again to close it · `Space` next month · the hall opens in top view with every rack labelled by hardware and customer: left-drag or `WASD` pan, right-drag orbit, wheel zoom, `Q/E` rotate, `V` top view, `L` labels, `T` thermal view · click a rack to inspect it · `Esc` menu · `Ctrl+Q` quit. Graphics Low/Balanced/High under Settings.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the engine is organised and where to add actions, queries and monthly systems.
 

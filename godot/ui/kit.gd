@@ -24,7 +24,11 @@ static var _ls_cache := {}
 static func ls(size: int, col: Color) -> LabelSettings:
 	var k := Vector3i(size, col.r8 | (col.g8 << 8) | (col.b8 << 16), col.a8)
 	if _ls_cache.has(k): return _ls_cache[k]
-	var s := LabelSettings.new(); s.font_size = size; s.font_color = col; _ls_cache[k] = s; return s
+	var s := LabelSettings.new(); s.font_size = size; s.font_color = col
+	if size >= 20:   # headlines and big numbers: bold with a dark outline and hard shadow, like a comic caption
+		s.font = Fonts.bold; s.outline_size = 5; s.outline_color = Color(0.01, 0.015, 0.03)
+		s.shadow_size = 1; s.shadow_color = Color(0, 0, 0, 0.85); s.shadow_offset = Vector2(3, 3)
+	_ls_cache[k] = s; return s
 
 static func label(t: String, size := 16, col: Color = TX, wrap := false) -> Label:
 	var l := Label.new(); l.text = t; l.label_settings = ls(size, col)
@@ -36,22 +40,62 @@ static func rich(t: String, size := 15) -> RichTextLabel:
 	r.add_theme_font_size_override("normal_font_size", size); r.add_theme_font_size_override("bold_font_size", size); r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE; return r
 
+static var accent := CY          # colour of the drawer being built (set by the app shell before a screen rebuilds)
+## Frame for a drawer / workshop: thick accent edge on the side facing the hall, hard offset shadow.
+static func drawer_sb(acc: Color, full: bool) -> StyleBoxFlat:
+	var s := sb(Color(0.035, 0.05, 0.075, 0.985), Color(0.02, 0.03, 0.045), 4, 3, 14)
+	if not full: s.border_width_left = 8; s.border_color = acc
+	s.shadow_color = Color(0, 0, 0, 0.55); s.shadow_size = 18; s.shadow_offset = Vector2(-8, 0) if not full else Vector2.ZERO
+	return s
+
+## Dock button: chunky tab with a coloured underline and a hotkey badge.
+static func dock_btn(t: String, key: String, col: Color, cb: Callable) -> Button:
+	var b := Button.new(); b.text = "%s\n[%s]" % [t, key]; b.focus_mode = Control.FOCUS_NONE; b.custom_minimum_size = Vector2(138, 58)
+	b.add_theme_font_size_override("font_size", 14); b.add_theme_font_override("font", Fonts.bold)
+	b.set_meta("col", col); dock_set(b, false); b.pressed.connect(cb); return b
+
+static func dock_set(b: Button, on: bool) -> void:
+	var col: Color = b.get_meta("col")
+	var base := col if on else Color(0.07, 0.1, 0.14)
+	for st in ["normal", "hover", "pressed"]:
+		var s := sb(base if st != "hover" else base.lightened(0.12), Color(0.02, 0.03, 0.05), 4, 3, 8)
+		s.border_width_bottom = 8; s.border_color = col if not on else Color(0.02, 0.03, 0.05)
+		s.shadow_color = Color(0, 0, 0, 0.6); s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
+		b.add_theme_stylebox_override(st, s)
+	b.add_theme_color_override("font_color", Color(0.05, 0.06, 0.1) if on else TX); b.add_theme_color_override("font_hover_color", Color(0.05, 0.06, 0.1) if on else Color.WHITE)
+	b.add_theme_color_override("font_pressed_color", Color(0.05, 0.06, 0.1) if on else Color.WHITE)
+
+## Tab inside a drawer header.
+static func tab_btn(t: String, on: bool, col: Color, cb: Callable) -> Button:
+	var b := Button.new(); b.text = t.to_upper(); b.focus_mode = Control.FOCUS_NONE; b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
+	var base := col if on else Color(0.07, 0.1, 0.14)
+	for st in ["normal", "hover", "pressed"]:
+		var s := sb(base if st != "hover" else base.lightened(0.12), Color(0.02, 0.03, 0.05), 3, 3, 10); s.shadow_color = Color(0, 0, 0, 0.6); s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
+		b.add_theme_stylebox_override(st, s)
+	var fc := Color(0.05, 0.06, 0.1) if on else TX
+	b.add_theme_color_override("font_color", fc); b.add_theme_color_override("font_hover_color", fc); b.add_theme_color_override("font_pressed_color", fc)
+	b.pressed.connect(cb); return b
+
 static var _btn_styles := {}
 ## Button StyleBoxes depend only on the kind, so they are built once and shared (hundreds of buttons per screen).
 static func _styles(kind: String) -> Dictionary:
 	if _btn_styles.has(kind): return _btn_styles[kind]
-	var base := Color(0.09, 0.14, 0.2); var brd := LINE
-	if kind == "pri": base = Color(0.1, 0.33, 0.48); brd = CY
-	elif kind == "go": base = Color(0.07, 0.4, 0.28); brd = GR
-	elif kind == "danger": base = Color(0.4, 0.1, 0.14); brd = RD
-	var st := {"normal": sb(base, brd, 8, 1, 10), "hover": sb(base.lightened(0.16), CY, 8, 1, 10), "pressed": sb(base.darkened(0.2), CY, 8, 2, 10), "disabled": sb(Color(0.06, 0.08, 0.1), Color(0.12, 0.16, 0.2), 8, 1, 10)}
+	var base := Color(0.1, 0.15, 0.21); var edge := Color(0.3, 0.42, 0.55); var ink := Color(0.88, 0.94, 1.0)
+	if kind == "pri": base = Color(0.16, 0.62, 0.86); edge = Color(0.02, 0.03, 0.05); ink = Color(0.03, 0.05, 0.09)
+	elif kind == "go": base = Color(0.2, 0.82, 0.52); edge = Color(0.02, 0.03, 0.05); ink = Color(0.02, 0.07, 0.04)
+	elif kind == "danger": base = Color(0.9, 0.28, 0.36); edge = Color(0.02, 0.03, 0.05); ink = Color(0.1, 0.02, 0.03)
+	var mk := func(bg: Color, off: Vector2) -> StyleBoxFlat:
+		var s := sb(bg, edge, 4, 2, 10); s.shadow_color = Color(0, 0, 0, 0.7); s.shadow_size = 1; s.shadow_offset = off; return s
+	var st := {"normal": mk.call(base, Vector2(3, 3)), "hover": mk.call(base.lightened(0.14), Vector2(3, 3)), "pressed": mk.call(base.darkened(0.12), Vector2(1, 1)), "disabled": mk.call(Color(0.06, 0.08, 0.1), Vector2(0, 0)), "ink": ink}
+	st.disabled.border_color = Color(0.12, 0.16, 0.2)
 	_btn_styles[kind] = st; return st
 
 static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
-	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.focus_mode = Control.FOCUS_NONE
+	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.add_theme_font_override("font", Fonts.bold); b.focus_mode = Control.FOCUS_NONE
 	var st := _styles(kind)
 	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
 	b.add_theme_stylebox_override("pressed", st.pressed); b.add_theme_stylebox_override("disabled", st.disabled)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, st.ink)
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.pressed.connect(cb); return b
 
 static func link(text: String, cb: Callable, size := 14) -> Button:
@@ -66,12 +110,37 @@ static func tabs(parent: Control, names: Array, current: String, cb: Callable) -
 	parent.add_child(h); return h
 
 ## A titled panel; returns [panel, body_vbox].
+const PANEL_FILL := Color(0.07, 0.095, 0.135, 0.98)
+const PANEL_EDGE := Color(0.2, 0.3, 0.42)
+## A panel in the game's sticker style: solid fill, 2px edge, hard offset shadow, title on an accent chip.
+static func card_sb(edge: Color = PANEL_EDGE, fill: Color = PANEL_FILL, bw := 2, pad := 14) -> StyleBoxFlat:
+	var s := sb(fill, edge, 5, bw, pad); s.shadow_color = Color(0, 0, 0, 0.75); s.shadow_size = 1; s.shadow_offset = Vector2(4, 4); return s
+
+## Small filled label (dark text on a colour).
+static func chip(t: String, col: Color, size := 13) -> PanelContainer:
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(col, Color(0.02, 0.03, 0.05), 3, 2, 7))
+	var s := p.get_theme_stylebox("panel") as StyleBoxFlat; s.content_margin_top = 1; s.content_margin_bottom = 1
+	var l := Label.new(); l.text = t; l.label_settings = ls_bold(size, Color(0.04, 0.05, 0.09)); p.add_child(l); return p
+
+static var _lsb_cache := {}
+static func ls_bold(size: int, col: Color) -> LabelSettings:
+	var k := Vector3i(size, col.r8 | (col.g8 << 8) | (col.b8 << 16), col.a8)
+	if _lsb_cache.has(k): return _lsb_cache[k]
+	var s := LabelSettings.new(); s.font_size = size; s.font_color = col; s.font = Fonts.bold; _lsb_cache[k] = s; return s
+
 static func panel(title := "", glow := false, parent: Control = null) -> Array:
-	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(PANEL, CY if glow else LINE, 12, 2 if glow else 1, 14)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); p.add_child(v)
-	if title != "": v.add_child(label(title.to_upper(), 14, CY))
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(accent if glow else PANEL_EDGE, PANEL_FILL, 3 if glow else 2)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); p.add_child(v)
+	if title != "":
+		var hb := HBoxContainer.new(); hb.add_child(chip(title.to_upper(), accent, 13)); v.add_child(hb)
 	if parent: parent.add_child(p)
 	return [p, v]
+
+## Two-column screens become ONE column inside a drawer (both names point at the same scrolling list): left content first, then right.
+static func cols2(root: Control) -> Array:
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); root.add_child(sc)
+	return [v, v]
 
 static func column(parent: Control, min_w := 0.0, expand := true) -> VBoxContainer:
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -94,12 +163,14 @@ static func bar(v: float, mx: float, warn := false) -> ProgressBar:
 	for s in [bg, fg]: s.content_margin_top = 0; s.content_margin_bottom = 0
 	p.add_theme_stylebox_override("background", bg); p.add_theme_stylebox_override("fill", fg); return p
 
-static func tag(t: String, col: Color = CY) -> Label:
-	var l := label(t, 12, col); return l
+static func tag(t: String, col: Color = CY) -> Control:
+	return chip(t, col, 11)
 
 static func tip(text: String) -> PanelContainer:
-	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(Color(0.05, 0.14, 0.2, 0.9), Color(0.2, 0.5, 0.65), 8, 1, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p.add_child(label("TIP  " + text, 14, Color(0.75, 0.9, 1.0), true)); return p
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(Color(0.9, 0.78, 0.25), Color(0.13, 0.12, 0.07), 2, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 10); p.add_child(hb)
+	var c := chip("TIP", Color(1.0, 0.82, 0.25), 12); c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; hb.add_child(c)
+	hb.add_child(label(text, 13, Color(0.95, 0.92, 0.8), true)); return p
 
 static func issue(sev: String, head: String, msg: String) -> PanelContainer:
 	var col := RD if sev == "error" else (AM if sev == "warn" else CY)
@@ -214,9 +285,9 @@ static func refresh_keep(node: Control) -> void:
 ## Collapsible panel. `folds` is a persistent Dictionary (key -> bool collapsed); toggling calls `on_toggle`.
 static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle: Callable, glow := false, parent: Control = null, default_collapsed := false) -> Array:
 	var collapsed: bool = folds.get(key, default_collapsed)
-	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(PANEL, CY if glow else LINE, 12, 2 if glow else 1, 14)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(accent if glow else PANEL_EDGE, PANEL_FILL, 3 if glow else 2, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); p.add_child(v)
-	var hb := btn(("▸ " if collapsed else "▾ ") + title.to_upper(), func(): folds[key] = not collapsed; on_toggle.call(), "", 14)
+	var hb := btn(("▸ " if collapsed else "▾ ") + title.to_upper(), func(): folds[key] = not collapsed; on_toggle.call(), "pri" if not collapsed else "", 13)
 	hb.alignment = HORIZONTAL_ALIGNMENT_LEFT; v.add_child(hb)
 	var body := VBoxContainer.new(); body.add_theme_constant_override("separation", 7); body.visible = not collapsed; v.add_child(body)
 	if parent: parent.add_child(p)
@@ -259,8 +330,5 @@ static func rebuild_keep(node: Control, rebuild: Callable) -> void:
 
 ## True when the mouse is over an interactive UI panel (so the 3D view must not react).
 static func over_ui(node: Node) -> bool:
-	var h := node.get_viewport().gui_get_hovered_control()
-	while h != null:
-		if h is PanelContainer or h is ScrollContainer or h is BaseButton or h is LineEdit or h is SpinBox or h is RichTextLabel or h is Range: return true
-		h = h.get_parent() as Control
-	return false
+	# The 3D hall is not a Control, so ANY hovered Control (drawer, panel, label, empty drawer space) means the pointer is on UI.
+	return node.get_viewport().gui_get_hovered_control() != null

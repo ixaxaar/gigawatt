@@ -33,8 +33,7 @@ func _rebuild() -> void:
 	hd.add_child(Kit.label("CUSTOMERS & CONTRACTS", 26, Kit.CY))
 	hd.add_child(Kit.label("Sign now, deploy within the ramp window — or wait until you can serve at once.", 13, Kit.DIM, true))
 	if msg != "": root.add_child(Kit.label(msg, 14, Kit.CY, true))
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
-	var left := Kit.column(cols, 0, true); var right := Kit.column(cols, 0, true)
+	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
 	left.add_child(Kit.tip("Customers pay for capacity: training customers rent a big coherent cluster by the GPU-hour; inference customers pay per million tokens. Each offer shows what it needs and what you still lack — hit EASY PATH and the game orders, installs, deploys and assigns it for you."))
 	left.add_child(Kit.label("MARKET OFFERS (%d)" % g.availableContracts.size(), 14, Kit.CY))
 	if g.availableContracts.is_empty(): left.add_child(Kit.label("No offers right now — new ones appear every month.", 14, Kit.DIM))

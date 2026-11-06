@@ -56,10 +56,11 @@ func _planner(root: Control) -> void:
 	var q: Dictionary = b.q("quote", [t.id, racks])
 	var checks: Array = b.q("hallChecks", [t.id, racks])
 	var cant_afford: bool = q.cost > b.g.cash
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
-	# --- column 1: platforms
-	var c1 := Kit.column(cols, 300, false)
-	c1.add_child(Kit.label("1 · PLATFORM", 14, Kit.CY))
+	var lr := Kit.cols2(root)   # one scrolling column: the drawer is too narrow for three
+	# --- step 1: platforms (2-up grid)
+	var c1: VBoxContainer = lr[0]
+	c1.add_child(Kit.panel("1 · Platform", false, null)[0] if false else Kit.chip("1 · PLATFORM", Kit.accent, 13))
+	var pg := GridContainer.new(); pg.columns = 2; pg.add_theme_constant_override("h_separation", 8); pg.add_theme_constant_override("v_separation", 8); pg.size_flags_horizontal = Control.SIZE_EXPAND_FILL; c1.add_child(pg)
 	for p in platforms:
 		var st := _state(p); var a: Dictionary = st.ts[0]; var ff: Dictionary = b.q("templateFacts", [a.id]); var on: bool = p == plat
 		var cid: String = a.tray.chassisId; var vend := "nvidia" if cid.begins_with("nv") else ("cerebras" if cid.begins_with("cb") else ("tenstorrent" if cid.begins_with("tt") else ("intel" if cid.begins_with("int") else "amd")))
@@ -72,9 +73,9 @@ func _planner(root: Control) -> void:
 		v.add_child(Kit.label(sub, 12, Kit.DIM, true))
 		var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Control.FOCUS_NONE
 		click.pressed.connect(func(): if st.live: plat = p; tier_sel = ""; app.sfx("click"); refresh())
-		card.add_child(click); c1.add_child(card)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL; card.add_child(click); pg.add_child(card)
 	# --- column 2: description, how many, how to buy
-	var c2 := Kit.column(cols, 0, true)
+	var c2: VBoxContainer = lr[0]
 	c2.add_child(Kit.tip("Pick a platform (a GPU generation, pre-engineered), say how many accelerators you want, then choose DIY (cheapest, you integrate), an OEM rack, or a turnkey one (priciest, fastest). Check the hall can feed and cool it before you order."))
 	var pa := Kit.panel(plat, false, c2); pa[1].add_child(Kit.label(t.codex.explain, 14, Kit.TX, true))
 	pa[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]]))
@@ -87,7 +88,7 @@ func _planner(root: Control) -> void:
 	var pf: float = f.tflopsFp8 if f.tflopsFp8 > 0 else f.tflopsBf16
 	ph[1].add_child(Kit.label("= %d rack%s · %s PFLOPS %s · %s TB memory · %d kW" % [racks, "s" if racks > 1 else "", Kit.num(racks * pf / 1000.0, 1), "FP8" if f.tflopsFp8 > 0 else "BF16", Kit.num(racks * f.memGB / 1000.0, 1), int(racks * f.kWPerRack)], 14, Kit.DIM, true))
 	var pt := Kit.panel("3 · How do you want to buy it?", false, c2)
-	var tg := HBoxContainer.new(); tg.add_theme_constant_override("separation", 10); pt[1].add_child(tg)
+	var tg := GridContainer.new(); tg.columns = 3; tg.add_theme_constant_override("h_separation", 10); tg.add_theme_constant_override("v_separation", 10); pt[1].add_child(tg)
 	for x in ts:
 		var qq: Dictionary = b.q("quote", [x.id, racks]); var on2: bool = x.id == t.id
 		var tc := PanelContainer.new(); tc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tc.add_theme_stylebox_override("panel", Kit.sb(Color(0.08, 0.2, 0.28) if on2 else Kit.PANEL, Kit.CY if on2 else Kit.LINE, 10, 2 if on2 else 1, 10))
@@ -100,7 +101,7 @@ func _planner(root: Control) -> void:
 		tg.add_child(tc)
 	pt[1].add_child(Kit.label("⚖  " + t.codex.tradeoffs[0], 13, Kit.DIM, true))
 	# --- column 3: hall check, BOM, order
-	var c3 := Kit.column(cols, 430, false)
+	var c3: VBoxContainer = lr[0]
 	var hc := Kit.panel("4 · Does your hall have room?", true, c3)
 	for c in checks: hc[1].add_child(Kit.issue("info" if c.ok else "error", "✓ OK · %s" % c.label if c.ok else "✗ Action needed · %s" % c.label, c.detail))
 	hc[1].add_child(Kit.btn("Open Build →", func(): app.go("facility"), "", 14))
