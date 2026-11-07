@@ -102,13 +102,16 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { pattern: dist-*, path: dist, merge-multiple: true }
+      - uses: actions/checkout@v4
+      - name: Release notes from CHANGELOG.md
+        run: |
+          ver=${GITHUB_REF_NAME#v}
+          awk -v v="$ver" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md > notes.md
+          printf '\n---\nDownload the archive for your OS, extract, and run. Node.js is bundled; nothing else to install.\n- **Windows**: unzip, run `GIGAWATT\\GIGAWATT.exe` (SmartScreen: More info, Run anyway; builds are unsigned).\n- **Linux (x86_64)**: `tar xf`, run `GIGAWATT/gigawatt.sh`. Needs a Vulkan-capable GPU/driver.\n- **macOS** (arm64 = Apple Silicon, x64 = Intel): unzip, then `xattr -dr com.apple.quarantine GIGAWATT.app` and open (builds are unsigned).\n' > tail.md
+          [ -s notes.md ] || { echo "no CHANGELOG entry for $ver"; exit 1; }
+          cat tail.md >> notes.md
       - run: cd dist && sha256sum * > SHA256SUMS.txt && ls -la
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
-          body: |
-            Download the archive for your OS, extract, and run. Node.js is bundled; nothing else to install.
-            - **Windows**: unzip, run `GIGAWATT\GIGAWATT.exe` (SmartScreen: More info → Run anyway; builds are unsigned).
-            - **Linux (x86_64)**: `tar xf`, run `GIGAWATT/gigawatt.sh`. Needs a Vulkan-capable GPU/driver.
-            - **macOS** (arm64 = Apple Silicon, x64 = Intel): unzip, then `xattr -dr com.apple.quarantine GIGAWATT.app` and open (builds are unsigned).
+          body_path: notes.md
