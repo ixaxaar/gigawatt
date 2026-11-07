@@ -18,16 +18,29 @@ func _free_racks() -> Array:
 			if r.status == "online" and not r.get("clusterId"): out.append(r)
 	return out
 
+## Pick a leaf/spine switch and cables that actually speak the chosen scale-out tech (fastest released part, then cheapest), so the default fabric is valid.
+func _fit_fabric(fab: Dictionary) -> void:
+	var tech := str(fab.scaleOutTech); var sw := []; var aoc := []; var optic := []
+	for it in app.b.items.values():
+		if it.kind == "switch" and it.role == "scale-out" and it.rackUnits > 0 and str(it.tech) == tech: sw.append(it)
+		elif it.kind == "cable" and it.compatibleTech.has(tech):
+			if it.cableType == "aoc": aoc.append(it)
+			elif it.cableType == "optic-dr" or it.cableType == "optic": optic.append(it)
+	var yr := float(app.b.year())
+	var avail := func(a): return float(a.get("availableFrom", 2020)) <= yr + 0.01
+	sw = sw.filter(avail) if sw.any(avail) else sw; aoc = aoc.filter(avail) if aoc.any(avail) else aoc; optic = optic.filter(avail) if optic.any(avail) else optic
+	var cheap := func(a, c): return float(a.get("priceUSD", 0)) < float(c.get("priceUSD", 0))
+	var fast := func(a, c): return float(a.get("gbps", 0)) > float(c.get("gbps", 0)) or (float(a.get("gbps", 0)) == float(c.get("gbps", 0)) and cheap.call(a, c))
+	sw.sort_custom(func(a, c): return float(a.get("portGbps", 0)) > float(c.get("portGbps", 0)) or (float(a.get("portGbps", 0)) == float(c.get("portGbps", 0)) and cheap.call(a, c)))
+	aoc.sort_custom(fast); optic.sort_custom(fast)
+	if sw.size() > 0: fab["leafSwitchId"] = sw[0].id; fab["spineSwitchId"] = sw[0].id
+	if aoc.size() > 0: fab["nodeToLeafCableId"] = aoc[0].id
+	elif optic.size() > 0: fab["nodeToLeafCableId"] = optic[0].id
+	if optic.size() > 0: fab["leafToSpineCableId"] = optic[0].id
+
 func _default_fabric() -> Dictionary:
-	var b: Bridge = app.b; var sw := []; var cables := []
-	for it in b.items.values():
-		if it.kind == "switch" and it.role == "scale-out" and it.rackUnits > 0: sw.append(it)
-		elif it.kind == "cable": cables.append(it)
-	var aoc := ""; var optic := ""
-	for c in cables:
-		if aoc == "" and c.cableType == "aoc": aoc = c.id
-		if optic == "" and c.cableType == "optic-dr": optic = c.id
-	return {"id": "fab", "name": "Fabric", "scaleOutTech": "ib-ndr", "topology": "fat-tree-rail-optimized", "oversubscription": 1, "leafSwitchId": sw[0].id if sw.size() > 0 else "", "spineSwitchId": sw[0].id if sw.size() > 0 else "", "nodeToLeafCableId": aoc, "leafToSpineCableId": optic}
+	var fab := {"id": "fab", "name": "Fabric", "scaleOutTech": "ib-ndr", "topology": "fat-tree-rail-optimized", "oversubscription": 1, "leafSwitchId": "", "spineSwitchId": "", "nodeToLeafCableId": "", "leafToSpineCableId": ""}
+	_fit_fabric(fab); return fab
 
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
@@ -66,7 +79,7 @@ func _rebuild() -> void:
 			if it.kind == "switch" and it.role == "scale-out" and it.rackUnits > 0: sw.append([it.id, it.name])
 			elif it.kind == "cable": cables.append([it.id, it.name])
 		var gr := GridContainer.new(); gr.columns = 2; gr.add_theme_constant_override("h_separation", 8); gr.add_theme_constant_override("v_separation", 6); p2[1].add_child(gr)
-		for row in [["Scale-out tech", Kit.option(TECH, f.scaleOutTech, func(v): f["scaleOutTech"] = v; refresh())], ["Topology", Kit.option(TOPO, f.topology, func(v): f["topology"] = v; refresh())], ["Leaf switch", Kit.option(sw, f.leafSwitchId, func(v): f["leafSwitchId"] = v; refresh())], ["Spine switch", Kit.option(sw, f.get("spineSwitchId", ""), func(v): f["spineSwitchId"] = v; refresh())], ["Node→leaf cable", Kit.option(cables, f.nodeToLeafCableId, func(v): f["nodeToLeafCableId"] = v; refresh())], ["Leaf→spine cable", Kit.option(cables, f.get("leafToSpineCableId", ""), func(v): f["leafToSpineCableId"] = v; refresh())]]:
+		for row in [["Scale-out tech", Kit.option(TECH, f.scaleOutTech, func(v): f["scaleOutTech"] = v; _fit_fabric(f); refresh())], ["Topology", Kit.option(TOPO, f.topology, func(v): f["topology"] = v; refresh())], ["Leaf switch", Kit.option(sw, f.leafSwitchId, func(v): f["leafSwitchId"] = v; refresh())], ["Spine switch", Kit.option(sw, f.get("spineSwitchId", ""), func(v): f["spineSwitchId"] = v; refresh())], ["Node→leaf cable", Kit.option(cables, f.nodeToLeafCableId, func(v): f["nodeToLeafCableId"] = v; refresh())], ["Leaf→spine cable", Kit.option(cables, f.get("leafToSpineCableId", ""), func(v): f["leafToSpineCableId"] = v; refresh())]]:
 			gr.add_child(Kit.label(row[0], 12, Kit.DIM)); gr.add_child(row[1])
 		p2[1].add_child(Kit.label("Oversubscription %s:1" % f.oversubscription, 12, Kit.DIM))
 		var sl := Kit.slider(f.oversubscription, 1, 4, 0.5, func(_v): pass); sl.drag_ended.connect(func(ch): if ch: f["oversubscription"] = sl.value; refresh()); p2[1].add_child(sl)

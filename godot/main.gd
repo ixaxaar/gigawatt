@@ -162,7 +162,7 @@ func _load_scenario(id: String) -> void:
 
 func _new_game(mode: String) -> void:
 	b.act("newGame", [int(Time.get_unix_time_from_system()) % 100000, mode]); b.act("setMode", [mode]); _begin()
-	if (Settings.tutorial != "off" and not OS.has_environment("GW_SMOKE")) or OS.has_environment("GW_COACH"): coach.start()
+	if (Settings.tutorial != "off" and not OS.has_environment("GW_SMOKE") and not OS.has_environment("GW_NOCOACH")) or OS.has_environment("GW_COACH"): coach.start()
 
 func _begin() -> void:
 	var tt := root.get_node_or_null("title")
