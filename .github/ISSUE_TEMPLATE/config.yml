@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and strategies
+    url: https://github.com/ixaxaar/gigawatt/discussions
+    about: Ask how something works, share a build, or suggest an idea.
+  - name: Player wiki
+    url: https://gigawatt.ing/wiki/
+    about: Guides to power, cooling, racks, networking, contracts and settings.

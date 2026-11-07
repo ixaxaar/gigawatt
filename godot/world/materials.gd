@@ -36,14 +36,17 @@ static func get_mat(name: String, per_m := 1.0, tint := Color.WHITE, rough := 1.
 	if tier.normal_maps:
 		var n := _load(name, "n")
 		if n != null: m.normal_enabled = true; m.normal_texture = n; m.normal_scale = 1.0
-	var r := _load(name, "r")
+	var r := _load(name, "r") if tier.full_maps else null
 	if r != null: m.roughness_texture = r; m.roughness = rough
-	var mt := _load(name, "m")
+	else: m.roughness = clampf(0.6 * rough, 0.0, 1.0)
+	var mt := _load(name, "m") if tier.full_maps else null
 	if mt != null: m.metallic_texture = mt; m.metallic = metal; m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	else: m.metallic = clampf(0.55 * metal, 0.0, 1.0)
 	m.uv1_triplanar = true; m.uv1_world_triplanar = true; m.uv1_scale = Vector3(per_m, per_m, per_m)
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC if tier.aniso else BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	if name == "alu": m.anisotropy_enabled = tier.aniso; m.anisotropy = 0.6
 	_mats[k] = m; return m
 
 static func floor_textures() -> Dictionary:
-	return {"c": _load("floor", "c"), "n": _load("floor", "n") if Settings.tier().normal_maps else null, "r": _load("floor", "r")}
+	var t := Settings.tier()
+	return {"c": _load("floor", "c"), "n": _load("floor", "n") if t.normal_maps else null, "r": _load("floor", "r") if t.full_maps else null}

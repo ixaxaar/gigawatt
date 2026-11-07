@@ -50,7 +50,9 @@ var next_btn: Button
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
 	Settings.load_all(); Settings.apply(get_window()); Settings.write_log(get_window())
-	get_window().size_changed.connect(func(): get_window().content_scale_factor = Settings.effective_ui_scale(get_window()))
+	get_window().size_changed.connect(func():
+		get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
+		if get("hall") != null and hall != null: hall.apply_scale())
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
@@ -83,7 +85,7 @@ func _ready() -> void:
 		hall.yaw = 0.55; hall.pitch = 0.6; hall.dist = (w + far.z) * 0.5 + 6.0; hall.target = Vector3(w * 0.5 + 2.0, 0.8, far.z * 0.5)
 		hall.auto_orbit = true; hall.orbit_speed = float(OS.get_environment("GW_ORBIT")); hall._update_cam()
 	if OS.get_environment("GW_CLEAN") != "": get_tree().process_frame.connect(func(): _shell_visible(false); coach.stop(false); guide.visible = false, CONNECT_ONE_SHOT)   # website capture: bare hall
-	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
+	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false; hall.set_cover(0.0)   # screenshots: just the 3D hall
 	if OS.get_environment("GW_CARD") != "":   # docs: show a story card (chapter:N or dilemma:N)
 		var cd := OS.get_environment("GW_CARD").split(":")
 		get_tree().create_timer(1.0).timeout.connect(func():
@@ -429,8 +431,15 @@ func open_decision() -> void:
 func _claim() -> void:
 	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("fanfare"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
 
+var _stats_on := OS.has_environment("GW_STATS")
+var _stats_t := 0.0
 func _process(dt: float) -> void:
 	_process_tip()
+	if _stats_on:
+		_stats_t += dt
+		if _stats_t > 2.0:
+			_stats_t = 0.0
+			print("STATS draws=%d prims=%d vram_mb=%d fps=%d" % [RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME), RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME), int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED)) / 1048576, int(Engine.get_frames_per_second())])
 	if _refresh_due and Time.get_ticks_msec() >= _refresh_at: _refresh_cur()
 	var idle := started and speed == 0 and Time.get_ticks_msec() - _last_input > 3000
 	if idle != Settings.idle: Settings.idle = idle; Settings.apply_fps()
@@ -486,6 +495,9 @@ func _smoke() -> void:
 	quiet = true; _load_scenario("stress-campus")
 	for sc in SCREENS:
 		show_screen(sc[0]); await get_tree().process_frame; await get_tree().process_frame
+	var small := 0
+	for scr in screens.values(): small += _small_fonts(scr)
+	print("FONTS below %d px: %d" % [Kit.MIN_FONT, small]); assert(small == 0, "text smaller than the readable minimum")
 	if OS.get_environment("GW_PERF") == "play": b.act("newGame", [11, "operator"]); b.act("setMode", ["operator"]); b.env("autoplay", ["tycoon", 48]); hall.hall_i = 0
 	if OS.has_environment("GW_PERF"):   # per-operation wall time on the biggest scenario
 		var t := Time.get_ticks_usec(); hall.rebuild(); print("PERF hall.rebuild %.1f ms nodes=%d" % [(Time.get_ticks_usec() - t) / 1000.0, hall.dyn.get_child_count()])
@@ -522,6 +534,19 @@ func _smoke() -> void:
 	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
 	b.stop(); get_tree().quit()
 
+## Count visible text controls whose font is below Kit.MIN_FONT (checked by the smoke test).
+func _small_fonts(n: Node) -> int:
+	var bad := 0
+	if n is Label:
+		var l := n as Label; var sz: int = l.label_settings.font_size if l.label_settings != null else l.get_theme_font_size("font_size")
+		if sz < Kit.MIN_FONT and l.text.strip_edges() != "": bad += 1
+	elif n is Button:
+		if (n as Button).get_theme_font_size("font_size") < Kit.MIN_FONT and (n as Button).text.strip_edges() != "": bad += 1
+	elif n is RichTextLabel:
+		if (n as RichTextLabel).get_theme_font_size("normal_font_size") < Kit.MIN_FONT: bad += 1
+	for c in n.get_children(): bad += _small_fonts(c)
+	return bad
+
 # ---------- settings + controls ----------
 var settings_ui: Control
 var _settings_tab := "Display"
@@ -530,6 +555,7 @@ const KEYS := [["Space", "Next month"], ["1-8", "Open a drawer or workshop"], ["
 const PAD_KEYS := [["A", "Select"], ["B", "Back"], ["X", "Inspect rack"], ["Y", "Next month"], ["LB / RB", "Switch drawer"], ["LT / RT", "Zoom"], ["Left stick", "Pan"], ["Right stick", "Orbit"], ["D-pad", "Navigate"], ["Start", "Menu"], ["View", "Speed"]]
 func _settings() -> void:
 	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; return
+	if OS.has_environment("GW_SETTINGS_TAB"): _settings_tab = OS.get_environment("GW_SETTINGS_TAB")
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -400; pn.offset_right = 400; pn.offset_top = -340; pn.offset_bottom = 340

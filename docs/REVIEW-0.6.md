@@ -1,3 +1,35 @@
+# Status after v0.6.0
+
+"Done" means shipped and checked; "Partial" says what is missing. The review below is kept as written, except item 1, where the root cause turned out to be different (see its note).
+
+| Item | Status | Notes |
+|---|---|---|
+| 0.1 Benchmark harness | Done | `scripts/bench.sh`, results in `docs/perf/bench.md`; `GW_STATS=1` prints draw calls and video memory, `GW_NOTHROTTLE=1` lifts the idle frame cap. |
+| 1 Wrong GPU / OpenGL fallback | Done, cause differs | On the review machine a stale `VK_ICD_FILENAMES` pointed at a non-existent driver file; Vulkan itself works. `gigawatt.sh` and `run.sh` now drop a stale value, start on Vulkan and honour `GIGAWATT_GPU`. In-game: compatibility-mode note, `user://logs/gigawatt.log`, "Copy diagnostics". Wiki page added. |
+| 2 Presets, render scale, auto-detect, FPS cap | Done | Five presets, FSR render scale (auto for weak GPUs on big panels), idle and background frame caps, Deck detection. Missing: TAA-vs-MSAA split per tier is simplified; reflection probes not added. |
+| 3 Monthly hitches | Partial | Open-screen refresh is coalesced to a few per second while auto-advancing; Codex never refreshes; picking looks at the slots under the ray; per-rack lookups are indexed once per rebuild. Not done: diffing the hall instead of rebuilding it, delta queries from the engine, lazy Warehouse rows, asynchronous `nextMonth`. |
+| 4 Draw calls | Partial | Shared meshes, cached materials, one shared rack-face material with per-rack instance parameters, visibility ranges on small props. Not done: MultiMesh for repeated parts. |
+| 5 Text on small screens | Done | 13 px floor, automatic UI scale on small windows, text-size boost. Not done: a separate handheld layout (full-screen sheets) and a `layout_test.gd`; the 1280x800 captures show every screen fitting. |
+| 6 Gold rush | Done | Late-start scenarios get a first review after one year; idle is fired and scores under 40% of an operator (tested). Ratings are still absolute. |
+| 7 Spurious unlock toasts | Done | |
+| G1 Texture library | Done | Seven CC0 ambientCG sets, triplanar, per-tier texture size, normal maps and anisotropy. |
+| G2 Rack face depth and LOD | Done | Emboss normal at LOD 0, LOD 1 and 2 drop the vent and bay detail. Not done: baked atlas for LOD 1/2. |
+| G3 Lighting | Partial | Lower flat ambient, a sky for reflections, exposure retuned. Not done: AgX tone mapping, reflection probes, floor-decal contact shadows. |
+| G4 Walls and title backdrop | Done | |
+| G5 Distance culling | Partial | Visibility ranges and per-tier light budgets. Not done: per-row culling groups. |
+| U1 Splash and icon | Done | Splash, app icon and Windows `.ico` are set; the Windows exe icon needs rcedit, which the CI export does not have. The loading card was skipped: engine start takes about 120 ms. |
+| U2 Transitions | Done | Slide and fade for drawers, fade and grow for workshops; reduced motion shortens them to a fade. Modal dimming is still instant. |
+| U3 Labels | Done | Close-up labels, cluster billboards when zoomed out. |
+| U4 Settings | Done | Five tabs, visible toggles, display mode, V-Sync, FPS cap. Window position is not persisted. |
+| U5 Small findings | Partial | Easy Path pills, pluralisation, one money line, decision card sizing, BF16 label, title shade. Not done: ultrawide KPI width cap, virtual keyboard for text inputs, hall auto-framing. |
+| B1 Revenue cliffs | Partial | Renewal offers arrive four months early (tested). Scripted personas still hit one cliff per run; they do not take renewals in time. |
+| B2 Idle fleet | Not done | |
+| B3 Careful players | Partial | Operator mode forgives a clearly growing company; strike messages name next year's target. The scripted "cautious" persona (one small contract at a time) is still fired, which is intended. |
+| B4 Persona gaps | Not done | |
+| P2 hygiene | Partial | Bug template and diagnostics added. Not done: macOS and Windows signing, leak-at-exit fix, crash-safety test. |
+
+---
+
 # GIGAWATT pre-beta review (v0.5.0 → v0.6)
 
 A review of v0.5.0 written as a work list for an implementer. It covers performance, platforms and screen sizes (including Steam Deck), stability, gameplay balance from scripted play, a graphics and texture pass with quality tiers, and UI polish. Every item has **problem**, **evidence**, **fix** and **done when**. Work top to bottom; P0 items block a public beta.
@@ -30,7 +62,7 @@ Measured on 2026-11-08: Ryzen 9 9900X, RTX 4090, plus the CPU's own Radeon iGPU 
 | Radeon iGPU, Vulkan | stress-campus, 4K | 15 | **3** | unplayable |
 | Radeon iGPU, Vulkan | fresh game, 1280×800 | 124 | 36 | Balanced 67 |
 | Radeon iGPU, Vulkan | stress-campus, 1280×800 | 127 | 37 | Balanced 66 |
-| **Default launch (no env)** | 4K fullscreen | 18–32 | 17 | **OpenGL fallback on the iGPU, even with a 4090 present** (item 1) |
+| **Default launch (no env)** | 4K fullscreen | 18–32 | 17 | **OpenGL fallback on the iGPU, even with a 4090 present: a stale `VK_ICD_FILENAMES` on this machine** (item 1) |
 
 The cost is almost all fill rate: the same iGPU goes from 3 FPS to 36 FPS on High when the window drops from 4K to 1280×800, and scene size barely matters (fresh game ≈ stress-campus). Because the project forces fullscreen at native resolution, any weak GPU driving a 1440p or 4K panel renders 3D at full resolution with no way to lower it. A Steam Deck (about 4× this iGPU, at 1280×800) should already manage Balanced at 60 FPS; verify that on hardware.
 
@@ -46,9 +78,11 @@ The 8-year soak passes (`SOAK year=8 … status=playing`, SMOKE OK), with leaked
 
 ## P0: blocks the beta
 
-### 1. On hybrid-GPU Linux the game silently runs on the integrated GPU in OpenGL
+### 1. A stale Vulkan environment makes the game silently run in OpenGL on the integrated GPU
 
-**Problem.** Launching the game normally (the release `gigawatt.sh` does exactly `./GIGAWATT.x86_64`) gives `ERROR: Required Vulkan instance extension VK_KHR_surface not found`, then "switching to OpenGL 3", which puts the game on the **AMD iGPU** at 18–32 FPS. Only `godot/run.sh` (dev only, excluded from exports) sets `VK_ICD_FILENAMES` to work around it. Every Linux gaming laptop with an NVIDIA dGPU is in this situation, and the player never finds out why the game is slow.
+> Note after investigation: the failure on the review machine came from `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json` in the user's environment, a file that does not exist (the installed file is `radeon_icd.json`). With the variable unset, plain `godot --path godot` picks the RTX 4090 on Vulkan. The fix below (launcher check, in-game notice, diagnostics) is still right, because a stale variable is common.
+
+**Problem.** With a bad `VK_ICD_FILENAMES`, Godot logs `Required Vulkan instance extension VK_KHR_surface not found`, then "switching to OpenGL 3", which puts the game on the integrated GPU at 18-32 FPS. The player never finds out why the game is slow. The release `gigawatt.sh` was a two-line `exec`, and `run.sh` (dev only) was the only place any GPU handling lived.
 
 **Evidence.** `godot --path godot --verbose`, then grep for `Vulkan|OpenGL`. `scripts/package.sh` writes a 2-line `gigawatt.sh`. `godot/export_presets.cfg` excludes `run.sh`.
 

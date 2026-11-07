@@ -2,6 +2,29 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.6.0] - 2026-11-08
+
+### Added
+- **Graphics presets** (Potato, Low, Balanced, High, Ultra) with a first-run auto-detect (integrated GPUs and the Steam Deck start on Low), a 3D render scale with FSR so the interface stays sharp on weak GPUs at 4K, and a frame-rate limit. The game idles at a low frame rate while paused and in the background.
+- **Settings in five tabs** (Display, Graphics, Audio, Accessibility, Controls): window mode, V-Sync, UI size (Auto by default), text-size boost, visible on/off switches, and a "Copy diagnostics" button.
+- **Textured hall.** CC0 metal, plate, aluminium, plaster, rubber and floor textures replace the flat ceramic look; rack faces get depth and three detail levels; the hall has walls (the ones between you and the hall hide themselves) and the plant sits inside them.
+- **Early renewals.** A happy customer puts the renewal offer on the board four months before the contract ends, so revenue does not fall off a cliff on the last day.
+- A **title-screen backdrop** (a lit hall with racks), a splash image and an app icon.
+- Smooth slide and fade transitions for drawers, workshops and modals (instant fades with reduced motion).
+- Cluster billboards when zoomed out; per-rack labels appear when you are close, or when a rack is idle or down.
+- `scripts/bench.sh`, a GPU benchmark (FPS, draw calls, video memory) with results in `docs/perf/bench.md`; the player wiki has a Performance and settings page; a bug-report template that asks for diagnostics; `CREDITS.md`.
+
+### Changed
+- Linux launcher ignores a stale `VK_ICD_FILENAMES` (which made Vulkan fail and the game fall back to OpenGL), starts on Vulkan and honours `GIGAWATT_GPU=dgpu|igpu`.
+- Text is never smaller than 13 px at 1080p, and screens under 1080p scale the interface to native size instead of shrinking it.
+- Late-start scenarios (the gold rush) get their first board review after one year, so doing nothing no longer wins. In Operator mode a company that is clearly growing passes a review it would otherwise miss; strike messages name next year's target.
+- Mesh, material and picking work in the hall is shared and cached; the open screen refreshes at most a few times a second while the game auto-advances.
+- Overview: counts are pluralised, Easy Path steps are pills, and the decision card fits its text. The Supercomputer screen shows BF16 for GPUs without FP8.
+
+### Fixed
+- "Unlocked: Customers" and "Unlocked: Supply" toasts at the start of every new game.
+- Supercomputer topology text was unreadable in small windows.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added

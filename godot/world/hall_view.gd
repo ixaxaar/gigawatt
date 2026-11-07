@@ -81,9 +81,8 @@ func apply_quality() -> void:
 	_env.volumetric_fog_enabled = t.fog
 	_env.volumetric_fog_density = 0.018; _env.volumetric_fog_albedo = Color(0.55, 0.65, 0.8); _env.volumetric_fog_emission = Color(0.01, 0.015, 0.025); _env.volumetric_fog_length = 48.0; _env.volumetric_fog_anisotropy = 0.5
 	_env.glow_enabled = t.glow
+	apply_scale()
 	var vp := get_viewport()
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if t.scale < 0.99 else Viewport.SCALING_3D_MODE_BILINEAR
-	vp.scaling_3d_scale = t.scale
 	vp.msaa_3d = Viewport.MSAA_4X if t.aa == "msaa4" else (Viewport.MSAA_2X if t.aa == "msaa2" else Viewport.MSAA_DISABLED)
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if t.aa == "fxaa" else Viewport.SCREEN_SPACE_AA_DISABLED
 	vp.use_taa = t.aa == "msaa4" and not Settings.compat
@@ -95,10 +94,16 @@ func apply_quality() -> void:
 	HallMaterials.reset()
 	if b != null and dyn != null: rebuild()
 
+## 3D render resolution only (also re-run when the window is resized: the automatic scale depends on the pixel count).
+func apply_scale() -> void:
+	var t := Settings.tier(); var vp := get_viewport()
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if (t.scale < 0.99 and t.fsr) else Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = t.scale
+
 func _build_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR; env.background_color = Color(0.008, 0.011, 0.018)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.36, 0.42, 0.52); env.ambient_light_energy = 0.9
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.ambient_light_color = Color(0.36, 0.42, 0.52); env.ambient_light_energy = 1.25
 	var sky_m := ProceduralSkyMaterial.new(); sky_m.sky_top_color = Color(0.1, 0.14, 0.2); sky_m.sky_horizon_color = Color(0.45, 0.52, 0.62); sky_m.ground_horizon_color = Color(0.32, 0.36, 0.42); sky_m.ground_bottom_color = Color(0.05, 0.06, 0.08); sky_m.sun_angle_max = 0.0
 	var sky := Sky.new(); sky.sky_material = sky_m; sky.radiance_size = Sky.RADIANCE_SIZE_64; env.sky = sky; env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.3; env.tonemap_white = 5.0
@@ -108,11 +113,12 @@ func _build_environment() -> void:
 	_env = env; apply_quality()
 	env.fog_enabled = true; env.fog_light_color = Color(0.012, 0.016, 0.026); env.fog_density = 0.012
 	var we := WorldEnvironment.new(); we.environment = env; add_child(we)
-	var key := DirectionalLight3D.new(); _key = key; key.light_energy = 0.55; key.light_color = Color(0.7, 0.8, 1.0); key.rotation_degrees = Vector3(-62, 28, 0); key.shadow_enabled = Settings.tier().shadows; key.directional_shadow_max_distance = 45.0; key.light_volumetric_fog_energy = 0.0; add_child(key)
+	var key := DirectionalLight3D.new(); _key = key; key.light_energy = 0.95; key.light_color = Color(0.7, 0.8, 1.0); key.rotation_degrees = Vector3(-62, 28, 0); key.shadow_enabled = Settings.tier().shadows; key.directional_shadow_max_distance = 45.0; key.light_volumetric_fog_energy = 0.0; add_child(key)
 	var vg := CanvasLayer.new(); vg.layer = -1; add_child(vg)                                   # screen vignette + faint grain, under the UI
 	var rect := ColorRect.new(); rect.set_anchors_preset(Control.PRESET_FULL_RECT); rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sh := Shader.new(); sh.code = "shader_type canvas_item;\nuniform bool animated = true;\nvoid fragment(){ vec2 uv=UV-0.5; float v=smoothstep(0.35,0.95,length(uv*vec2(1.0,0.85))); float g=fract(sin(dot(FRAGCOORD.xy+(animated?TIME*30.0:0.0),vec2(12.9898,78.233)))*43758.5453)-0.5; COLOR=vec4(0.0,0.005,0.012,v*0.62+(animated?abs(g)*0.02:0.0)); }"
 	var sm := ShaderMaterial.new(); sm.shader = sh; rect.material = sm; vg.add_child(rect); _grain_mat = sm
+	if OS.has_environment("GW_NOVIGNETTE"): vg.visible = false
 
 func _emit(c: Color, energy: float, alpha: bool) -> StandardMaterial3D:
 	var key := "%s|%s|%s" % [c.to_html(true), energy, alpha]
@@ -531,7 +537,7 @@ func _build_walls(hall: Dictionary) -> void:
 func _build_boards() -> void:
 	for cid in _clusters:
 		var c: Dictionary = _clusters[cid]; var sl: Array = c.slots
-		if sl.is_empty(): continue
+		if sl.size() < 3: continue   # tiny clusters would only add overlapping text
 		var sum := Vector3.ZERO
 		for k in sl: sum += slot_pos(k)
 		var ctr: Vector3 = sum / float(sl.size())

@@ -76,14 +76,16 @@ Builds are unsigned, hence the OS warnings. Releases are built by `.github/workf
 
 ## Run from source
 
-Requirements: **Godot 4.x** (developed on 4.7), **Node 18+**, a Vulkan GPU recommended.
+Requirements: **Godot 4.x** (developed on 4.7), **Node 18+**, a Vulkan GPU recommended (an integrated GPU runs the Low preset comfortably).
 
 ```sh
 cd godot
 ./run.sh            # launches with Vulkan Forward+ (see note below)
 ```
 
-`run.sh` points Vulkan at the NVIDIA ICD and forces `forward_plus`; on hybrid AMD+NVIDIA laptops the default loader otherwise falls back to OpenGL compatibility. Edit it for your GPU, or just run `godot --path godot`.
+`run.sh` starts the project with Vulkan Forward+ and ignores a `VK_ICD_FILENAMES` that names a driver file which no longer exists (that mistake makes Vulkan fail and the game fall back to a reduced OpenGL mode). The packaged Linux launcher `gigawatt.sh` does the same and honours `GIGAWATT_GPU=dgpu|igpu` to pick a GPU.
+
+**Graphics.** Five presets (Potato, Low, Balanced, High, Ultra) with an automatic first-run choice, a 3D render scale with FSR (the interface stays at native resolution), borderless or exclusive fullscreen, V-Sync and a frame-rate limit, and a text-size boost. Surfaces use CC0 metal, plate, plaster and floor textures (see `CREDITS.md`). `scripts/bench.sh` measures FPS, draw calls and video memory per GPU, preset and window size; results are in `docs/perf/bench.md`.
 
 **Controls:** `1`–`8` open a drawer (Overview, Customers, Supply, Facility, Operations) or workshop (Design Lab, Supercomputer, Codex); press the same key again to close it · `Space` next month · the hall opens in top view with every rack labelled by hardware and customer: left-drag or `WASD` pan, right-drag orbit, wheel zoom, `Q/E` rotate, `V` top view, `L` labels, `T` thermal view · click a rack to inspect it · `Esc` menu · `Ctrl+Q` quit. Graphics Low/Balanced/High under Settings.
 

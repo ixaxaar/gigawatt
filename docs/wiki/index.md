@@ -27,6 +27,10 @@ If you are not sure what to do first, read [Getting started](getting-started.md)
 - [Customers and contracts](customers-and-contracts.md) — training vs inference offers, fit verdicts, the Easy Path, SLAs, renewals and the ramp window
 - [Energy and the spot market](energy-and-spot.md) — PPAs, take-or-pay, spot power and selling idle GPUs
 
+**Settings and performance**
+
+- [Performance and settings](performance-and-settings.md) — graphics presets, 3D resolution, Steam Deck, laptops with two GPUs, troubleshooting
+
 **Running the business**
 
 - [Money and operations](money-and-operations.md) — cash, loans, depreciation, staffing, hardware lifecycle and the Operations screen

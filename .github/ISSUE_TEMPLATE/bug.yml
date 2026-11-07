@@ -1,0 +1,30 @@
+name: Bug report
+description: Something is broken, crashes, or runs slowly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you saw. A screenshot helps.
+    validations: { required: true }
+  - type: textarea
+    id: diag
+    attributes:
+      label: Diagnostics
+      description: In the game open Menu, Settings, Display and press "Copy diagnostics", then paste it here (GPU, driver, window size, settings).
+      render: text
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: Game version, placeholder: v0.6.0 }
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux, Windows, macOS (Apple Silicon), macOS (Intel), Steam Deck]
+  - type: textarea
+    id: save
+    attributes:
+      label: Save file (optional)
+      description: Attach a save from the game's user data folder if the problem depends on your game state.

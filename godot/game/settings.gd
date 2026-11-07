@@ -63,18 +63,23 @@ static func tier() -> Dictionary:
 		"scale": [0.67, 0.75, 1.0, 1.0, 1.0][q], "aa": ["none", "fxaa", "fxaa", "msaa2", "msaa4"][q],
 		"shadows": q >= 1, "shadow_size": [2048, 2048, 4096, 4096, 8192][q], "ssao": fp and q >= 2, "ssil": fp and q >= 3, "ssr": fp and q >= 3, "fog": fp and q >= 3,
 		"glow": q >= 1, "lights": [0, 8, 24, 999, 999][q], "labels_far": q >= 2, "smoke": q >= 1, "grain_anim": q >= 2,
-		"tex": [512, 1024, 2048, 2048, 2048][q], "normal_maps": q >= 1, "aniso": q >= 3, "reflections": fp and q >= 3, "fps": [40 if deck else 60, 60, 0, 0, 0][q],
+		"tex": [512, 512, 512, 1024, 1024][q], "normal_maps": q >= 1, "full_maps": q >= 2, "aniso": q >= 3, "reflections": fp and q >= 3, "fps": [40 if deck else 60, 40 if deck else 60, 40 if deck else 0, 40 if deck else 0, 40 if deck else 0][q],
 		"face_lod": [2, 1, 1, 0, 0][q], "vis_scale": [0.5, 0.7, 1.0, 1.3, 1.6][q],
 	}
-	# Auto scale for weak GPUs on big panels: aim for about 1.6 megapixels of 3D.
+	# Auto scale for weak GPUs on big panels: aim for about 1.3 megapixels of 3D.
 	var rs := render_scale
 	if rs <= 0.0:
 		rs = d.scale
 		if preset < 0 and q <= 1:
-			var px := DisplayServer.screen_get_size()
+			var px := DisplayServer.window_get_size()   # the real render surface (a window, or the whole screen in fullscreen)
 			var mp := float(maxi(1, px.x * px.y))
-			rs = clampf(sqrt(1.6e6 / mp), 0.4, 1.0)
+			rs = clampf(sqrt(1.3e6 / mp), 0.4, 1.0)
 	d.scale = rs
+	d["fsr"] = not integrated and not compat   # FSR costs about 10 ms at 4K on a small iGPU; plain bilinear upscaling is nearly free
+	if OS.has_environment("GW_TIER_SET"):   # dev/bench: GW_TIER_SET="lights=8,tex=1024,ssao=0"
+		for kv in OS.get_environment("GW_TIER_SET").split(","):
+			var p := kv.split("=")
+			if p.size() == 2 and d.has(p[0]): d[p[0]] = (float(p[1]) if "." in p[1] else (int(p[1]) if p[1].is_valid_int() else p[1])) if not (d[p[0]] is bool) else (p[1] == "1")
 	return d
 
 static func load_all() -> void:
@@ -117,12 +122,13 @@ static func apply(window: Window) -> void:
 	if not OS.has_environment("GW_NODISPLAY"):
 		var wm: int = [Window.MODE_WINDOWED, Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN][window_mode]
 		if window.mode != wm and not OS.has_environment("GW_SHOT") and not OS.has_environment("GW_SMOKE"): window.mode = wm
-	DisplayServer.window_set_vsync_mode([DisplayServer.VSYNC_DISABLED, DisplayServer.VSYNC_ENABLED, DisplayServer.VSYNC_ADAPTIVE][vsync])
+	if not OS.has_environment("GW_NODISPLAY"): DisplayServer.window_set_vsync_mode([DisplayServer.VSYNC_DISABLED, DisplayServer.VSYNC_ENABLED, DisplayServer.VSYNC_ADAPTIVE][vsync])
 	apply_fps()
 
 static var idle := false        # set by the app shell: paused and untouched for a while
 static var focused := true
 static func apply_fps() -> void:
+	if OS.has_environment("GW_NOTHROTTLE"): Engine.max_fps = 0; return   # benchmarks and tests
 	var cap: int = fps_cap if fps_cap > 0 else int(tier().fps)
 	if cap >= 1000: cap = 0
 	if not focused: cap = 10 if cap == 0 or cap > 10 else cap

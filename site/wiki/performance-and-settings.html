@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Performance and settings · GIGAWATT Wiki</title>
+<meta name="description" content="Graphics presets, render scale, the Steam Deck, laptops with two GPUs, and what to do when the game runs slowly.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/performance-and-settings.html">
+<meta property="og:title" content="Performance and settings · GIGAWATT Wiki">
+<meta property="og:description" content="Graphics presets, render scale, the Steam Deck, laptops with two GPUs, and what to do when the game runs slowly.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/performance-and-settings.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="performance-and-settings.html" aria-current="page">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Performance and settings</h1>
+    <p class="lede2">Graphics presets, render scale, the Steam Deck, laptops with two GPUs, and what to do when the game runs slowly.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#the-settings-tabs">The settings tabs</a></li><li><a href="#graphics-presets">Graphics presets</a></li><li><a href="#3d-resolution">3D resolution</a></li><li><a href="#steam-deck-and-small-screens">Steam Deck and small screens</a></li><li><a href="#laptops-and-pcs-with-two-gpus">Laptops and PCs with two GPUs</a></li><li><a href="#if-the-game-runs-slowly">If the game runs slowly</a></li><li><a href="#where-the-files-live">Where the files live</a></li></ul></nav>
+    <p>GIGAWATT picks graphics settings for your machine the first time it starts and shows the choice in <strong>Menu ▸ Settings ▸ Graphics</strong> as &quot;Auto&quot;. You can change anything later; the settings are saved and apply immediately.</p>
+<figure><img loading="lazy" src="img/settings-graphics.webp" alt="Settings, Graphics tab"><figcaption>The Graphics tab: a preset, a 3D resolution slider and a one-line summary of what the preset does.</figcaption></figure>
+<h2 id="the-settings-tabs">The settings tabs</h2>
+<ul><li><strong>Display</strong>: window mode (windowed, borderless fullscreen or exclusive fullscreen), V-Sync, a frame-rate limit, UI size (Auto by default), and a &quot;Copy diagnostics&quot; button for bug reports.</li><li><strong>Graphics</strong>: the preset and the 3D resolution.</li><li><strong>Audio</strong>: master, music and effects volume, and the music style.</li><li><strong>Accessibility</strong>: colour-blind-safe cluster colours, reduced motion (no auto-orbit camera and no sliding panels) and a text-size boost.</li><li><strong>Controls</strong>: the keyboard, mouse and controller bindings.</li></ul>
+<h2 id="graphics-presets">Graphics presets</h2>
+<div class="tbl"><table><thead><tr><th>Preset</th><th>What it is for</th></tr></thead><tbody><tr><td><strong>Potato</strong></td><td>Handhelds and very old GPUs. Renders the 3D hall at reduced resolution, no shadows, painted light pools instead of real lights, flat rack faces, smaller textures.</td></tr><tr><td><strong>Low</strong></td><td>Integrated graphics. Shadows from the main light, a few real lights, simplified rack faces.</td></tr><tr><td><strong>Balanced</strong></td><td>A mid-range GPU. Soft ambient shading, more lights, full textures.</td></tr><tr><td><strong>High</strong></td><td>A good discrete GPU. Adds reflections, volumetric haze, finer anti-aliasing and anisotropic filtering.</td></tr><tr><td><strong>Ultra</strong></td><td>Everything on, with the highest-quality shadows.</td></tr></tbody></table></div>
+<p><strong>Auto</strong> chooses Low on integrated GPUs and on a Steam Deck, and High on a discrete GPU. It also lowers the 3D resolution automatically when a weak GPU drives a large screen.</p>
+<h2 id="3d-resolution">3D resolution</h2>
+<p>The menus and text always draw at your screen's native resolution. Only the 3D hall is scaled, and it is upscaled with FSR, so a weak GPU on a 4K display can render the hall at a fraction of 4K and still look sharp where it matters. Drag the <strong>3D resolution</strong> slider in Graphics; &quot;Preset&quot; hands control back to the preset.</p>
+<h2 id="steam-deck-and-small-screens">Steam Deck and small screens</h2>
+<ul><li>The first run on a Deck selects the Low preset and a 40 FPS cap.</li><li>On screens under 1080p the interface is scaled up so text stays at its native size. If the text is still too small, raise <strong>Accessibility ▸ Text size boost</strong>, or set <strong>Display ▸ UI size</strong> by hand.</li><li>Everything is reachable from the controller: A selects, B goes back, LB and RB switch drawers, the sticks pan and orbit the hall.</li><li>The game pauses and autosaves when you suspend the Deck or switch away from the window.</li></ul>
+<h2 id="laptops-and-pcs-with-two-gpus">Laptops and PCs with two GPUs</h2>
+<p>On Linux the launcher (<code>gigawatt.sh</code>) checks for a broken Vulkan setup and starts the game on the Vulkan renderer. To pick a GPU:</p>
+<pre><code>GIGAWATT_GPU=dgpu ./gigawatt.sh     # the discrete (NVIDIA or AMD) GPU
+GIGAWATT_GPU=igpu ./gigawatt.sh     # the integrated GPU</code></pre>
+<p>If an environment variable such as <code>VK_ICD_FILENAMES</code> points at a driver file that no longer exists, Vulkan cannot start and the game falls back to a reduced &quot;compatibility mode&quot; on whatever OpenGL driver is available. The launcher ignores such a stale variable for you. In compatibility mode the game shows a note on the title screen and turns off the screen-space effects.</p>
+<h2 id="if-the-game-runs-slowly">If the game runs slowly</h2>
+<ol><li>Open <strong>Settings ▸ Graphics</strong> and pick a lower preset, or drag <strong>3D resolution</strong> down. This is the biggest single saving on large or high-resolution screens.</li><li>Open <strong>Settings ▸ Display</strong> and set a frame-rate limit. Capping at 60 (or 40 on a handheld) saves battery and keeps fans quiet.</li><li>Very large halls and campuses cost more: zoom in when you are inspecting racks, because far-away labels, small parts and cables are hidden at a distance.</li><li>Press <strong>Copy diagnostics</strong> in Display and paste the result into a bug report. It lists your GPU, driver, window size and settings.</li></ol>
+<p>The game also drops to a low frame rate while it is paused and untouched, and to a minimum while its window is in the background.</p>
+<h2 id="where-the-files-live">Where the files live</h2>
+<p>Settings, saves and the log are in the game's user data folder (on Linux <code>~/.local/share/godot/app_userdata/GIGAWATT/</code>): <code>settings.cfg</code>, <code>saves/</code>, and <code>logs/gigawatt.log</code>, which records the renderer and GPU on every start.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="strategy-tips.html">← Strategy tips</a>
+      <a href="faq.html">FAQ →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/performance-and-settings.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

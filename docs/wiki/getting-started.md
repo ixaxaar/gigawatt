@@ -72,6 +72,6 @@ Saves are versioned and stored in your user data folder: **three manual slots pl
 
 ## Settings
 
-`F1` opens settings: master/music/effects volume, a music-style picker (the soundtrack follows the game — expect something darker when things fail), UI scale, a colour-blind-safe cluster palette, reduced motion, and graphics quality Low/Balanced/High.
+`F1` opens settings in five tabs: display (window mode, V-Sync, frame-rate limit, UI size), graphics (a preset from Potato to Ultra and a 3D resolution slider), audio (volume and a music-style picker; the soundtrack follows the game, so expect something darker when things fail), accessibility (colour-blind-safe cluster palette, reduced motion, text size) and controls. See [Performance and settings](performance-and-settings.md).
 
 Next: [Your first hour](first-hour.md).
