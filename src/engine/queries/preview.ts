@@ -4,8 +4,12 @@ import { selectMonthlyPnL } from '../selectors';
 import { staffNeeded } from '../../sim/staffing';
 import { policyOf, maintenanceUSD } from '../../sim/policy';
 import { G } from './shared';
+import { fleetOf, needsOf } from '../needs';
 
 export const previewQueries: Record<string, (...a: any[]) => any> = {
+  fleet: () => fleetOf(G()),
+  needs: () => needsOf(G()),
+  board: () => { const g = G(); return g.board ?? null; },
   preview: () => {
     const g = G(); const next = g.month + 1;
     const deliveries = g.orders.filter((o) => o.arriveMonth <= next).map((o) => ({ item: getItem(o.itemId)?.name ?? o.itemId, qty: o.qty, spare: !!o.spare }));

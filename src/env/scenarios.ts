@@ -68,7 +68,7 @@ export function stressFill(racksPerTemplate: number, hallsPerClass = 1) {
 export const SCENARIOS: Scenario[] = [
   { id: 'classic', title: 'Classic start (Jan 2020)', seed: 1, horizonMonths: 120, description: 'Default $50M start; the baseline for comparing agents.' },
   { id: 'lean', title: 'Lean start', seed: 2, horizonMonths: 120, description: '$8M cash: every dollar of capex and every contract choice matters.', setup: () => patch(g => { g.cash = 8_000_000; }) },
-  { id: 'gold-rush-2025', title: 'GPU gold rush (Jan 2025)', seed: 3, horizonMonths: 60, description: 'Start in 2025 with $250M into Blackwell-era scarcity, high demand and allocation caps.', setup: () => patch(g => { g.month = 60; g.cash = 250_000_000; }) },
+  { id: 'gold-rush-2025', title: 'GPU gold rush (Jan 2025)', seed: 3, horizonMonths: 60, description: 'Start in 2025 with $250M into Blackwell-era scarcity, high demand and allocation caps.', setup: () => patch(g => { g.month = 60; g.cash = 250_000_000; g.reputation = 60; g.demandBoost = 1.7; }) },
   { id: 'stress-all-racks', title: 'Stress: every rack type deployed', seed: 4, horizonMonths: 24, description: 'Sep-2026 start, effectively unlimited cash; four 200-slot halls (air/RDHx/DLC/immersion) pre-filled with every system template to test extremes of power, cooling, failures and fabric.', setup: () => { patch(g => { g.month = 80; g.cash = 5e10; }); stressFill(6); } },
   { id: 'stress-campus', title: 'Stress: multi-hall campus', seed: 5, horizonMonths: 24, description: 'Eight halls (two per cooling class), 12 racks of every template each: a gigawatt-class campus for scaling limits.', setup: () => { patch(g => { g.month = 80; g.cash = 2e11; }); stressFill(12, 2); } },
 ];

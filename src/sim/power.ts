@@ -11,6 +11,9 @@ import type { GameState, PowerContract, PowerOffer } from '../types';
 import type { RNG } from './rng';
 import { gpuHourAnchor } from './market';
 import { HOURS_PER_MONTH } from './economy';
+import { BAL, lerpPoints } from './balance';
+import { getItem } from '../data';
+import { generationsBehind, rackAccelItem } from './lifecycle';
 
 type Log = (level: 'info' | 'good' | 'bad', text: string) => void;
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -87,7 +90,7 @@ export function powerMarketTick(s: GameState, rng: RNG, log: Log): void {
 
 // ---------- spot GPU market ----------
 export const SPOT_HISTORY_LEN = 24;
-export const spotAnchor = (month: number) => gpuHourAnchor(2020 + month / 12) * 0.85;
+export const spotAnchor = (month: number) => gpuHourAnchor(2020 + month / 12) * BAL.spotDiscount;
 
 export function spotUtilization(price: number, month: number): number {
   return clamp(1.45 - 1.0 * (price / gpuHourAnchor(2020 + month / 12)), 0.15, 0.95);
@@ -103,22 +106,34 @@ export function stepSpotPrice(s: GameState, rng: RNG): void {
   s.spotHistory = [...(s.spotHistory ?? []), s.spotPrice].slice(-SPOT_HISTORY_LEN);
 }
 
-/** Revenue from selling idle clustered accelerators on the spot market. */
+/** Spot demand multiplier for one accelerator model: older generations clear well below the current top part. */
+const genFactor = (s: GameState, accelId: string | undefined): number => {
+  const a = accelId ? getItem(accelId) : undefined;
+  if (!a || a.kind !== 'accelerator') return 1;
+  return BAL.spotGeneration[Math.min(3, generationsBehind(a, s.month))] ?? 1;
+};
+
+/** Revenue from selling idle accelerators on the spot market. The market has finite depth: the more GPUs you
+ *  offer, the smaller the fraction that clears (saturating), and older generations sell at a discount. */
 export function spotRevenue(s: GameState, servedClusterIds: Set<string>, accelsOfDesign: (designId: string) => number = () => 0): { revenue: number; accels: number; util: number } {
   const price = s.spotPrice ?? spotAnchor(s.month);
   if (price < (s.spotReserve ?? 0)) return { revenue: 0, accels: 0, util: 0 };
   const util = spotUtilization(price, s.month);
-  let accels = 0;
+  let accels = 0, weighted = 0;
+  const add = (n: number, accelId: string | undefined) => { accels += n; weighted += n * genFactor(s, accelId); };
   for (const id of s.spotClusters ?? []) {
     if (servedClusterIds.has(id)) continue;
-    accels += s.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0;
+    const st = s.clusters.find((c) => c.id === id)?.stats;
+    add(st?.accelerators ?? 0, st?.acceleratorId);
   }
   const inClusterSpot = new Set(s.spotClusters ?? []);
   for (const id of s.spotRacks ?? []) {
     const pr = s.halls.flatMap((h) => h.racks).find((r) => r.id === id);
     if (!pr || pr.status !== 'online') continue;
     if (pr.clusterId && (servedClusterIds.has(pr.clusterId) || inClusterSpot.has(pr.clusterId))) continue;
-    accels += accelsOfDesign(pr.designId);
+    add(accelsOfDesign(pr.designId), rackAccelItem(s, pr.designId)?.id);
   }
-  return { revenue: accels * util * price * HOURS_PER_MONTH, accels, util };
+  const depth = lerpPoints(BAL.spotDepth, 2020 + s.month / 12);
+  const cleared = accels > 0 ? depth * (1 - Math.exp(-accels / depth)) / accels : 0; // fraction of offered GPUs that find a buyer
+  return { revenue: weighted * cleared * util * price * HOURS_PER_MONTH, accels, util: util * cleared };
 }

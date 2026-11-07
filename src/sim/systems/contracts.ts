@@ -5,6 +5,8 @@ import { inferenceCapacity } from '../perf';
 import { contractRevenue } from '../economy';
 import { uplinkGbps, totalNeedGbps } from '../internet';
 import { rackAccels } from './helpers';
+import { BAL } from '../balance';
+import { staffNeeded } from '../staffing';
 import type { System } from './types';
 
 const ARCH_BONUS: Record<ActiveContract['contract']['archetype'], number> = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
@@ -37,6 +39,9 @@ export const serveContracts: System = {
     const completed: ActiveContract[] = [];
     const defaulted: ActiveContract[] = [];
     const usedFrac: Record<string, number> = {};
+    const { needed: staffNeed } = staffNeeded(s);
+    const staffShort = Math.max(0, staffNeed - s.staff) / staffNeed;
+    const staffFactor = 1 - BAL.understaffedAvail * staffShort;
     const needGbps = totalNeedGbps(s);
     const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s) / needGbps) : 1;
     if (netFactor < 1) log('bad', `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
@@ -45,7 +50,12 @@ export const serveContracts: System = {
       if (ac.clusterIds.length === 0) {
         // Signed but not yet deployed: no revenue, no SLA clock — until the ramp deadline passes.
         const by = ac.deployBy ?? ac.startMonth + 4;
-        if (s.month > by) defaulted.push(ac);
+        if (s.month > by) {
+          // a customer who can see a build under way grants one 3-month extension instead of walking
+          const underway = (s.projects ?? []).some((p) => p.contractId === k.id && p.stage !== 'done' && p.stage !== 'failed');
+          if (underway && !ac.extended) { ac.extended = true; ac.deployBy = by + 3; log('info', `${k.customer} grants a 3-month extension on ${k.model.name}: they can see your build is under way.`); }
+          else defaulted.push(ac);
+        }
         else if (s.month === by) log('bad', `Last month to bring capacity online for ${k.customer} (${k.model.name}) — assign a qualifying cluster now or they walk.`);
         continue;
       }
@@ -93,7 +103,7 @@ export const serveContracts: System = {
         tokensPerSec = Math.min(capacity, k.tokensPerSec);
       }
 
-      availability *= netFactor;
+      availability *= netFactor * staffFactor;
       const res = k.kind === 'training'
         ? contractRevenue(ac, { accelerators, availability })
         : contractRevenue(ac, { tokensPerSec, availability });
@@ -140,6 +150,7 @@ export const contractMarket: System = {
     const expired = s.availableContracts.filter((k) => k.deadlineMonth < s.month);
     const alive = s.availableContracts.filter((k) => k.deadlineMonth >= s.month);
     const renewals = alive.filter(isRenewal);
+    if (s.demandBoost && s.demandBoost > 1.001) s.demandBoost = 1 + (s.demandBoost - 1) * 0.97; else if (s.demandBoost) s.demandBoost = undefined; // scenario demand surge fades over a few years
     const fresh = generateContracts(s, s.month, rng);
     const regular = [...alive.filter((k) => !isRenewal(k)), ...fresh];
     const room = Math.max(0, o.maxAvailableContracts - renewals.length);

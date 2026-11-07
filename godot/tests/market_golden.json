@@ -39,15 +39,15 @@
       "kvBytesPerToken": 196608,
       "era": 2020
      },
-     "durationMonths": 21,
+     "durationMonths": 18,
      "penaltyRate": 0.011,
      "deadlineMonth": 14,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 10231,
+     "tokensPerSec": 30692,
      "tpotMs": 26,
-     "ttftMs": 440,
-     "contextTokens": 1024,
-     "pricePerMTok": 1.422,
+     "ttftMs": 260,
+     "contextTokens": 2048,
+     "pricePerMTok": 0.711,
      "rampMonths": 6
     }
    ]
@@ -70,15 +70,15 @@
       "kvBytesPerToken": 28672,
       "era": 2021.5
      },
-     "durationMonths": 21,
+     "durationMonths": 18,
      "penaltyRate": 0.011,
      "deadlineMonth": 27,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 36375,
+     "tokensPerSec": 109125,
      "tpotMs": 26,
-     "ttftMs": 440,
-     "contextTokens": 2048,
-     "pricePerMTok": 3.076,
+     "ttftMs": 260,
+     "contextTokens": 8192,
+     "pricePerMTok": 1.538,
      "rampMonths": 6
     }
    ]
@@ -101,16 +101,16 @@
       "kvBytesPerToken": 131072,
       "era": 2023.9
      },
-     "durationMonths": 21,
+     "durationMonths": 18,
      "penaltyRate": 0.011,
      "deadlineMonth": 51,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 272814,
+     "tokensPerSec": 818441,
      "tpotMs": 26,
-     "ttftMs": 440,
-     "contextTokens": 8192,
-     "pricePerMTok": 1.805,
-     "rampMonths": 6
+     "ttftMs": 260,
+     "contextTokens": 65536,
+     "pricePerMTok": 2.257,
+     "rampMonths": 9
     }
    ]
   },
@@ -132,16 +132,16 @@
       "kvBytesPerToken": 73728,
       "era": 2026.6
      },
-     "durationMonths": 21,
+     "durationMonths": 18,
      "penaltyRate": 0.011,
      "deadlineMonth": 83,
      "slaAvailability": 0.980533256039489,
-     "tokensPerSec": 1212505,
+     "tokensPerSec": 3637515,
      "tpotMs": 26,
-     "ttftMs": 440,
-     "contextTokens": 32768,
-     "pricePerMTok": 1.446,
-     "rampMonths": 6
+     "ttftMs": 260,
+     "contextTokens": 262144,
+     "pricePerMTok": 1.807,
+     "rampMonths": 9
     }
    ]
   },
@@ -194,15 +194,15 @@
       "kvBytesPerToken": 28672,
       "era": 2021.5
      },
-     "durationMonths": 11,
+     "durationMonths": 8,
      "penaltyRate": 0.006,
      "deadlineMonth": 29,
      "slaAvailability": 0.97365474648308,
-     "tokensPerSec": 21598,
+     "tokensPerSec": 64793,
      "tpotMs": 55,
-     "ttftMs": 320,
-     "contextTokens": 2048,
-     "pricePerMTok": 2.325,
+     "ttftMs": 260,
+     "contextTokens": 8192,
+     "pricePerMTok": 1.163,
      "rampMonths": 7
     },
     {
@@ -259,7 +259,7 @@
      "minScaleOutGBsPerAccel": 37.5,
      "minTotalMemGB": 28800,
      "pricePerAccelHour": 3.74,
-     "rampMonths": 17
+     "rampMonths": 20
     },
     {
      "kind": "training",
@@ -284,7 +284,7 @@
      "minScaleOutGBsPerAccel": 37.5,
      "minTotalMemGB": 748,
      "pricePerAccelHour": 3.18,
-     "rampMonths": 9
+     "rampMonths": 12
     },
     {
      "kind": "inference",
@@ -300,16 +300,16 @@
       "kvBytesPerToken": 196608,
       "era": 2020
      },
-     "durationMonths": 7,
+     "durationMonths": 6,
      "penaltyRate": 0.008,
      "deadlineMonth": 51,
      "slaAvailability": 0.9673569013760425,
-     "tokensPerSec": 144097,
+     "tokensPerSec": 432292,
      "tpotMs": 55,
-     "ttftMs": 170,
-     "contextTokens": 65536,
-     "pricePerMTok": 0.229,
-     "rampMonths": 8
+     "ttftMs": 680,
+     "contextTokens": 8192,
+     "pricePerMTok": 0.286,
+     "rampMonths": 11
     }
    ]
   },
@@ -331,16 +331,16 @@
       "kvBytesPerToken": 491520,
       "era": 2025.65
      },
-     "durationMonths": 5,
+     "durationMonths": 9,
      "penaltyRate": 0.004,
      "deadlineMonth": 86,
      "slaAvailability": 0.9493432243796996,
-     "tokensPerSec": 535494,
+     "tokensPerSec": 1606483,
      "tpotMs": 67,
-     "ttftMs": 650,
-     "contextTokens": 262144,
-     "pricePerMTok": 2.06,
-     "rampMonths": 5
+     "ttftMs": 630,
+     "contextTokens": 32768,
+     "pricePerMTok": 2.575,
+     "rampMonths": 8
     },
     {
      "kind": "inference",
@@ -360,12 +360,12 @@
      "penaltyRate": 0.005,
      "deadlineMonth": 86,
      "slaAvailability": 0.9478092359611764,
-     "tokensPerSec": 443082,
+     "tokensPerSec": 1329247,
      "tpotMs": 48,
-     "ttftMs": 540,
-     "contextTokens": 32768,
-     "pricePerMTok": 2.641,
-     "rampMonths": 8
+     "ttftMs": 180,
+     "contextTokens": 262144,
+     "pricePerMTok": 3.301,
+     "rampMonths": 11
     }
    ]
   }

@@ -101,7 +101,7 @@ const baseGame = (over: Partial<GameState> = {}): GameState => {
     availableContracts: [],
     activeContracts: [],
     log: [],
-    staff: 0,
+    staff: 4,
     utilityUSDPerKWh: 0.07,
     codexSeen: [],
     missionsDone: [],
@@ -319,7 +319,7 @@ describe('advanceMonth: contract lifecycle & market', () => {
 
 describe('advanceMonth: finances', () => {
   it('charges monthly loan interest', () => {
-    const g = baseGame({ debt: 1_000_000, clusters: [] });
+    const g = baseGame({ debt: 1_000_000, clusters: [], staff: 0 });
     g.halls[0].racks = [];
     const s = advanceMonth(g, NO_FAIL);
     const interest = (1_000_000 * 0.07) / 12;

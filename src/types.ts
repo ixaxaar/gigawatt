@@ -502,6 +502,8 @@ export interface GameState {
   /** 'playing' until bankruptcy or the 2028 horizon; then the game is over and `endReport` is set. */
   status?: GameStatus;
   endReport?: EndReport;
+  /** Investor board: yearly revenue targets, three missed years in a row and you are out. */
+  board?: BoardState;
   /** Consecutive months with negative cash (bankruptcy at 3). */
   negCashMonths?: number;
   /** Save schema version, bumped by engine/persistence migrations. */
@@ -512,6 +514,8 @@ export interface GameState {
   rivals?: Rival[];
   /** Contract price multiplier from competition (1 = neutral, <1 = rivals undercut you). */
   marketPriceIndex?: number;
+  /** Scenario demand surge: multiplies fresh offer prices and fades by 3% of its excess each month. */
+  demandBoost?: number;
   /** Vendor framework agreements (commit spend, get discount) and relationship score 0..100 per vendor id. */
   frameworks?: Framework[];
   vendorRel?: Record<string, number>;
@@ -521,14 +525,19 @@ export interface GameState {
 export interface Rival { id: string; name: string; style: 'hyperscaler' | 'neocloud' | 'sovereign'; accels: number; priceMult: number; cash: number; aggression: number }
 export interface Framework { id: string; vendorId: string; commitUSD: number; spentUSD: number; discountPct: number; startMonth: number; endMonth: number }
 export interface OpsPolicy { /** months of burn-in before a rack goes online (0..3, default 1) */ burnInMonths: number; /** 0 reactive, 1 preventive, 2 premium */ maintenance: 0 | 1 | 2 }
-export type GameStatus = 'playing' | 'bankrupt' | 'finished';
+export type GameStatus = 'playing' | 'bankrupt' | 'finished' | 'fired';
 export interface GameStats { contractsCompleted: number; peakAccels: number; slaMisses: number; revenueTotal: number; decommissioned: number }
-export interface EndReport { reason: 'bankrupt' | 'horizon'; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
+export type EndingId = 'ipo' | 'acquired' | 'steady' | 'fire-sale' | 'bankrupt' | 'fired';
+export interface BoardReview { month: number; target: number; actual: number; ok: boolean }
+export interface BoardState { baseNW: number; startMonth: number; strikes: number; reviews: BoardReview[] }
+export interface EndReport { reason: 'bankrupt' | 'horizon' | 'fired'; ending?: EndingId; epilogue?: string; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
 export type GameMode = 'learner' | 'operator' | 'tycoon';
 export interface Project {
   id: string; contractId: string; templateId: string; racks: number; hallId: string; name: string;
   stage: 'building' | 'commissioning' | 'clustering' | 'assigning' | 'done' | 'failed';
   rackIds: string[]; plant: { id: string; n: number }[]; clusterId?: string; notes: string[]; startMonth: number;
+  /** Month the project first got blocked, and the month the player was last alerted about it. */
+  stalledSince?: number; alertedMonth?: number;
 }
 export interface PowerOffer {
   id: string; supplier: string; source: 'grid' | 'solar' | 'gas' | 'hydro' | 'nuclear';
@@ -543,7 +552,9 @@ export interface Order { id: string; itemId: string; qty: number; unitPrice: num
   /** Orders placed together by buyTemplate share a batch (cancelled/resized as one). */ batch?: string; templateId?: string; racks?: number; placedMonth?: number; }
 /** Set on contracts offered by a returning customer after a clean run. */
 export interface RenewalTag { renewalOf?: string }
-export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number; }
+export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number;   /** The customer already granted one build-delay extension. */
+  extended?: boolean;
+}
 export interface LogEntry { month: number; level: 'info' | 'good' | 'bad'; text: string; }
 
 export const MONTHS_PER_YEAR = 12;

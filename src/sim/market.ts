@@ -1,3 +1,7 @@
+import { BAL } from './balance';
+import { ALL_ITEMS } from '../data';
+import { inferenceCapacity } from './perf';
+import type { Accelerator } from '../types';
 import { monthToYear } from '../types';
 import type { Contract, GameState, InferenceContract, ModelSpec, TrainingContract } from '../types';
 import { pick, randInt, randRange, type RNG } from './rng';
@@ -59,12 +63,38 @@ const lerpCurve = (points: [number, number][], x: number): number => {
 };
 
 // Reference $/accelerator-hour for a top-of-generation GPU. New generations
-// launch at a premium (~$3) then decay; the H100 era sits around $2.5-3.
+// launch at a premium then decay: the H100 era sits around $2.5-3 and a newer generation resets the top of the curve.
+// Older parts fall away from it through BAL.spotGeneration and the lifecycle residual curve.
 const GPU_HOUR_ANCHOR: [number, number][] = [
-  [2020, 1.9], [2021, 1.75], [2022, 1.6], [2023.2, 2.9], [2024, 2.6], [2024.6, 3.0],
-  [2025, 3.6], [2026, 4.4], [2026.8, 5.6], [2027, 5.6], [2028, 5.2],
+  [2020, 1.9], [2021, 1.75], [2022, 1.6], [2023.2, 2.9], [2024, 2.6], [2024.6, 2.7],
+  [2025, 2.7], [2026, 3.7], [2026.8, 3.8], [2027, 3.6], [2028, 3.3],
 ];
+/** GPU-economics price, kept within 0.5x..1.25x of the real-world API list price for that model class. */
+const clampBand = (price: number, list: number): number => Math.min(list * 1.25, Math.max(list * 0.5, price));
+
+/** Extra ramp months customers allow while GPU allocation is tight: lead times in a hot market exceed any fixed window. */
+export const rampPad = (year: number): number => Math.round(lerpCurve([[2020, 0], [2022.5, 0], [2023.5, 3], [2025, 4], [2026.5, 3], [2027.5, 1], [2028, 0]], year));
+
 export const gpuHourAnchor = (year: number): number => lerpCurve(GPU_HOUR_ANCHOR, year);
+
+const FLAGSHIPS = ALL_ITEMS.filter((i): i is Accelerator => i.kind === 'accelerator' && i.memGB >= 40);
+const refCache = new Map<string, number>();
+/** Output tokens/s one top-of-generation accelerator sustains for this model (what a competent operator can get),
+ *  so inference prices can be tied to what a GPU-hour earns instead of drifting away from it. */
+export function refTokensPerGpu(year: number, model: ModelSpec, contextTokens: number, tpotMs: number): number {
+  const key = `${Math.floor(year * 2)}|${model.id}|${contextTokens}|${Math.round(tpotMs / 10)}`;
+  const hit = refCache.get(key); if (hit !== undefined) return hit;
+  let accel: Accelerator | undefined;
+  for (const a of FLAGSHIPS) if (a.availableFrom <= year && (!accel || a.availableFrom > accel.availableFrom || (a.availableFrom === accel.availableFrom && a.memGB > accel.memGB))) accel = a;
+  let out = 1000;
+  if (accel) for (const n of [8, 16, 32, 64, 128]) {
+    const stats = { accelerators: n, acceleratorId: accel.id, scaleUpDomain: n, totalMemGB: n * accel.memGB, peakPFLOPSFp8: 0, peakPFLOPSBf16: 0, powerKW: 0, bisectionTbps: 0, effScaleOutGBs: 50, switchCounts: {}, cableCounts: {}, issues: [] };
+    const cap = inferenceCapacity(stats, accel, model, { contextTokens, tpotMs });
+    if (cap.fitsWeights && cap.tokensPerSec > 0) { out = cap.tokensPerSec / n; break; }
+  }
+  refCache.set(key, out); return out;
+}
+
 
 // USD per million output tokens, calibrated to real API prices:
 // GPT-3 175B (2020) ~$60/Mtok, 70B-class (2024) ~$5, DeepSeek-class (2025) ~$1-2.
@@ -170,19 +200,21 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
           gpuHourAnchor(year)
           * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1)
           * t.priceMult
+          * BAL.trainPrice
           * randRange(rng, 0.92, 1.15)
-          * (state.marketPriceIndex ?? 1), // rival competition reprices fresh offers
+          * (state.marketPriceIndex ?? 1) * (state.demandBoost ?? 1), // rival competition and scenario demand reprice fresh offers
         ),
       };
-      contract.rampMonths = Math.min(20, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0));
+      contract.rampMonths = Math.min(24, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0) + rampPad(year));
       out.push(contract);
     } else {
       const tps = Math.max(
         100,
-        Math.round(lerpCurve(ERA_TOKENS_PER_SEC, year) * t.tokenMult * randRange(rng, 0.6, 1.8)),
+        Math.round(lerpCurve(ERA_TOKENS_PER_SEC, year) * t.tokenMult * BAL.inferDemand * randRange(rng, 0.6, 1.8)),
       );
       const tpotMs = Math.round(randRange(rng, 20, 60) + (model.activeParamsB > 80 ? randRange(rng, 10, 40) : 0));
       const ctxOpts = CONTEXT_OPTIONS.find(([y]) => year < y)?.[1] ?? [262144];
+      const ctxTokens = pick(rng, ctxOpts);
       const contract: InferenceContract = {
         kind: 'inference',
         id: `inf-${month}-${i}-${suffix}`,
@@ -191,19 +223,23 @@ export function generateContracts(state: GameState, month: number, rng: RNG): Co
         tokensPerSec: tps,
         tpotMs: Math.max(15, tpotMs),
         ttftMs: Math.round(randRange(rng, 150, 700) / 10) * 10,
-        contextTokens: pick(rng, ctxOpts),
+        contextTokens: ctxTokens,
+        // priced so a fully used GPU earns about `inferPremium` x the reserved GPU-hour price (latency SLAs and idle headroom justify the markup)
         pricePerMTok: Math.max(
           0.01,
           round3(
-            mtokPrice(model.activeParamsB, year)
+            clampBand(
+              (gpuHourAnchor(year) * BAL.inferPremium) / ((refTokensPerGpu(year, model, ctxTokens, Math.max(15, tpotMs)) * 3600) / 1e6),
+              mtokPrice(model.activeParamsB, year),
+            )
             * (tpotMs < 30 ? 1.25 : 1)
             * t.priceMult
             * randRange(rng, 0.9, 1.2)
-            * (state.marketPriceIndex ?? 1), // rival competition reprices fresh offers
+            * (state.marketPriceIndex ?? 1) * (state.demandBoost ?? 1), // rival competition and scenario demand reprice fresh offers
           ),
         ),
       };
-      contract.rampMonths = randInt(rng, 5, 8);
+      contract.rampMonths = randInt(rng, 5, 8) + rampPad(year);
       out.push(contract);
     }
   }

@@ -42,7 +42,9 @@ const COOL_LEVEL: Record<string, number> = { air: 0, rdhx: 1, dlc: 2, immersion:
 
 /** Cheapest-per-kW purchasable plant units for a hall. */
 function plantChoice(g: GameState, hallClass: string, kind: 'power' | 'cooling') {
-  const cand = ALL_ITEMS.filter(i => kind === 'power' ? (i.kind === 'power' && i.powerType === 'transformer') : (i.kind === 'cooling' && i.serves === hallClass)).map(i => offerAt(i, g.month)).filter(o => o.available);
+  // rear-door halls have no plant of their own class: they reject heat through the same chilled-water plant as air halls
+  const plantClass = (c: string) => (c === 'rdhx' ? 'air' : c);
+  const cand = ALL_ITEMS.filter(i => kind === 'power' ? (i.kind === 'power' && i.powerType === 'transformer') : (i.kind === 'cooling' && i.serves === plantClass(hallClass))).map(i => offerAt(i, g.month)).filter(o => o.available);
   cand.sort((a, b) => a.unitPrice / ((a.item as any).capacityKW || 1) - b.unitPrice / ((b.item as any).capacityKW || 1));
   return cand[0];
 }
@@ -67,15 +69,36 @@ export function stepProject(st: GameStore, pid: string): void {
     if (load <= h2.itPowerKW && load <= h2.coolingKW) {
       while (placed < p.racks && free - (placed - p.rackIds.length) > 0 && have(1)) { const r = st.placeRack(hall.id, designId); if (!r.ok) { note(`placement blocked: ${r.message}`); break; } placed++; }
     }
-    if (placed > p.rackIds.length) { const ids = [...p.rackIds, ...useStoreHall(st, hall.id).racks.filter(r => !before.has(r.id)).map(r => r.id)]; note(`deployed ${placed}/${p.racks} racks`); st.patchProject(pid, { rackIds: ids, ...(placed >= p.racks ? { stage: 'commissioning' as const } : {}) }); }
+    if (placed > p.rackIds.length) { st.patchProject(pid, { stalledSince: undefined, alertedMonth: undefined }); const ids = [...p.rackIds, ...useStoreHall(st, hall.id).racks.filter(r => !before.has(r.id)).map(r => r.id)]; note(`deployed ${placed}/${p.racks} racks`); st.patchProject(pid, { rackIds: ids, ...(placed >= p.racks ? { stage: 'commissioning' as const } : {}) }); }
     else {
+      // Missing plant is the easy path's job, not the player's: top up power and cooling for what this hall now has to carry.
+      const topUp = (kind: 'power' | 'cooling', deficit: number): void => {
+        const ch = plantChoice(G(), h2.coolingClass, kind); if (!ch) return;
+        const id = ch.item.id, cap = (ch.item as any).capacityKW || 1;
+        const coming = (G().inventory[id] ?? 0) + G().orders.filter(o => o.itemId === id).reduce((n, o) => n + o.qty, 0);
+        const units = Math.ceil(deficit / cap) - coming; if (units <= 0) return;
+        const b = st.buy(id, units); if (!b.ok) return;
+        const inst = (kind === 'power' ? h2.powerEquip : h2.coolingEquip)[id] ?? 0;
+        const cur = G().projects!.find(x => x.id === pid)!;
+        st.patchProject(pid, { plant: [...cur.plant.filter(x => x.id !== id), { id, n: inst + coming + units }] });
+        note(`ordered ${units} × ${ch.item.name} to cover the hall's ${kind === 'power' ? 'power' : 'heat'} load`);
+      };
+      if (load > h2.itPowerKW) topUp('power', load - h2.itPowerKW);
+      if (load > h2.coolingKW) topUp('cooling', load - h2.coolingKW);
       const why = load > h2.itPowerKW ? `waiting for power: need ${load.toFixed(0)} kW IT, hall has ${h2.itPowerKW.toFixed(0)} kW (order a transformer on Build)`
         : load > h2.coolingKW ? `waiting for cooling: need ${load.toFixed(0)} kW, hall rejects ${h2.coolingKW.toFixed(0)} kW (add cooling on Build)`
         : free <= 0 ? `${hall.name} is full — buy floor space on Build`
         : !have(1) ? 'waiting for parts to arrive (lead time)' : 'waiting';
       const last = (G().projects ?? []).find(x => x.id === pid)?.notes.slice(-1)[0] ?? '';
       if (!last.endsWith(why)) note(why);
-      if (G().month - p.startMonth > 16) { st.patchProject(pid, { stage: 'failed', notes: [...(G().projects ?? []).find(x => x.id === pid)!.notes, 'Gave up after 16 months stuck — the parts are in your warehouse; finish the build by hand.'].slice(-12) }); }
+      // surface the blocker as a log alert within a month, then every 3 months, so a stall never goes unnoticed
+      const cur = (G().projects ?? []).find(x => x.id === pid)!;
+      const since = cur.stalledSince ?? G().month;
+      if (cur.stalledSince === undefined || (G().month - (cur.alertedMonth ?? since) >= 3 && why !== 'waiting for parts to arrive (lead time)')) {
+        st.patchProject(pid, { stalledSince: since, alertedMonth: G().month });
+        if (why !== 'waiting for parts to arrive (lead time)' || G().month - since >= 3) useGame.setState(s0 => ({ game: { ...s0.game, log: [...s0.game.log, { month: G().month, level: 'bad' as const, text: `Easy path is stuck on "${t.name}" for ${G().activeContracts.find(a => a.contract.id === p.contractId)?.contract.customer ?? 'a contract'}: ${why}.` }].slice(-400) } }));
+      }
+      if (G().month - p.startMonth > 10) { st.patchProject(pid, { stage: 'failed', notes: [...(G().projects ?? []).find(x => x.id === pid)!.notes, 'Gave up after 10 months stuck — the parts are in your warehouse; finish the build by hand.'].slice(-12) }); }
     }
   } else if (p.stage === 'commissioning') {
     const racks = useStoreHall(st, hall.id).racks.filter(r => p.rackIds.includes(r.id));
