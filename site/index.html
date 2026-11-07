@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIGAWATT — AI Datacenter Tycoon</title>
+<meta name="description" content="Build an AI datacenter from 2020 to 2028. Buy real GPUs, design racks, cool a hall, wire a supercomputer and lease it to customers who train and serve frontier models. Free for Linux, Windows and macOS. Steam Deck friendly.">
+<meta property="og:title" content="GIGAWATT — AI Datacenter Tycoon">
+<meta property="og:description" content="Real GPUs, real power and cooling limits, real fabrics. Build the datacenter that trains the next frontier model.">
+<meta property="og:image" content="https://ixaxaar.github.io/gigawatt/assets/og.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="top">
+  <a class="logo" href="#top" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="#loop">The loop</a>
+    <a href="#features">Features</a>
+    <a href="#heat">Heat lab</a>
+    <a href="#deck">Controller</a>
+    <a href="#engine">Under the hood</a>
+    <a href="#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="rackfield" aria-hidden="true"></canvas>
+  <div class="hero-copy">
+    <p class="eyebrow">AI Datacenter Tycoon · 2020 → 2028</p>
+    <h1>GIGA<span>WATT</span></h1>
+    <p class="lede">Buy real GPUs. Design your own racks. Fight physics for every kilowatt. Wire a supercomputer and lease it to the labs racing to train the next frontier model.</p>
+    <div class="cta">
+      <a id="dl-main" class="btn go big" href="https://github.com/ixaxaar/gigawatt/releases/latest">Download free</a>
+      <a class="btn big" href="https://github.com/ixaxaar/gigawatt">View on GitHub</a>
+    </div>
+    <p class="fine" id="dl-note">Linux · Windows · macOS &nbsp;·&nbsp; plays on Steam Deck with a controller</p>
+  </div>
+  <figure class="hero-shot">
+    <img src="assets/hall.webp" width="1600" height="900" alt="GIGAWATT top-down view of a datacenter hall: racks labelled by hardware and customer, with the Overview drawer open on the right">
+    <span class="chip c1">690+ real parts</span>
+    <span class="chip c2">live thermal state</span>
+    <span class="chip c3">train &amp; serve</span>
+  </figure>
+</section>
+
+<!-- STATS -->
+<section class="stats" aria-label="At a glance">
+  <div><b>690+</b><span>real parts from 100+ vendors</span></div>
+  <div><b>70+</b><span>ready-to-order system templates</span></div>
+  <div><b>97</b><span>months, Dec 2020 → Dec 2028</span></div>
+  <div><b>4</b><span>cooling classes: air, rear-door, liquid, immersion</span></div>
+  <div><b>330</b><span>automated tests keep the economy honest</span></div>
+</section>
+
+<!-- LOOP -->
+<section class="band" id="loop">
+  <h2><span class="tag">THE LOOP</span> Four moves, a thousand tradeoffs</h2>
+  <div class="steps">
+    <article class="step s1"><i>1</i><h3>Design</h3><p>Pick a platform or build a tray and rack from individual CPUs, DIMMs, GPUs, NICs and PSUs. The validator tells you what breaks.</p></article>
+    <article class="step s2"><i>2</i><h3>Order</h3><p>Real lead times, allocation caps, vendor relationships and volume discounts. Buy DIY, an OEM rack, or a turnkey one.</p></article>
+    <article class="step s3"><i>3</i><h3>Build</h3><p>Power, cooling, floor loading, internet circuits. Air, rear-door, direct-liquid or immersion. Overcommit and racks trip.</p></article>
+    <article class="step s4"><i>4</i><h3>Lease</h3><p>Training customers rent a coherent cluster by the GPU-hour. Inference customers pay per million tokens. Miss the SLA and they leave.</p></article>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <h2><span class="tag">FEATURES</span> Everything is a real engineering constraint</h2>
+
+  <article class="feat">
+    <div class="txt">
+      <h3 class="c-yellow">Procure like an operator</h3>
+      <p>A guided planner (platform → how many → who builds it) on top of a full parts bin. Specs, street prices that drift with the AI boom, lead times that stretch when demand spikes.</p>
+      <ul>
+        <li>HGX A100 to Vera Rubin NVL144, AMD Instinct, Gaudi, Cerebras, Tenstorrent</li>
+        <li>Vendor frameworks and relationships unlock discounts and allocation</li>
+        <li>Open orders can be cancelled or trimmed, with a restocking fee</li>
+      </ul>
+    </div>
+    <figure><img loading="lazy" src="assets/procure.webp" width="1600" height="900" alt="The Procure drawer showing platform cards and a build planner"></figure>
+  </article>
+
+  <article class="feat flip">
+    <div class="txt">
+      <h3 class="c-orange">Design at the motherboard level</h3>
+      <p>A tray bench with sockets, DIMM banks, GPU baseboards, NICs, NVMe and PSUs, plus a 42U rack elevation. Live validation and a five-year cost advisor.</p>
+      <ul>
+        <li>Power, weight and cooling interface are checked before you order</li>
+        <li>Save designs and reuse them across halls</li>
+      </ul>
+    </div>
+    <figure><img loading="lazy" src="assets/design.webp" width="1600" height="900" alt="The Design Lab tray bench"></figure>
+  </article>
+
+  <article class="feat">
+    <div class="txt">
+      <h3 class="c-violet">Wire a real supercomputer</h3>
+      <p>Group racks into one machine, auto-design the fabric or hand-tune it, and see what it can train or serve: per-model tokens per second, MFU and time to first token.</p>
+      <ul>
+        <li>Fat-tree bisection, scale-up domains, oversubscription</li>
+        <li>MoE and dense models behave differently, as they should</li>
+      </ul>
+    </div>
+    <figure><img loading="lazy" src="assets/supercomputer.webp" width="1600" height="900" alt="The Supercomputer builder showing a fabric and model fit table"></figure>
+  </article>
+
+  <article class="feat flip">
+    <div class="txt">
+      <h3 class="c-pink">Customers who actually want things</h3>
+      <p>Offers show a live fit verdict and exactly what you still need to buy. Hit <em>Easy Path</em> and the game orders, installs, deploys and assigns for you as parts arrive. Good service earns renewals.</p>
+      <ul>
+        <li>Training vs inference, SLAs, ramp windows, three rival operators</li>
+        <li>Sell idle capacity on the spot market, or sign power purchase agreements</li>
+      </ul>
+    </div>
+    <figure><img loading="lazy" src="assets/customers.webp" width="1600" height="900" alt="The Customers drawer with market offers and a build suggestion"></figure>
+  </article>
+
+  <article class="feat">
+    <div class="txt">
+      <h3 class="c-cyan">Run it, age it, sell it</h3>
+      <p>Staffing scales with racks, liquid cooling and fabric size. Hardware loses value every year and every GPU generation. Know when to replace a rack and when to ride it out.</p>
+      <ul>
+        <li>Burn-in and maintenance policy, spares, failures, repairs</li>
+        <li>Bankruptcy after three months of negative cash; a scored report at the end</li>
+      </ul>
+    </div>
+    <figure><img loading="lazy" src="assets/build-ledger.webp" width="1600" height="900" alt="The Facility drawer with power and cooling gauges and the machine ledger"></figure>
+  </article>
+</section>
+
+<!-- DRAWER UI -->
+<section class="band alt">
+  <h2><span class="tag">THE FLOOR</span> Your datacenter never leaves the screen</h2>
+  <p class="sub">The hall opens in top view with every rack labelled by hardware and customer. A row of dots shows thermal load. Everything else is a drawer that slides over it, so you can keep an eye on the floor while you shop, hire, or sign a contract.</p>
+  <div class="gallery">
+    <figure><img loading="lazy" src="assets/thermal.webp" width="1600" height="900" alt="Thermal view of the hall"><figcaption>Thermal view</figcaption></figure>
+    <figure><img loading="lazy" src="assets/campus-dlc.webp" width="1600" height="900" alt="A direct-liquid-cooled hall at campus scale"><figcaption>Direct liquid cooling</figcaption></figure>
+    <figure><img loading="lazy" src="assets/campus-rdhx.webp" width="1600" height="900" alt="A rear-door heat exchanger hall"><figcaption>Rear-door heat exchangers</figcaption></figure>
+    <figure><img loading="lazy" src="assets/campus-aisle.webp" width="1600" height="900" alt="Cold aisle containment"><figcaption>Cold aisle</figcaption></figure>
+  </div>
+</section>
+
+<!-- HEAT LAB -->
+<section class="lab" id="heat">
+  <h2><span class="tag">HEAT LAB</span> Can your hall cool that rack?</h2>
+  <p class="sub">A back-of-the-envelope version of the question the game asks you every month. Rack powers are rounded vendor figures; the game computes them from the exact parts you choose.</p>
+  <div class="labgrid">
+    <div class="controls">
+      <label for="gen">Generation</label>
+      <select id="gen">
+        <option value="13">2020 · 2× DGX A100 (16 GPUs/rack)</option>
+        <option value="41">2023 · 4× DGX H100 (32 GPUs/rack)</option>
+        <option value="57">2025 · 4× HGX B200 (32 GPUs/rack)</option>
+        <option value="132" selected>2025 · GB200 NVL72 (72 GPUs/rack)</option>
+        <option value="190">2026 · Vera Rubin NVL144, projected (144 GPUs/rack)</option>
+      </select>
+      <label for="mw">Hall power budget: <b id="mwv">5</b> MW</label>
+      <input id="mw" type="range" min="1" max="50" value="5">
+      <label for="cool">Cooling</label>
+      <select id="cool">
+        <option value="20">Air (CRAH + containment)</option>
+        <option value="55">Rear-door heat exchanger</option>
+        <option value="150" selected>Direct liquid cooling</option>
+        <option value="250">Immersion</option>
+      </select>
+    </div>
+    <div class="readout" aria-live="polite">
+      <div class="verdict" id="verdict"></div>
+      <div class="big"><b id="racks">0</b><span>racks fit in the power budget</span></div>
+      <div class="big"><b id="gpus">0</b><span>accelerators</span></div>
+      <div class="dots" id="dots" aria-hidden="true"></div>
+      <p id="why"></p>
+    </div>
+  </div>
+</section>
+
+<!-- CONTROLLER -->
+<section class="band deck" id="deck">
+  <h2><span class="tag">STEAM DECK</span> Play on the couch</h2>
+  <p class="sub">Full controller support: D-pad navigates every drawer, sticks fly the camera, and the UI scales up on small screens. A Steam release is planned.</p>
+  <div class="pad">
+    <ul>
+      <li><kbd>A</kbd> select</li>
+      <li><kbd>B</kbd> back / close drawer</li>
+      <li><kbd>X</kbd> inspect the rack under the reticle</li>
+      <li><kbd>Y</kbd> next month</li>
+      <li><kbd>LB</kbd><kbd>RB</kbd> switch drawers</li>
+      <li><kbd>LT</kbd><kbd>RT</kbd> zoom</li>
+      <li><kbd>L-stick</kbd> pan <kbd>R-stick</kbd> orbit</li>
+      <li><kbd>D-pad</kbd> navigate</li>
+      <li><kbd>Start</kbd> menu <kbd>View</kbd> game speed</li>
+    </ul>
+    <figure><img loading="lazy" src="assets/campus-thermal.webp" width="1600" height="900" alt="A campus-scale hall in thermal view"><figcaption>Fly the camera across hundreds of racks with the sticks; the in-game Codex explains every part as you meet it</figcaption></figure>
+  </div>
+</section>
+
+<!-- ENGINE -->
+<section class="engine" id="engine">
+  <h2><span class="tag">UNDER THE HOOD</span> A deterministic engine you can test and train against</h2>
+  <div class="flow" aria-label="Architecture">
+    <div class="node n1"><b>Godot 4</b><span>Vulkan front-end, 3D hall, drawers, controller</span></div>
+    <div class="arrow">⇄</div>
+    <div class="node n2"><b>Node sidecar</b><span>JSON line protocol over a pipe</span></div>
+    <div class="arrow">⇄</div>
+    <div class="node n3"><b>TypeScript engine</b><span>every rule: power, cooling, fabric, markets</span></div>
+  </div>
+  <div class="cols3">
+    <article><h3>Same seed, same game</h3><p>The monthly tick is an ordered pipeline of systems. Golden trajectory tests pin full campaigns bit for bit.</p></article>
+    <article><h3>Scripted players</h3><p>Six personas (idle, random, operator, tycoon, cautious, spot-only) play full 97-month campaigns and check whole-state invariants every month.</p></article>
+    <article><h3>An RL environment</h3><p>The engine exposes a step/reset interface with a Python wrapper, so agents can learn to run a datacenter.</p></article>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download" id="download">
+  <h2><span class="tag">DOWNLOAD</span> Free, no account</h2>
+  <p class="sub" id="ver">Loading the latest release…</p>
+  <div class="dlgrid" id="dlgrid">
+    <a class="dl" data-os="linux" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Linux</b><span>x86_64 · tar.gz</span></a>
+    <a class="dl" data-os="windows" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Windows</b><span>x64 · zip</span></a>
+    <a class="dl" data-os="macos-arm64" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>macOS</b><span>Apple silicon · zip</span></a>
+    <a class="dl" data-os="macos-x64" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>macOS</b><span>Intel · zip</span></a>
+  </div>
+  <p class="fine">Builds are unsigned, so your OS will warn you the first time. Each release lists SHA-256 checksums. Everything is built by GitHub Actions from the public source.</p>
+</section>
+
+</main>
+
+<footer>
+  <div><b>⚡ GIGAWATT</b> · AI Datacenter Tycoon</div>
+  <div><a href="https://github.com/ixaxaar/gigawatt">Source</a> · <a href="https://github.com/ixaxaar/gigawatt/releases">Releases</a> · <a href="https://github.com/ixaxaar/gigawatt/issues">Report a bug</a></div>
+  <div class="fine">Built with Godot 4 and TypeScript. Part names and specs are for educational purposes; vendors are not affiliated with this game.</div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

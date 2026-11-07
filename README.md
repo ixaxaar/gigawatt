@@ -1,5 +1,7 @@
 # ⚡ GIGAWATT — AI Datacenter Tycoon
 
+**[ixaxaar.github.io/gigawatt](https://ixaxaar.github.io/gigawatt/)**
+
 **Build an AI datacenter from 2020 to 2028.** Buy real GPUs, NICs and switches, design your own server trays and racks, power and cool a hall, wire a fat-tree fabric into a supercomputer, and lease it to customers who want to **train** and **serve** frontier models — all while the price of electricity, the hardware roadmap and the odd backhoe conspire against you.
 
 The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-model datacenter). Every rule — physics of power and cooling, fabric bisection, MFU, inference capacity, contracts, markets, incidents — runs in a deterministic TypeScript engine that Godot drives through a headless Node sidecar.
