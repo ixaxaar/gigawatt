@@ -1,6 +1,6 @@
 # ⚡ GIGAWATT — AI Datacenter Tycoon
 
-**[ixaxaar.github.io/gigawatt](https://ixaxaar.github.io/gigawatt/)**
+**[gigawatt.ing](https://gigawatt.ing/)**
 
 **Build an AI datacenter from 2020 to 2028.** Buy real GPUs, NICs and switches, design your own server trays and racks, power and cool a hall, wire a fat-tree fabric into a supercomputer, and lease it to customers who want to **train** and **serve** frontier models — all while the price of electricity, the hardware roadmap and the odd backhoe conspire against you.
 
