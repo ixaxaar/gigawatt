@@ -201,17 +201,6 @@
  },
  "music": [
   {
-   "id": "neon-overclock",
-   "title": "Neon Overclock",
-   "genre": "Synthwave",
-   "bpm": 104,
-   "moods": [
-    "play",
-    "drive"
-   ],
-   "file": "music/neon-overclock.ogg"
-  },
-  {
    "id": "cold-aisle",
    "title": "Cold Aisle",
    "genre": "Lo-fi hip-hop",

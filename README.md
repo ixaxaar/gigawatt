@@ -1,6 +1,6 @@
 # ⚡ GIGAWATT — AI Datacenter Tycoon
 
-**[gigawatt.ing](https://gigawatt.ing/)**
+**[gigawatt.ing](https://gigawatt.ing/)** · **[Player wiki](https://gigawatt.ing/wiki/)** · **[Community](https://github.com/ixaxaar/gigawatt/discussions)**
 
 **Build an AI datacenter from 2020 to 2028.** Buy real GPUs, NICs and switches, design your own server trays and racks, power and cool a hall, wire a fat-tree fabric into a supercomputer, and lease it to customers who want to **train** and **serve** frontier models — all while the price of electricity, the hardware roadmap and the odd backhoe conspire against you.
 
@@ -23,9 +23,13 @@ The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-mode
 | **Roadmap** | Hardware keynotes (GTC, Computex, SC, OCP, AMD Advancing AI) fire on their real dates: a card explains the technology and what it changes in your hall. Announced parts can be **pre-ordered** at a launch premium and arrive after they ship; cancelling refunds 90%. |
 | **Codex** | "Datacenter 101": every concept with a live *do I need this right now?* verdict, plus the accelerator timeline. |
 
-The campaign runs Dec 2020 → Dec 2028 and ends with a scored report (net worth, reliability, scale); three months of negative cash is bankruptcy (Learner mode can't go bankrupt). Saves are versioned and stored in your user data folder: three slots plus a monthly autosave, and quitting saves automatically. Continue on the title screen resumes exactly where you left off, including the tutorial.
+The campaign runs Dec 2020 → Dec 2028. An **investor board** (Margaux Vance, Dev Okonkwo, Ilse Brandt) reviews your revenue every January from the second year on; three missed reviews in a row and you are fired (Learner mode only warns). Three months of negative cash is bankruptcy (Learner mode can't go bankrupt). Each January a **chapter card** sets the scene for the year, and now and then a **decision** with two honest answers lands on your desk. The story ends one of six ways (IPO, acquired by a hyperscaler, a steady independent, a fire sale, bankrupt, or fired), with an end screen that shows your revenue and cash over eight years, your best deal, your worst incident and how you compare with the rivals.
 
-**Sound.** Every button, purchase and alarm has its own 8-bit cue (banknote rustle and a till bell for buying, coin cascade for selling, fanfares for missions and launches), and a catalog of seven long, bass-heavy tracks (lo-fi hip-hop, dub techno, trip-hop, ambient, future garage, synthwave, dark ambient) that follows the game: lo-fi on the title, a rotating mix while you build, a dark ambient track when something fails. Music, effects and master volume, and a fixed music style, are in Settings. All audio is synthesised by `tools/audio/generate.py` (numpy, scipy, ffmpeg), so there are no samples and no licensing.
+Saves are versioned and stored in your user data folder: three slots plus a monthly autosave, and quitting saves automatically. Continue on the title screen resumes exactly where you left off, including the tutorial.
+
+The Overview opens with a **Needs you now** card, the one thing worth doing next. A fresh game shows Overview, Customers and Supply; Facility, Operations, the Design Lab, the Supercomputer builder and the Codex appear as you need them (Tycoon mode shows everything from the start).
+
+**Sound.** Every button, purchase and alarm has its own synthesised cue (banknote rustle and a till bell for buying, coin cascade for selling, fanfares for missions and launches), and a catalog of six long, bass-heavy tracks (lo-fi hip-hop, dub techno, trip-hop, ambient, future garage, dark ambient) that follows the game: lo-fi on the title, a rotating mix while you build, a dark ambient track when something fails. The datacenter hum grows with the hall and gets brighter with liquid cooling. Music, effects and master volume, and a fixed music style, are in Settings. All audio is synthesised by `tools/audio/generate.py` (numpy, scipy, ffmpeg), so there are no samples and no licensing.
 
 Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon**. A short guided tutorial walks a first run from the first customer to the first revenue, then hands over to a seven-chapter **Learning path** (power and cooling, silicon, networks, customers, money, resilience) with cash-rewarded goals and live "do I need this now?" concepts.
 
@@ -52,6 +56,10 @@ The same engine runs multi-hall campuses (the `stress-campus` scenario: eight ha
 ![Build screen with the machine ledger](docs/screenshots/build-ledger.png)
 
 The Build screen shows floor space (bought in blocks, with a commissioning delay) and a machine ledger: every rack's serial, slot, status and what it is doing right now.
+
+## Learn the game
+
+The **[player wiki](https://gigawatt.ing/wiki/)** has a first-hour walkthrough, guides to power and cooling, racks, networking, contracts, money, energy and the hardware roadmap, a FAQ and a glossary. The source is `docs/wiki/*.md`; `node scripts/build-wiki.mjs` renders it into `site/wiki`. Questions, strategies and show-offs belong in [GitHub Discussions](https://github.com/ixaxaar/gigawatt/discussions); bugs go in [Issues](https://github.com/ixaxaar/gigawatt/issues).
 
 ## Download
 
@@ -130,4 +138,4 @@ The catalogue spans NVIDIA/AMD/Intel accelerators, 20+ switch and NIC vendors, t
 
 ## Status
 
-Early but playable. Known gaps: advisor bubble, per-mode tip toggling, part art, drag-and-drop in the Design Lab, objectives/incident cards in the Godot layer.
+Playable and balanced against scripted players (`docs/playtest/report.md`). Known gaps: part art, drag-and-drop in the Design Lab, layered adaptive music, and a human listening pass on the soundtrack (loudness and loop seams are measured, see `tools/audio/LISTENING.md`).

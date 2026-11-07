@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FAQ · GIGAWATT Wiki</title>
+<meta name="description" content="Fifteen questions every operator asks sooner or later.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/faq.html">
+<meta property="og:title" content="FAQ · GIGAWATT Wiki">
+<meta property="og:description" content="Fifteen questions every operator asks sooner or later.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/faq.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html" aria-current="page">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>FAQ</h1>
+    <p class="lede2">Fifteen questions every operator asks sooner or later.</p>
+    
+    <p><strong>1. Which mode should I pick?</strong> Pick <strong>Learner</strong> if a chiller is a mystery — it adds explainers everywhere, and you can't go bankrupt. <strong>Operator</strong> is the intended experience with the guided planner and checklists. <strong>Tycoon</strong> strips the help. You can cycle modes any time from the top bar. The Easy Path (&quot;do it for me&quot;) is available in every mode.</p>
+<p><strong>2. Do I need to know hardware to play?</strong> No. The tutorial walks you from first customer to first revenue, the Learning path pays you to learn each system, and the in-game Codex explains every concept and part with a live &quot;do I need this right now?&quot; verdict. Start with <a href="first-hour.html">Your first hour</a>.</p>
+<p><strong>3. How do I actually make money?</strong> Sign contracts, deploy hardware that meets their checks in time, and keep utilization high. Revenue minus power, staff, support, depreciation and interest is profit. Idle GPUs on the spot market cover part of their own cost while they wait.</p>
+<p><strong>4. Why does my order take months to arrive?</strong> Everything has a lead time, hot GPUs have per-quarter allocation caps, and shocks can slip in-transit orders further. Order ahead of need; missions teach this first for a reason. See <a href="hardware-roadmap.html">Hardware roadmap</a>.</p>
+<p><strong>5. Why can't I place my rack?</strong> A deploy needs every part of the design in the warehouse, plus hall power, cooling headroom and a free slot. The Warehouse and Build screens list exactly what's missing — use <em>order all missing</em>.</p>
+<p><strong>6. What is commissioning / burn-in?</strong> The soak period after installation: power-on, firmware, burn-in tests. It catches dead GPUs and optics before customers do. Its length is a policy you set in Operations — skipping it ships dead silicon.</p>
+<p><strong>7. Air or liquid cooling?</strong> Air works to roughly 20–25 kW per rack, rear-door heat exchangers stretch toward 40 kW, and direct-to-chip liquid (with CDUs) is required beyond that — GB200 NVL72-class racks (~120 kW) are liquid-only. See <a href="power-and-cooling.html">Power and cooling</a>.</p>
+<p><strong>8. What is PUE and why should I care?</strong> Total facility power ÷ IT power. You pay the overhead every month, so efficient cooling directly cuts your power bill — especially with <a href="energy-and-spot.html">PPAs</a> pricing every MWh.</p>
+<p><strong>9. Training or inference contracts?</strong> Whatever your hardware fits. Training pays by the GPU-hour and demands scale-up domains and fabric bandwidth; inference pays per token and rewards memory capacity and bandwidth. A balanced book of both rides out demand cycles.</p>
+<p><strong>10. What oversubscription should I pick?</strong> 1:1 for training clusters (congestion slows collectives), 2–4:1 for inference (much cheaper, rarely missed). The Supercomputer screen's auto-design buttons pick sensibly for you. See <a href="networking-and-clusters.html">Networking and clusters</a>.</p>
+<p><strong>11. Should I sign a PPA?</strong> Usually yes, sized to your steady load: it hedges energy-crisis spikes. But take-or-pay means you buy the committed MW even when idle, so don't over-commit before the load exists. See <a href="energy-and-spot.html">Energy and the spot market</a>.</p>
+<p><strong>12. My contract says &quot;awaiting deployment&quot; — what now?</strong> You signed; the ramp window (about four months) is ticking. Build/buy the hardware, cluster it on the Supercomputer screen, then assign the cluster — or serve straight from racks for inference. Miss the window and the customer walks with a reputation hit. See <a href="customers-and-contracts.html">Customers and contracts</a>.</p>
+<p><strong>13. A rack failed — why, and how do I fix it fast?</strong> Parts fail at a steady rate. A spare on the shelf swaps in within about a month; without one, the vendor RMA takes roughly four. Check the spares table on the Warehouse and keep it at the advised level. See <a href="incidents-and-resilience.html">Incidents and resilience</a>.</p>
+<p><strong>14. When should I sell old racks?</strong> When residual value is still real — typically as the successor generation lands and demand shifts to it. The Operations lifecycle table sorts worst-first and advises per rack. Sell while the hardware is still a discounted workhorse, not a paperweight.</p>
+<p><strong>15. How does the campaign end?</strong> December 2028 brings a scored report: rating, net worth, lifetime revenue, peak accelerators, contracts completed, reputation. Alternatively, three consecutive months of negative cash ends everything early in bankruptcy (Learner mode excepted). See <a href="money-and-operations.html">Money and operations</a>.</p>
+<p>Still stuck? The <a href="glossary.html">Glossary</a> defines the words, and the in-game Codex explains every part.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="strategy-tips.html">← Strategy tips</a>
+      <a href="glossary.html">Glossary →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/faq.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

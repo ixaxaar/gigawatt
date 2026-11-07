@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Networking and clusters · GIGAWATT Wiki</title>
+<meta name="description" content="Scale-up versus scale-out, fabrics and oversubscription, and how the Supercomputer screen turns racks into one machine.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/networking-and-clusters.html">
+<meta property="og:title" content="Networking and clusters · GIGAWATT Wiki">
+<meta property="og:description" content="Scale-up versus scale-out, fabrics and oversubscription, and how the Supercomputer screen turns racks into one machine.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/networking-and-clusters.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html" aria-current="page">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Networking and clusters</h1>
+    <p class="lede2">Scale-up versus scale-out, fabrics and oversubscription, and how the Supercomputer screen turns racks into one machine.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#two-kinds-of-network">Two kinds of network</a></li><li><a href="#the-supercomputer-screen">The Supercomputer screen</a></li><li><a href="#oversubscription">Oversubscription</a></li><li><a href="#design-rules-of-thumb">Design rules of thumb</a></li><li><a href="#internet-transit">Internet transit</a></li></ul></nav>
+    <p>A <strong>cluster</strong> is racks plus a network fabric. Racks that aren't clustered can still serve inference straight from the Customers screen, but a training customer rents one big coherent machine — that's what you build here.</p>
+<h2 id="two-kinds-of-network">Two kinds of network</h2>
+<ul><li><strong>Scale-up (NVLink)</strong> links GPUs inside a node or rack at TB/s and makes them act like one GPU with one memory domain. Model-parallel and MoE traffic lives here. Contracts state the scale-up domain they need (a 72-GPU NVLink domain comes from a GB200 NVL72 rack).</li><li><strong>Scale-out (InfiniBand / Ethernet)</strong> links nodes and racks at 25–100+ GB/s per GPU. Data-parallel gradients cross this one. Contracts also state the GB/s per GPU they expect.</li></ul>
+<p>Wrong balance between the two means idle GPUs. Training needs both; inference mostly needs memory and tokens per second.</p>
+<h2 id="the-supercomputer-screen">The Supercomputer screen</h2>
+<ol><li><strong>Pick racks</strong> — any online racks not already in a cluster, across all halls.</li><li><strong>Wire the network</strong> — the easy way is <strong>Auto-design for TRAINING</strong> (finds the cheapest fabric that meets the year's expected GB/s per GPU) or <strong>Auto-design for INFERENCE</strong> (cheaper still). The advanced panel exposes everything: scale-out tech (InfiniBand NDR/XDR, Spectrum-X, 400G/800G Ethernet, RoCE, Ultra Ethernet), topology (fat-tree rail-optimized, fat-tree, single-domain, dragonfly, torus-ish), leaf and spine switches, node→leaf and leaf→spine cables, and an oversubscription slider.</li><li><strong>Read the stats</strong> — accelerators, scale-up domain, FP8 compute, memory, power, effective GB/s per GPU, <strong>bisection bandwidth</strong> and network capex.</li><li><strong>What can this machine do?</strong> — a per-model table showing whether the training state fits (tokens/s and MFU) and whether weights fit for serving (tokens/s, time-to-first-token, tensor-parallel size).</li><li><strong>BUILD CLUSTER</strong>.</li></ol>
+<p>Existing machines can be <strong>unclustered</strong> and <strong>re-clustered</strong> at any time — dissolve one, adjust the rack selection, rebuild. Clusters show in the hall as colored markers, and each rack's inspector says which cluster and customer it belongs to.</p>
+<figure><img loading="lazy" src="img/supercomputer.webp" alt="Supercomputer builder"><figcaption>Pick racks, wire the fabric, and see what the machine can train or serve.</figcaption></figure>
+<h2 id="oversubscription">Oversubscription</h2>
+<p>Spine uplinks can carry less than the sum of leaf downlinks — that ratio is <strong>oversubscription</strong>. 2:1 cuts your spine cost while slowing collective operations. Pick <strong>1:1 for training</strong> (big all-reduce traffic punishes congestion) and <strong>2–4:1 for inference</strong>, where it is usually fine and much cheaper. The stats panel flags effective GB/s per GPU below the year's training tier.</p>
+<h2 id="design-rules-of-thumb">Design rules of thumb</h2>
+<ul><li><strong>One NIC per GPU, rail-optimized</strong>, for training trays; half that for inference (the tray sizing advisor checks this).</li><li><strong>The scale-up domain decides which models you can serve efficiently</strong> — MoE expert parallelism and huge-model inference want everything inside one NVLink domain.</li><li><strong>At scale, the network IS the computer</strong>: past a few hundred GPUs, bisection bandwidth and failure rates dominate training efficiency. The 256-accelerator mission exists to teach this.</li><li><strong>HBM and the KV cache</strong> decide inference capacity: GPU memory holds the weights plus every active request's cache. No room to batch users means tokens/s you can't sell. The &quot;what you need to buy&quot; checks on contracts verify this for you.</li><li><strong>Fewer, bigger switches</strong> (higher radix) mean fewer tiers, fewer hops and less cabling power per GPU — a generation of 102.4 Tb/s switch silicon halves switch count for the same fabric.</li></ul>
+<h2 id="internet-transit">Internet transit</h2>
+<p>Customer-facing bandwidth lives on the <strong>Build</strong> screen: buy IP transit circuits, watch demand (Gb/s) against your uplink capacity, and — before signing SLA-heavy contracts — buy a <strong>second carrier on a physically diverse path</strong>. One circuit is one backhoe away from an outage (see <a href="incidents-and-resilience.html">Incidents and resilience</a>).</p>
+<p>Related: <a href="customers-and-contracts.html">Customers and contracts</a> for assigning clusters, <a href="hardware-roadmap.html">Hardware roadmap</a> for how fabrics evolve.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="servers-and-racks.html">← Servers and racks</a>
+      <a href="customers-and-contracts.html">Customers and contracts →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/networking-and-clusters.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

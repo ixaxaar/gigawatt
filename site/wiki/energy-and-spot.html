@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Energy and the spot market · GIGAWATT Wiki</title>
+<meta name="description" content="PPAs and take-or-pay power, the spot utility rate, and selling idle GPU capacity hour by hour.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/energy-and-spot.html">
+<meta property="og:title" content="Energy and the spot market · GIGAWATT Wiki">
+<meta property="og:description" content="PPAs and take-or-pay power, the spot utility rate, and selling idle GPU capacity hour by hour.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/energy-and-spot.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html" aria-current="page">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Energy and the spot market</h1>
+    <p class="lede2">PPAs and take-or-pay power, the spot utility rate, and selling idle GPU capacity hour by hour.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#the-power-position">The power position</a></li><li><a href="#ppas-take-or-pay-power">PPAs — take-or-pay power</a></li><li><a href="#the-spot-gpu-market">The spot GPU market</a></li><li><a href="#how-they-fit-together">How they fit together</a></li></ul></nav>
+    <p>Power is one of your largest operating costs, and your <a href="power-and-cooling.html">PUE</a> sets how much of it goes to overhead. The Energy screen (Facility drawer → Energy tab) manages both sides: what you pay for electricity and what idle hardware earns while it waits for a contract.</p>
+<h2 id="the-power-position">The power position</h2>
+<p>The top panel shows your facility draw in MW against your committed contracts. With no contracts, you buy 100% at the <strong>spot utility rate</strong>, which mean-reverts toward a baseline but spikes during energy-crisis events — sometimes painfully. The projected monthly bill and blended rate tell you what your halls actually cost to run.</p>
+<h2 id="ppas-take-or-pay-power">PPAs — take-or-pay power</h2>
+<p>A <strong>power purchase agreement</strong> is a long contract to buy fixed MW from a plant at a fixed price, paid whether you use the power or not. Plant offers arrive most months from grid, solar, gas, hydro and nuclear sources, and each card shows:</p>
+<ul><li><strong>Price</strong> vs the current spot rate</li><li><strong>Firmness</strong> — the share of months the plant actually delivers (a supplier failure means curtailment or fallback to spot)</li><li><strong>Oversubscription limit</strong> — you may draw above your commit up to a limit, billed at an overage multiple; beyond that, you're back on spot</li><li><strong>Take-or-pay</strong> — the fixed monthly bill for the committed MW; unused surplus is resold at a discount</li></ul>
+<p>PPAs are cheaper than spot and hedge price spikes, but they punish over-commitment: signing a big block before your load exists means paying for unused megawatts. Size contracts to your steady, predictable draw and let spot cover the peaks. The screen does the arithmetic for you — each offer shows how much cheaper or dearer than spot it would be at today's load, and it warns you outright when nothing is drawing yet.</p>
+<h2 id="the-spot-gpu-market">The spot GPU market</h2>
+<p>The flip side: a floating <strong>spot price per GPU-hour</strong>, driven by market demand (the fill rate). When demand spikes, idle clusters earn well; when it crashes, they barely cover power. You can:</p>
+<ul><li><strong>Offer individual racks</strong> — no cluster needed; tick them on the Energy screen or from the rack inspector in the hall. They earn while waiting for a contract.</li><li><strong>Offer whole clusters</strong> — a cluster serving no contract can earn on spot.</li><li><strong>Set a reserve price</strong> — you never sell below your floor.</li></ul>
+<p>A rack on spot leaves the market automatically once a contract takes it. Spot is <strong>pre-emptible</strong>: committed contracts always win, so treat spot as a bridge, not a business model. The Codex's <em>spot vs reserved</em> concept nags you when online racks are idle and not on spot — idle GPUs still cost power and depreciation.</p>
+<h2 id="how-they-fit-together">How they fit together</h2>
+<p>A balanced position looks like: a PPA (or two) covering your contracted baseline load, spot power absorbing the peaks, and every idle rack offered on the spot market until a customer signs. When an energy crisis hits the utility rate, the PPA block is the part of your bill that doesn't move — that's the hedge working. When a viral model launch floods inference demand, spot is where idle memory-rich GPUs pay off.</p>
+<p>Related: <a href="customers-and-contracts.html">Customers and contracts</a> for the reserved side, <a href="incidents-and-resilience.html">Incidents and resilience</a> for crisis events, <a href="strategy-tips.html">Strategy tips</a>.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="money-and-operations.html">← Money and operations</a>
+      <a href="hardware-roadmap.html">Hardware roadmap →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/energy-and-spot.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

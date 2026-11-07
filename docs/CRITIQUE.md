@@ -1,3 +1,37 @@
+# Status after v0.5.0
+
+Every item below was worked in the order the list suggests. "Done" means shipped with a test or a measurement; "Partial" says what is missing.
+
+| # | Item | Status | Notes |
+|---|---|---|---|
+| 1 | Hardware pays for itself | Done | Inference is priced off GPU-hour economics (bounded by real API prices); payback bands pinned in `src/economy.balance.test.ts`: 10-32 months in 2023-25, 30-48 later. A competent scripted operator ends at $100M-$600M from $50M, not the $300M median the list hoped for. |
+| 2 | Doing nothing is safe | Done | Investor board: yearly revenue reviews from year two, three strikes and you are fired (Learner exempt). Idle play is fired by month 60 and scores under a quarter of the operator. |
+| 3 | Spot is a zero-skill strategy | Done | Spot saturates (finite depth) and discounts older generations; spot-only play does not beat doing nothing. |
+| 4 | Revenue cliff with no warning | Partial | Fixed the cause (Easy Path never ordered missing plant), added a one-time build extension, a "revenue ends within 3 months" warning and a board-strike warning. Not built: emergency refinancing, renewal offers before expiry. |
+| 5 | Inference uses a sliver of the cluster | Partial | Prices and sizes recalibrated; idle GPUs surface in the Needs card and a `fleet` query. Per-cluster load % is not yet drawn on the Supercomputer screen. |
+| 6 | Staffing has no teeth | Partial | Understaffing now costs availability on every contract and shows in the Needs card. No dedicated "50% short earns 15% less" test yet. |
+| 7 | Alternate scenarios | Done | Lean start works for competent play ($7M to over $100M). Gold rush gets a demand surge; scripted players still gain little there. |
+| 8 | Easy Path stalls silently | Done | It orders missing power and cooling itself, alerts within a month with the blocker named, gives up after 10 months instead of 16. |
+| 9 | Prices go the wrong way | Done | The top-of-generation anchor no longer climbs through 2027; spot prices fall with each generation (tested). |
+| 10 | Ratings and scoring | Done | Bands moved to 60M / 100M / 250M / 600M; fired and bankrupt runs are penalised in the score. |
+| 11 | HUD clutter | Done | Four controls: mode, speed, Next month, Menu. Everything else is in the menu. |
+| 12 | Overview wall of text | Done | "Needs you now" card first, collapsible sections with counts. |
+| 13 | Hall view | Partial | Short labels, idle/spot/burn-in/down states, amber plate on idle racks. Camera auto-framing not done. |
+| 14 | Contract cards hide the money | Done | Monthly revenue, total and profit after power lead each card, offers sorted by profit, tested against what the engine bills. |
+| 15 | Dead air in the first two years | Done | Median 10 months to $250k/month for a competent operator (tested). |
+| 16 | Too much catalog too early | Done | The dock unlocks progressively in Learner and Operator modes. |
+| 17 | No story | Done | Named board, eight chapter cards, 14 two-way decisions, three rivals with voices, 19 customers with voices, incident lessons moved to a Codex handbook. |
+| 18 | Anticlimactic ending | Done | Six endings; end screen with charts, best deal, worst incident, rival comparison and a copyable summary. |
+| 19 | Unlistened music | Partial | Higher bitrate, tail fades, loudness measured (`tools/audio/LISTENING.md`). A human listening pass and layered adaptive stems are not done. |
+| 20 | Confused sound identity | Done | Chiptune dropped, six tracks, copy corrected. |
+| 21 | Fixed hum | Done | Hum level and brightness follow the hall, liquid cooling adds pumps, power-down dips it (tested). |
+| 22 | Playtest report misreports GPUs | Done | Installed vs clustered GPUs and utilisation columns. |
+| 23 | Personas cover half the game | Done | New planner (power contracts, frameworks, lifecycle) and builder personas; every persona plays every scenario; anomaly rules for cliffs, idle capacity and understaffing. |
+
+The original critique follows unchanged.
+
+---
+
 # GIGAWATT critique and fix list (v0.4.0)
 
 Harsh review, written to be handed to an implementer. Every item has: **problem**, **evidence**, **fix**, **done when**.

@@ -12,6 +12,9 @@ Each offer also shows its archetype (startup, lab, enterprise, sovereign), the m
 ![Customers and contracts](img/customers.png)
 *Market offers with live fit verdicts and what you still lack.*
 
+![Offers lead with what they pay: monthly revenue, total value](img/contract-offers.png)
+*Offers lead with what they pay: monthly revenue, total value and profit after power. The requirements fold open when you want the detail.*
+
 ## Fit verdicts
 
 Every offer carries a live verdict computed against your actual fleet:

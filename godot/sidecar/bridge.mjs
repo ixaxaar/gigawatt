@@ -13304,6 +13304,15 @@ const previewQueries = {
     const g = G$1();
     return g.board ?? null;
   },
+  /** Docs and screenshots: a chapter or decision card regardless of game state. */
+  storySample: (kind, i = 0) => {
+    if (kind === "chapter") {
+      const c = CHAPTERS[Math.min(i, CHAPTERS.length - 1)];
+      return { year: c.year, title: c.title, text: c.text };
+    }
+    const d = DILEMMAS[Math.min(i, DILEMMAS.length - 1)];
+    return { id: d.id, title: d.title, text: d.text, monthsLeft: 3, choices: d.choices.map((c, k2) => ({ index: k2, label: c.label, cash: c.effect.cash ?? 0, rep: c.effect.rep ?? 0 })) };
+  },
   story: () => {
     const g = G$1();
     const st2 = g.story;

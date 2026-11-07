@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Getting started · GIGAWATT Wiki</title>
+<meta name="description" content="Installing GIGAWATT, picking a mode, and finding your way around the HUD, drawers, camera and saves.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/getting-started.html">
+<meta property="og:title" content="Getting started · GIGAWATT Wiki">
+<meta property="og:description" content="Installing GIGAWATT, picking a mode, and finding your way around the HUD, drawers, camera and saves.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/getting-started.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html" aria-current="page">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Getting started</h1>
+    <p class="lede2">Installing GIGAWATT, picking a mode, and finding your way around the HUD, drawers, camera and saves.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#install-and-run">Install and run</a></li><li><a href="#the-title-screen-and-modes">The title screen and modes</a></li><li><a href="#the-hud">The HUD</a></li><li><a href="#the-eight-drawers">The eight drawers</a></li><li><a href="#camera-and-the-hall">Camera and the hall</a></li><li><a href="#keyboard-shortcuts">Keyboard shortcuts</a></li><li><a href="#saves">Saves</a></li><li><a href="#settings">Settings</a></li></ul></nav>
+    <figure><img loading="lazy" src="img/overview-needs.webp" alt="The Overview drawer. The &quot;Needs you now&quot; card at the top is "><figcaption>The Overview drawer. The &quot;Needs you now&quot; card at the top is the one thing worth doing next; everything below it folds away.</figcaption></figure>
+<h2 id="install-and-run">Install and run</h2>
+<p>Grab the archive for your OS from the game's Releases page, extract it, and run the launcher inside — Node.js is bundled, so there is nothing else to install.</p>
+<div class="tbl"><table><thead><tr><th>OS</th><th>Run</th></tr></thead><tbody><tr><td>Windows</td><td><code>GIGAWATT\GIGAWATT.exe</code> (SmartScreen: <em>More info → Run anyway</em>)</td></tr><tr><td>Linux</td><td><code>GIGAWATT/gigawatt.sh</code> (needs a Vulkan-capable GPU and driver)</td></tr><tr><td>macOS</td><td>Remove the quarantine attribute from the app, then open it</td></tr></tbody></table></div>
+<p>Builds are unsigned, so expect a warning from your OS the first time. From source, you need Godot 4.x and Node 18+, and you launch with <code>godot --path godot</code>.</p>
+<h2 id="the-title-screen-and-modes">The title screen and modes</h2>
+<p>You pick one of three modes when starting a campaign, and you can cycle between them any time from the top bar:</p>
+<ul><li><strong>Learner</strong> — &quot;I don't know what a chiller is.&quot; Explainers everywhere, the most starting cash, and no bankruptcy risk: Learner runs cannot go bankrupt.</li><li><strong>Operator</strong> — &quot;I know the basics.&quot; A guided procurement planner, checklists and a moderate bankroll. The recommended first mode.</li><li><strong>Tycoon</strong> — &quot;Just give me the keys.&quot; The least starting cash and no hand-holding.</li></ul>
+<p>The <strong>Easy Path</strong> on the Customers screen, which orders, installs, deploys and assigns contracts for you, is available in every mode.</p>
+<p>A short guided tutorial walks a first run from the first customer to the first revenue, then hands over to the Learning path missions (see <a href="first-hour.html">Your first hour</a>). If a recent save exists, <strong>CONTINUE</strong> resumes exactly where you left off, tutorial included.</p>
+<h2 id="the-hud">The HUD</h2>
+<p>The top bar is always visible:</p>
+<ul><li><strong>Date and month progress</strong> — the campaign runs Dec 2020 → Dec 2028, one month at a time.</li><li><strong>CASH, DEBT, NET WORTH, REPUTATION (★)</strong> — your four vital signs. Reputation rises when you deliver contracts and falls with SLA misses and incidents.</li><li><strong>Speed controls</strong> — pause, 1×, 2×, 3× auto-advance, and the big <strong>NEXT MONTH</strong> button. Nothing happens until you advance a month; this is a turn-based game with a 3D view.</li><li><strong>Mode, How to play, Sound, Save, MENU</strong> — self-explanatory; Save writes to the slot you last saved to or loaded from.</li></ul>
+<p>Toasts appear top-right for deliveries, incidents and mission completions, and a <strong>keynote overlay</strong> pauses the clock when a hardware launch lands (see <a href="hardware-roadmap.html">Hardware roadmap</a>).</p>
+<h2 id="the-eight-drawers">The eight drawers</h2>
+<p>Press the number key or click the dock. Pressing the key of the open drawer again closes it and returns you to the Overview.</p>
+<div class="tbl"><table><thead><tr><th>Key</th><th>Drawer</th><th>What's inside</th></tr></thead><tbody><tr><td>1</td><td><strong>Overview</strong> (Datacenter)</td><td>The 3D hall, cash plaques, a next-month preview, Learning-path missions, Easy-path projects, customers and the event log</td></tr><tr><td>2</td><td><strong>Customers</strong></td><td>Market offers with live fit verdicts, contracts, assignment</td></tr><tr><td>3</td><td><strong>Supply</strong></td><td><strong>Procure</strong> (guided planner, parts bin, roadmap) and <strong>Warehouse</strong> (assembly, deploy, spares, ledger)</td></tr><tr><td>4</td><td><strong>Facility</strong></td><td><strong>Build</strong> (power, cooling, floor space, internet, halls) and <strong>Energy</strong> (PPAs, spot market)</td></tr><tr><td>5</td><td><strong>Operations</strong></td><td>Team, debt, hardware lifecycle, operating policy, vendors, rivals</td></tr><tr><td>6</td><td><strong>Design Lab</strong></td><td>Full-screen tray bench and rack bench with live validation</td></tr><tr><td>7</td><td><strong>Supercomputer</strong></td><td>Full-screen cluster builder: racks + fabric = one machine</td></tr><tr><td>8</td><td><strong>Codex</strong></td><td>Full-screen parts encyclopedia, &quot;Datacenter 101&quot; concepts, accelerator timeline (<code>0</code> also opens it)</td></tr></tbody></table></div>
+<h2 id="camera-and-the-hall">Camera and the hall</h2>
+<p>The game opens in top view with every rack labelled by hardware and customer. <strong>Left-drag or WASD</strong> pans, <strong>right-drag</strong> orbits, <strong>wheel</strong> zooms, <strong>Q/E</strong> rotates, <strong>V</strong> returns to top view, <strong>L</strong> toggles rack labels, and <strong>T</strong> switches to the thermal view that shows heat. <strong>Click a rack</strong> to inspect it: serial, status, what it is doing, a spot-market toggle and a decommission button. A gamepad works too (A select, B back, X inspect, Y next month, LB/RB drawers).</p>
+<h2 id="keyboard-shortcuts">Keyboard shortcuts</h2>
+<ul><li><code>Space</code> — next month</li><li><code>1</code>–<code>8</code> — open/close drawers · <code>0</code> — open the Codex</li><li><code>Q</code> / <code>E</code> — rotate the hall · <code>WASD</code> — pan · <code>V</code> / <code>L</code> / <code>T</code> — top view / labels / thermal view</li><li><code>Esc</code> — pause menu · <code>F1</code> — settings and controls · <code>Ctrl+Q</code> — quit</li></ul>
+<h2 id="saves">Saves</h2>
+<p>Saves are versioned and stored in your user data folder: <strong>three manual slots plus a monthly autosave</strong>. Quitting (or closing the window) always writes the autosave first, so it never overwrites a manual slot. Save from the top bar or the pause menu; load from the title screen or the pause menu.</p>
+<h2 id="settings">Settings</h2>
+<p><code>F1</code> opens settings: master/music/effects volume, a music-style picker (the soundtrack follows the game — expect something darker when things fail), UI scale, a colour-blind-safe cluster palette, reduced motion, and graphics quality Low/Balanced/High.</p>
+<p>Next: <a href="first-hour.html">Your first hour</a>.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="index.html">← GIGAWATT Player Wiki</a>
+      <a href="first-hour.html">Your first hour →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/getting-started.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

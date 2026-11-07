@@ -12,6 +12,12 @@ export const previewQueries: Record<string, (...a: any[]) => any> = {
   offerMoney: () => { const g = G(); return Object.fromEntries(g.availableContracts.map((c) => [c.id, offerMoney(g, c)])); },
   needs: () => needsOf(G()),
   board: () => { const g = G(); return g.board ?? null; },
+  /** Docs and screenshots: a chapter or decision card regardless of game state. */
+  storySample: (kind: string, i = 0) => {
+    if (kind === 'chapter') { const c = CHAPTERS[Math.min(i, CHAPTERS.length - 1)]; return { year: c.year, title: c.title, text: c.text }; }
+    const d = DILEMMAS[Math.min(i, DILEMMAS.length - 1)];
+    return { id: d.id, title: d.title, text: d.text, monthsLeft: 3, choices: d.choices.map((c, k) => ({ index: k, label: c.label, cash: c.effect.cash ?? 0, rep: c.effect.rep ?? 0 })) };
+  },
   story: () => {
     const g = G(); const st = g.story;
     const year = st?.cards[0]; const ch = year !== undefined ? CHAPTERS.find((c) => c.year === year) : undefined;

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Servers and racks · GIGAWATT Wiki</title>
+<meta name="description" content="Trays, racks, the Design Lab, rack density, validation and spares — how the machines you sell are actually made.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/servers-and-racks.html">
+<meta property="og:title" content="Servers and racks · GIGAWATT Wiki">
+<meta property="og:description" content="Trays, racks, the Design Lab, rack density, validation and spares — how the machines you sell are actually made.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/servers-and-racks.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html" aria-current="page">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Servers and racks</h1>
+    <p class="lede2">Trays, racks, the Design Lab, rack density, validation and spares — how the machines you sell are actually made.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#the-tray-bench">The tray bench</a></li><li><a href="#the-rack-bench">The rack bench</a></li><li><a href="#from-design-to-floor">From design to floor</a></li><li><a href="#spares">Spares</a></li></ul></nav>
+    <p>There are two ways to get hardware: buy a <strong>pre-engineered system</strong> (the Procure guided planner's DIY / OEM / turnkey tiers, or ready-made templates from several integrators), or design your own in the <strong>Design Lab</strong>. Buying a system saves its design automatically, so you can study it, copy it and modify it — a good way to learn.</p>
+<h2 id="the-tray-bench">The tray bench</h2>
+<p>A <strong>tray</strong> is a chassis plus parts. Pick a chassis (its cooling class and rack units matter), then click sockets on the board and install parts: accelerators, CPUs, DIMMs, NICs, DPUs, NVMe drives, PSUs. Required slots are marked; <strong>Auto-fill</strong> populates everything with the first compatible part, and <strong>load pre-built system</strong> starts you from a known-good design.</p>
+<p><strong>Live validation</strong> refuses to save a broken tray. It tracks power draw, cost, accelerator count, FP8/BF16 PFLOPS, HBM and PCIe lanes. The <strong>Sizing &amp; cost advisor</strong> is the teaching tool — it checks, as you build:</p>
+<ul><li><strong>PSUs</strong> — capacity must cover the GPU draw with N+1 redundancy: one PSU can fail without taking down an expensive tray. More than N+1 is wasted money.</li><li><strong>PCIe lanes and CPUs</strong> — GPUs set the power and NIC needs, CPUs set lanes and memory channels. One CPU starves an 8-GPU tray with eight NICs; two is the standard layout.</li><li><strong>NICs</strong> — rule of thumb: one NIC per GPU (&quot;rail-optimized&quot;) for training, one per two GPUs for inference. The advisor shows whether you meet the training bandwidth tier customers expect this year.</li><li><strong>Memory</strong> — populate all channels, and keep host RAM around half of GPU HBM so checkpointing stays smooth.</li><li><strong>5-year cost</strong> — capex and power per GPU and your break-even hourly cost at full and partial utilization, against what the market pays this year.</li></ul>
+<h2 id="the-rack-bench">The rack bench</h2>
+<p>A <strong>rack</strong> is a 42U elevation. Add compute trays in the middle, ToR switches at the top, power and storage at the bottom (zones are hints; the <em>Add</em> button finds the best free spot). Every component has height in U and a power draw, and validation checks units used, weight, cost — and above all <strong>kilowatts against the rack's limit</strong>.</p>
+<p>Rack density is the real limit of the whole game. An 8-GPU H100 tray draws roughly 10 kW; four per rack is already 40 kW, the edge of air cooling. The rack's <strong>cooling interface</strong> (air / RDHx / DLC / immersion) must match what your hall can serve — see <a href="power-and-cooling.html">Power and cooling</a>. The validation panel also shows the tray's <strong>scale-up domain</strong> (how many GPUs NVLink joins into one memory domain), which matters for big-model workloads.</p>
+<figure><img loading="lazy" src="img/design.webp" alt="Design Lab"><figcaption>The tray bench: sockets, live validation and the sizing advisor.</figcaption></figure>
+<figure><img loading="lazy" src="img/campus-dlc.webp" alt="Liquid-cooled racks"><figcaption>Dense liquid-cooled racks in a DLC hall — note the coolant plumbing.</figcaption></figure>
+<h2 id="from-design-to-floor">From design to floor</h2>
+<p>A saved design is only paper. The <strong>Warehouse</strong> shows, per design, how many racks are <em>ready to deploy</em> and exactly which parts are missing — with an <strong>order all missing</strong> button that buys everything, spares included. A rack can only be deployed when every part is in the warehouse and the hall has power, cooling headroom and a free slot. Then comes installation and commissioning (burn-in), which finds failed optics and GPUs before customers do. Skipping burn-in ships dead GPUs.</p>
+<h2 id="spares">Spares</h2>
+<p>Parts fail at a steady rate: GPUs, PSUs, NICs, NVMe drives, DIMMs, CPUs and switches all break. A spare on your shelf swaps in within a month; without one, the vendor RMA takes roughly four months — during which the rack misses SLAs and earns nothing while it still depreciates. Orders include the advised spares by default, and the Warehouse's spares table shows <em>have vs advised</em> per part with a one-click top-up. See <a href="incidents-and-resilience.html">Incidents and resilience</a>.</p>
+<p>Related: <a href="networking-and-clusters.html">Networking and clusters</a> for what happens after the rack is online, and <a href="money-and-operations.html">Money and operations</a> for selling racks at end of life.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="power-and-cooling.html">← Power and cooling</a>
+      <a href="networking-and-clusters.html">Networking and clusters →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/servers-and-racks.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

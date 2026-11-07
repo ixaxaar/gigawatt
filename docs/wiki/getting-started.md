@@ -2,6 +2,9 @@
 
 *Installing GIGAWATT, picking a mode, and finding your way around the HUD, drawers, camera and saves.*
 
+![The Overview drawer. The "Needs you now" card at the top is ](img/overview-needs.png)
+*The Overview drawer. The "Needs you now" card at the top is the one thing worth doing next; everything below it folds away.*
+
 ## Install and run
 
 Grab the archive for your OS from the game's Releases page, extract it, and run the launcher inside — Node.js is bundled, so there is nothing else to install.

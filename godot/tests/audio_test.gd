@@ -27,5 +27,9 @@ func _init() -> void:
 	if not ("crisis" in a.now.moods): push_error("crisis did not switch to a crisis track"); bad += 1
 	Settings.music_mode = "off"; a.music_changed()
 	for k in ["click", "buy", "good", "bad", "alarm", "nonexistent"]: a.play(k)
+	if not (GameAudio.hum_db(60, false) > GameAudio.hum_db(0, false) + 6.0): push_error("hum does not grow with the hall"); bad += 1
+	if not (GameAudio.hum_cutoff(60, false) > GameAudio.hum_cutoff(0, false)): push_error("hum is not brighter in a full hall"); bad += 1
+	if not (GameAudio.hum_db(10, true) > GameAudio.hum_db(10, false)): push_error("liquid cooling adds no pump noise"); bad += 1
+	a.set_hall_load(60, true); a.hum_dip(0.1)
 	print("AUDIO OK" if bad == 0 else "AUDIO FAIL %d" % bad)
 	quit(0 if bad == 0 else 1)

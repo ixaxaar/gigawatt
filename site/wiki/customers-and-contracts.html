@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customers and contracts · GIGAWATT Wiki</title>
+<meta name="description" content="Training versus inference offers, fit verdicts, the Easy Path, SLAs, renewals and the ramp window — how capacity becomes revenue.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/customers-and-contracts.html">
+<meta property="og:title" content="Customers and contracts · GIGAWATT Wiki">
+<meta property="og:description" content="Training versus inference offers, fit verdicts, the Easy Path, SLAs, renewals and the ramp window — how capacity becomes revenue.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/customers-and-contracts.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html" aria-current="page">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Customers and contracts</h1>
+    <p class="lede2">Training versus inference offers, fit verdicts, the Easy Path, SLAs, renewals and the ramp window — how capacity becomes revenue.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#fit-verdicts">Fit verdicts</a></li><li><a href="#the-easy-path">The Easy Path</a></li><li><a href="#signing-ramp-window-and-slas">Signing, ramp window and SLAs</a></li><li><a href="#renewals">Renewals</a></li><li><a href="#reputation">Reputation</a></li></ul></nav>
+    <p>Customers pay for capacity in two ways, and the hardware they need differs:</p>
+<ul><li><strong>Training</strong> customers rent a big coherent cluster by the GPU-hour. Offers state a minimum accelerator count, a price per GPU-hour, and network requirements — a scale-up domain size (e.g. 72) and GB/s per GPU. Training is compute- and network-bound.</li><li><strong>Inference</strong> customers pay per million tokens. Offers state a target tokens/s and a price per Mtok. Inference is memory-bandwidth-bound: GPUs with more HBM capacity and bandwidth hold bigger models and bigger KV caches, serving more users per replica.</li></ul>
+<p>Each offer also shows its archetype (startup, lab, enterprise, sovereign), the model, the duration in months, an <strong>SLA availability</strong> target, and a deadline by which you must sign or the offer disappears.</p>
+<figure><img loading="lazy" src="img/customers.webp" alt="Customers and contracts"><figcaption>Market offers with live fit verdicts and what you still lack.</figcaption></figure>
+<figure><img loading="lazy" src="img/contract-offers.webp" alt="Offers lead with what they pay: monthly revenue, total value"><figcaption>Offers lead with what they pay: monthly revenue, total value and profit after power. The requirements fold open when you want the detail.</figcaption></figure>
+<h2 id="fit-verdicts">Fit verdicts</h2>
+<p>Every offer carries a live verdict computed against your actual fleet:</p>
+<ul><li><strong>✓ CAN SERVE NOW</strong> — an existing cluster meets every check. Sign and go live immediately.</li><li><strong>◔ CAN BUILD IN TIME</strong> — you can buy and commission hardware before the ramp window closes.</li><li><strong>✗ NEED MORE / DIFFERENT HARDWARE</strong> — below, the <em>What you need to buy</em> box names the exact racks (template, quantity, tier) that would cover the contract, when they would be ready, and whether that fits the ramp window — plus any hall gaps (power, cooling, floor) you'd need to close first. If nothing on the market can meet it, it says so: wait for a later GPU generation.</li><li><strong>✗ NO CLUSTER YET</strong> — build one on the Supercomputer screen.</li></ul>
+<p>Checks compare need vs have: accelerators, memory, scale-up domain, scale-out bandwidth, and so on. If the verdict isn't &quot;ready&quot;, the screen also shows your pipeline — accelerators free online, commissioning, in warehouse, on order.</p>
+<h2 id="the-easy-path">The Easy Path</h2>
+<p><strong>EASY PATH — do it all for me</strong> signs the contract, orders the racks, installs plant, deploys, builds the fabric and assigns the contract as parts arrive. Watch progress as <strong>Easy-path projects</strong> on the Overview screen (Order &amp; build → Burn-in → Cluster → Assign → LIVE). It's a learning tool and a convenience; doing the steps yourself from the same &quot;what you need to buy&quot; list works identically. <strong>Just order the racks</strong> is the middle option — you buy, then handle deployment, clustering and assignment yourself.</p>
+<h2 id="signing-ramp-window-and-slas">Signing, ramp window and SLAs</h2>
+<p>You can sign an offer you can't serve yet: after signing you get a <strong>ramp window</strong> (about four months by default) to deploy. No revenue and no SLA clock runs until you go live — miss the window and the customer walks, with a reputation hit. Deploy by building or picking a cluster, or use <strong>serve straight from racks</strong> for inference without a clustering step.</p>
+<p>While serving, the panel shows months served and <strong>SLA misses</strong>. Misses come from outages, failures and overloaded uplinks (see <a href="incidents-and-resilience.html">Incidents and resilience</a>); too many and the contract sours. You can update which clusters serve a contract as your fleet changes, or release it back to pending.</p>
+<h2 id="renewals">Renewals</h2>
+<p>Delivered contracts compound: satisfied customers come back with <strong>renewal offers</strong> — bigger, at a premium over the original — and they sort to the top of the market list. Renewals are cheaper than acquisitions; a contract book balanced across training and inference rides out demand cycles instead of chasing them.</p>
+<h2 id="reputation">Reputation</h2>
+<p>The ★ reputation in the top bar drives the quality of offers you receive. It rises with delivered contracts and uptime, and falls with SLA misses, missed ramp windows, outages, fires and customer defaults.</p>
+<p>Related: <a href="networking-and-clusters.html">Networking and clusters</a> for building what the checks demand, <a href="money-and-operations.html">Money and operations</a> for the P&amp;L behind a signed deal.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="networking-and-clusters.html">← Networking and clusters</a>
+      <a href="money-and-operations.html">Money and operations →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/customers-and-contracts.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

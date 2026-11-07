@@ -2,6 +2,9 @@
 
 *Habits that separate a thriving AI factory from a beautiful hall full of idle GPUs. (Deliberately qualitative — balance numbers shift with tuning, the habits don't.)*
 
+![The end screen: how the story finished, your revenue and cas](img/end-screen.png)
+*The end screen: how the story finished, your revenue and cash over eight years, your best deal, your worst incident and how you stacked up against the rivals.*
+
 ## Buy before you need
 
 Lead times and allocation punish just-in-time thinking. Order transformers, plant and racks for the contracts you *expect*, not just the ones you've signed. When a keynote announces a part that changes your market, a pre-order is a cheap place in the queue — you can cancel most of it back if plans change.

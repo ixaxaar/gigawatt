@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from synth import SR, write_wav
-import sfx, music, songs, chill, chill_songs
+import sfx, chill, chill_songs
 
 OUT = Path(__file__).resolve().parents[2] / "godot" / "assets" / "audio"
 # per-cue playback trim in dB (the files are peak-normalised) and pitch jitter for cues you hear a lot
@@ -18,8 +18,8 @@ LEVEL = {"hover": -16, "tick": -14, "click": -9, "tab": -10, "month": -14, "noti
 JITTER = ["hover", "tick", "click", "tab", "month"]
 
 
-# the catalog: one arcade chiptune kept from the first pass, the rest chill and bass-heavy
-ALL = [s for s in songs.SONGS if s["id"] == "neon-overclock"] + chill_songs.CHILL
+# the catalog: warm, chill and bass-heavy; one sonic identity (the first-pass chiptune was dropped)
+ALL = list(chill_songs.CHILL)
 
 
 def build_sfx():
@@ -40,14 +40,15 @@ def build_music(only):
         if only and s["id"] not in only:
             continue
         print(f"music {s['id']} ({s['genre']}, {s['bpm']} bpm) ...", flush=True)
-        body = (chill if s.get("engine") == "chill" else music).render(s, s["seed"])
+        body = chill.render(s, s["seed"])
         wav = d / f"{s['id']}.wav"; ogg = d / f"{s['id']}.ogg"
         import numpy as np
         body = body - body.mean(axis=0)
         body = body * (0.105 / np.sqrt(np.mean(body ** 2)))      # ~ -20 dBFS RMS: songs sit under the effects
         body = np.tanh(body / 0.8) * 0.8                          # soft ceiling instead of hard clipping
+        n_fade = int(3.0 * SR); body[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)[:, None] if body.ndim == 2 else np.linspace(1.0, 0.0, n_fade)   # tracks end on a 3 s fade so a track change never cuts
         write_wav(wav, body, peak=None)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libvorbis", "-b:a", "64k", str(ogg)], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libvorbis", "-b:a", "112k", str(ogg)], check=True)
         wav.unlink()
         print(f"  {len(body) / SR:.1f}s  {ogg.stat().st_size // 1024} KB")
     for s in ALL:

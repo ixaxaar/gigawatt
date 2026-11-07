@@ -229,6 +229,10 @@ static func check(text: String, on: bool, cb: Callable) -> CheckBox:
 	var c := CheckBox.new(); c.text = text; c.button_pressed = on; c.focus_mode = Control.FOCUS_NONE; c.add_theme_font_size_override("font_size", 14); c.toggled.connect(cb); return c
 
 # ---------- formatting ----------
+## Unit prices ($/GPU-hour, $/Mtok): cents matter, so never round them away.
+static func price(n: float) -> String:
+	return "$%.2f" % n if n < 100.0 else usd(n)
+
 static func usd(n: float) -> String:
 	var a := absf(n); var s := "-" if n < 0 else ""
 	if a >= 1e9: return "%s$%.2fB" % [s, a / 1e9]

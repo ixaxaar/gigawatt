@@ -4,6 +4,9 @@
 
 After an opening grace period, roughly one world event fires every few months. Each one tests a decision you made earlier — or teaches you the decision you should have made. The event log on the Overview screen explains the lesson every time.
 
+![Now and then a decision with two honest answers. Ignore it a](img/story-decision.png)
+*Now and then a decision with two honest answers. Ignore it and the offer lapses after three months.*
+
 ## The incident catalog
 
 **Utility outage.** A weak power chain (no UPS, no battery string, an undersized generator, no transfer switch) means running jobs restart from checkpoint, every serving contract takes an SLA miss, and reputation drops. A complete chain — UPS + battery + generator + transfer switch, sized N+1 — rides through with zero customer impact. The Outage protection panel on the Build screen shows your tier and the exact gap to close.

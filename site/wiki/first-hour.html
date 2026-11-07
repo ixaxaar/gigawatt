@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your first hour · GIGAWATT Wiki</title>
+<meta name="description" content="A step-by-step walkthrough from an empty hall to your first revenue, following the Learning path missions in order.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/first-hour.html">
+<meta property="og:title" content="Your first hour · GIGAWATT Wiki">
+<meta property="og:description" content="A step-by-step walkthrough from an empty hall to your first revenue, following the Learning path missions in order.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/first-hour.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html" aria-current="page">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Your first hour</h1>
+    <p class="lede2">A step-by-step walkthrough from an empty hall to your first revenue, following the Learning path missions in order.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#1-place-your-first-order-procure">1 · Place your first order (Procure)</a></li><li><a href="#2-expand-your-cooling-plant-build">2 · Expand your cooling plant (Build)</a></li><li><a href="#3-design-a-server-tray-design-lab">3 · Design a server tray (Design Lab)</a></li><li><a href="#4-design-a-rack-design-lab">4 · Design a rack (Design Lab)</a></li><li><a href="#5-place-a-rack-on-the-floor-warehouse">5 · Place a rack on the floor (Warehouse)</a></li><li><a href="#6-get-a-rack-online">6 · Get a rack online</a></li><li><a href="#7-build-a-cluster-supercomputer">7 · Build a cluster (Supercomputer)</a></li><li><a href="#8-land-your-first-contract-customers">8 · Land your first contract (Customers)</a></li><li><a href="#9-sign-a-power-contract-energy">9 · Sign a power contract (Energy)</a></li><li><a href="#10-earn-revenue">10 · Earn revenue</a></li><li><a href="#after-the-first-hour">After the first hour</a></li></ul></nav>
+    <p>The <strong>Missions</strong> panel on the Overview screen always shows your next three missions with a <strong>Go →</strong> button that jumps to the right screen. Each completed mission pays a cash reward and teaches one lesson. This page walks the opening ten in order. If you ever feel stuck, the <a href="customers-and-contracts.html">Easy Path</a> on the Customers screen can order, install, deploy and assign a contract for you.</p>
+<figure><img loading="lazy" src="img/story-chapter.webp" alt="Every January a chapter card sets the scene for the year ahe"><figcaption>Every January a chapter card sets the scene for the year ahead.</figcaption></figure>
+<h2 id="1-place-your-first-order-procure">1 · Place your first order (Procure)</h2>
+<p>Open <strong>Supply → Procure</strong>. The guided planner walks you through: pick a <strong>platform</strong> (a GPU generation, pre-engineered), say <strong>how many accelerators</strong> you want, choose <strong>how to buy</strong> — DIY (cheapest, you integrate), an OEM integrated rack, or turnkey (priciest, fastest) — check your hall can feed and cool it, then order from the bill of materials. The lesson: hardware has <strong>lead times</strong> and, for GPUs, <strong>allocation</strong>. Parts arrive months later, so order early.</p>
+<figure><img loading="lazy" src="img/procure.webp" alt="The guided planner"><figcaption>Platform → how many → how to buy → hall check → order.</figcaption></figure>
+<h2 id="2-expand-your-cooling-plant-build">2 · Expand your cooling plant (Build)</h2>
+<p>Open <strong>Facility → Build</strong>. Under <em>Buy plant</em>, buy a CRAH (air handler) sized for your hall's cooling class, wait for it to arrive, then <strong>Install 1</strong> from inventory. Every watt of IT power becomes a watt of heat, and cooling capacity — not floor space — caps most AI halls. See <a href="power-and-cooling.html">Power and cooling</a>.</p>
+<h2 id="3-design-a-server-tray-design-lab">3 · Design a server tray (Design Lab)</h2>
+<p>Open <strong>Design Lab → Tray bench</strong>. Pick an 8-GPU chassis, hit <strong>Auto-fill</strong> to populate every required socket, then fix anything the live validation flags. The <strong>Sizing advisor</strong> checks PSU capacity and N+1 redundancy, PCIe lanes versus CPU count, NIC bandwidth per GPU, and memory. Save the tray. Details in <a href="servers-and-racks.html">Servers and racks</a>.</p>
+<h2 id="4-design-a-rack-design-lab">4 · Design a rack (Design Lab)</h2>
+<p>Switch to the <strong>Rack bench</strong>. Stack your trays plus a leaf (top-of-rack) switch into a 42U elevation within the rack's kW limit — four 8-GPU H100 trays at roughly 10 kW each already push 40 kW. Set the cooling interface, clear the validation errors, and save the rack design.</p>
+<h2 id="5-place-a-rack-on-the-floor-warehouse">5 · Place a rack on the floor (Warehouse)</h2>
+<p>Open <strong>Supply → Warehouse</strong>. Your rack design lists exactly which parts are missing; use <strong>order all missing</strong> to buy them in one go. When everything is in the warehouse and the hall has power, cooling and a free slot, press <strong>DEPLOY 1</strong> (or pick the design on the Build screen and click an empty floor slot).</p>
+<h2 id="6-get-a-rack-online">6 · Get a rack online</h2>
+<p>Racks take months to install and commission. Press <code>Space</code> to advance months and watch the <strong>Next month</strong> preview on the Overview screen — it tells you what is arriving, what starts burn-in and what goes online. Commissioning (power-on, firmware, burn-in) is what finds dead GPUs before your customers do; you control its length in Operations.</p>
+<figure><img loading="lazy" src="img/build-ledger.webp" alt="Build screen ledger"><figcaption>Every rack's serial, slot, status and current job, on the Build screen.</figcaption></figure>
+<h2 id="7-build-a-cluster-supercomputer">7 · Build a cluster (Supercomputer)</h2>
+<p>Open <strong>Supercomputer</strong>, select your online rack(s), press <strong>Auto-design for TRAINING</strong> (or the cheaper inference fabric), check the <em>What can this machine do?</em> table, and <strong>BUILD CLUSTER</strong>. A cluster is racks plus a network fabric — see <a href="networking-and-clusters.html">Networking and clusters</a>.</p>
+<h2 id="8-land-your-first-contract-customers">8 · Land your first contract (Customers)</h2>
+<p>Open <strong>Customers</strong> and read the verdict on each offer: <strong>CAN SERVE NOW</strong>, <strong>CAN BUILD IN TIME</strong>, or <strong>NEED MORE / DIFFERENT HARDWARE</strong>. If you're ready, <strong>SIGN &amp; START SERVING</strong> and assign your cluster. If not, the <em>What you need to buy</em> box lists the exact racks to order — or press <strong>EASY PATH</strong> and the game does the whole pipeline for you. You can also serve straight from racks without clustering. Inference is memory-bandwidth-bound; training is compute- and network-bound — match hardware to workload.</p>
+<h2 id="9-sign-a-power-contract-energy">9 · Sign a power contract (Energy)</h2>
+<p>Open <strong>Facility → Energy</strong>. Compare plant offers (solar, gas, hydro, nuclear, grid) and sign a PPA roughly matched to your draw. Take-or-pay means you pay for committed megawatts whether you use them or not, so don't over-commit. More in <a href="energy-and-spot.html">Energy and the spot market</a>.</p>
+<h2 id="10-earn-revenue">10 · Earn revenue</h2>
+<p>Advance a month with an active contract. Revenue minus power, staff, support, depreciation and interest is your profit — the plaques at the bottom of the Overview screen show revenue, burn and net per month. Utilization is everything: an idle rack still costs money, so put spare capacity on the spot market.</p>
+<h2 id="after-the-first-hour">After the first hour</h2>
+<p>The Learning path continues: go liquid-cooled with a DLC hall and a 120 kW-class rack, run a 256-accelerator supercomputer, deploy a 72-GPU NVLink domain, then the long campaign goals (thousands of accelerators, halls, net worth). See <a href="strategy-tips.html">Strategy tips</a>.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="getting-started.html">← Getting started</a>
+      <a href="power-and-cooling.html">Power and cooling →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/first-hour.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

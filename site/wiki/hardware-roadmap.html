@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hardware roadmap · GIGAWATT Wiki</title>
+<meta name="description" content="Keynotes, pre-orders, lead times and allocation — knowing what ships next decides when you buy, build and sell.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/hardware-roadmap.html">
+<meta property="og:title" content="Hardware roadmap · GIGAWATT Wiki">
+<meta property="og:description" content="Keynotes, pre-orders, lead times and allocation — knowing what ships next decides when you buy, build and sell.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/hardware-roadmap.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html" aria-current="page">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Hardware roadmap</h1>
+    <p class="lede2">Keynotes, pre-orders, lead times and allocation — knowing what ships next decides when you buy, build and sell.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#pre-orders-and-allocation">Pre-orders and allocation</a></li><li><a href="#the-shape-of-the-campaign">The shape of the campaign</a></li><li><a href="#when-to-buy">When to buy</a></li></ul></nav>
+    <p>Silicon is announced at keynotes months before it ships. The game fires keynotes on their real calendar dates — GTC (spring), Computex (May/June), SC (November), OCP, and AMD's Advancing AI events — and each one pauses the clock with a <strong>keynote card</strong> explaining the technology, what it changes in your hall, and the one thing to remember. The <strong>Roadmap tab</strong> in Procurement lists every past keynote with a <em>Read the keynote</em> button and shows the next one coming.</p>
+<h2 id="pre-orders-and-allocation">Pre-orders and allocation</h2>
+<p>After a keynote, announced parts become <strong>pre-orderable</strong>:</p>
+<ul><li>Pre-orders open at the keynote, never earlier than 12 months before the ship date</li><li>You pay a <strong>launch premium</strong> and queue <strong>behind the hyperscalers</strong>; delivery lands after the ship date</li><li><strong>Cancelling refunds most of what you paid</strong> — a pre-order is a cheap option on supply</li><li>Even regular orders of hot parts carry <strong>per-quarter allocation caps</strong>; vendor relationships and frameworks raise your allocation (see <a href="money-and-operations.html">Money and operations</a>)</li></ul>
+<p>If you wait instead, you pay the going rate and stand in the queue with everyone else — hot generations sell out before they ship.</p>
+<h2 id="the-shape-of-the-campaign">The shape of the campaign</h2>
+<p>A few beats worth planning around (dates as they land in-game):</p>
+<ul><li><strong>GTC 2021 — Grace.</strong> A roadmap keynote: an Arm CPU built to sit next to GPUs over NVLink-C2C. Nothing to buy for years; note the direction.</li><li><strong>GTC 2022 — Hopper H100.</strong> FP8 Transformer Engine, NVLink 4 at 900 GB/s between GPUs, ~3.35 TB/s HBM3, 700 W per SXM GPU — an 8-GPU node is ~10 kW. A GPU generation is a power and cooling project first and a chip purchase second.</li><li><strong>2023 — GH200, Spectrum-X, MI300X, H200.</strong> Memory becomes the story: MI300X brings 192 GB of HBM3, and H200 shows that when a workload is memory-bound, faster memory is worth more than faster math. Ethernet becomes a real alternative to InfiniBand for scale-out.</li><li><strong>GTC 2024 — Blackwell.</strong> GB200 NVL72 links 72 GPUs into one liquid-cooled ~120 kW rack (NVLink 5 at 1.8 TB/s per GPU). Air-cooled halls cannot host it at all; the floor needs a CDU loop.</li><li><strong>Computex 2024 — the yearly cadence.</strong> All vendors move to annual generations. Everything you buy depreciates faster; resale timing becomes part of the business model.</li><li><strong>GTC 2025 — Blackwell Ultra, Vera Rubin roadmap.</strong> GB300 drops into GB200-class racks: same ~120 kW, so the hall you built keeps working. Rubin racks will draw considerably more — plan bigger feeds and CDUs early.</li><li><strong>Oct 2025 — Vera Rubin orders open.</strong> Longer queues than any prior generation; earlier-generation prices soften as buyers wait. Sell older racks while residual value holds.</li><li><strong>GTC 2026 — Rubin Ultra, 102.4 Tb/s switches.</strong> 576-GPU NVLink domains; bigger switch silicon means fewer tiers and hops per GPU.</li></ul>
+<h2 id="when-to-buy">When to buy</h2>
+<ul><li><strong>Plan the building two generations ahead.</strong> Racks change yearly; power and cooling plants last decades. Buy transformers and CDU capacity for the rack that ships next, not the one shipping today.</li><li><strong>Pre-order at the keynote when the part changes your market</strong> — e.g. a rack format that unlocks contracts you can't serve — and treat the cancellation loss as the price of a place in the queue.</li><li><strong>Sell into strength.</strong> When a generation lands, its predecessor becomes a discounted workhorse: reassign it to inference or spot, or sell it while residual value is real.</li><li><strong>Watch the calendar beats.</strong> The 2023 demand shock slashes allocation and slips in-transit GPU orders; later, vendors reward operators with demonstrated deployments — a campus that ships on schedule gets first call on the next generation.</li></ul>
+<p>The Codex's <strong>accelerator timeline</strong> view shows every generation with memory, bandwidth, power and scale-up — the fastest way to compare what to buy.</p>
+<p>Related: <a href="money-and-operations.html">Hardware lifecycle</a> · <a href="servers-and-racks.html">Servers and racks</a> · <a href="power-and-cooling.html">Power and cooling</a>.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="energy-and-spot.html">← Energy and the spot market</a>
+      <a href="incidents-and-resilience.html">Incidents and resilience →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/hardware-roadmap.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

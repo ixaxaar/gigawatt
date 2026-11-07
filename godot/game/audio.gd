@@ -1,6 +1,6 @@
 class_name GameAudio
 extends Node
-## Game audio: SFX cues, a genre-wise 8-bit music catalog with a mood director, and a quiet datacenter hum.
+## Game audio: SFX cues, a chill music catalog with a mood director, and a datacenter hum that follows the size and heat of the hall.
 ## Assets are rendered offline by tools/audio/generate.py into res://assets/audio (catalog.json lists them).
 ## Buses: Master > Music, SFX, Ambience (created at runtime). Volumes come from Settings.
 
@@ -20,6 +20,8 @@ var now: Dictionary = {}                  ## currently playing catalog entry ({}
 var _history: Array = []
 var _crisis_until := 0.0
 var _hum: AudioStreamPlayer
+var _lp: AudioEffectLowPassFilter
+var _hum_target_db := -34.0
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -33,7 +35,10 @@ func _ready() -> void:
 		var p := AudioStreamPlayer.new(); p.bus = "SFX"; add_child(p); _voices.append(p)
 	for i in 2:
 		var m := AudioStreamPlayer.new(); m.bus = "Music"; m.volume_db = -80.0; m.finished.connect(_on_track_end.bind(i)); add_child(m); _mus.append(m)
-	_hum = AudioStreamPlayer.new(); _hum.bus = "Ambience"; _hum.stream = _make_hum(); _hum.volume_db = -26.0; add_child(_hum); _hum.play()
+	_hum = AudioStreamPlayer.new(); _hum.bus = "Ambience"; _hum.stream = _make_hum(); _hum.volume_db = hum_db(0, false); add_child(_hum); _hum.play()
+	_lp = AudioEffectLowPassFilter.new(); _lp.cutoff_hz = hum_cutoff(0, false)
+	var ai := AudioServer.get_bus_index("Ambience")
+	if ai != -1: AudioServer.add_bus_effect(ai, _lp)
 	apply_volumes()
 
 func _setup_buses() -> void:
@@ -162,7 +167,8 @@ func crisis(seconds := 50.0) -> void:
 func _crisis_active() -> bool:
 	return Time.get_ticks_msec() / 1000.0 < _crisis_until
 
-func _process(_d: float) -> void:
+func _process(d: float) -> void:
+	if _hum != null and not is_equal_approx(_hum.volume_db, _hum_target_db) and (_hum.volume_db > _hum_target_db - 12.0): _hum.volume_db = move_toward(_hum.volume_db, _hum_target_db, 6.0 * d)
 	if mood == "crisis" and not _crisis_active():
 		mood = "play"; if Settings.music_mode == "auto": next_track(2.5)
 
@@ -171,6 +177,26 @@ func music_changed() -> void:
 	apply_volumes()
 	if Settings.music_mode == "off": stop_music(0.6)
 	else: next_track(1.2)
+
+
+# ---------- ambience: the hum follows the hall ----------
+## Level of the datacenter hum for a hall with `racks` online racks (louder as it fills; liquid cooling adds pumps).
+static func hum_db(racks: int, liquid: bool) -> float:
+	return -34.0 + 12.0 * clampf(float(racks) / 60.0, 0.0, 1.0) + (2.0 if liquid else 0.0)
+
+## Brightness of the hum: a full hall's fans are brighter than an empty room's.
+static func hum_cutoff(racks: int, liquid: bool) -> float:
+	return 500.0 + 2600.0 * clampf(float(racks) / 60.0, 0.0, 1.0) + (300.0 if liquid else 0.0)
+
+## Called by the game whenever the hall changes. Eased in _process so it never jumps.
+func set_hall_load(racks: int, liquid: bool) -> void:
+	_hum_target_db = hum_db(racks, liquid)
+	if _lp != null: _lp.cutoff_hz = hum_cutoff(racks, liquid)
+
+## A power-down dips the hum for a moment, like a hall losing its fans.
+func hum_dip(seconds := 2.0) -> void:
+	if _hum == null: return
+	var tw := create_tween(); tw.tween_property(_hum, "volume_db", _hum_target_db - 18.0, 0.3); tw.tween_interval(seconds); tw.tween_property(_hum, "volume_db", _hum_target_db, 1.2)
 
 # ---------- ambience ----------
 func _make_hum() -> AudioStreamWAV:

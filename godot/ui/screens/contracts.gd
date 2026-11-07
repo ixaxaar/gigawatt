@@ -102,7 +102,7 @@ func _offer(parent: Control, c: Dictionary) -> void:
 	var t: bool = c.kind == "training"
 	if mline != "": v.add_child(Kit.label(mline, 17, Kit.GR, true))
 	v.add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%sB%s · %s[/color]" % [c.model.name, Kit.num(c.model.paramsB, 1), (" (%sB active)" % Kit.num(c.model.activeParamsB, 1)) if c.model.activeParamsB != c.model.paramsB else "", c.kind], 15))
-	var head := ("%s+ GPUs · %s/GPU-hr" % [Kit.num(c.minAccelerators), Kit.usd(c.pricePerAccelHour)]) if t else ("%s tok/s · %s/Mtok" % [Kit.num(c.tokensPerSec), Kit.usd(c.pricePerMTok)])
+	var head := ("%s+ GPUs · %s/GPU-hr" % [Kit.num(c.minAccelerators), Kit.price(c.pricePerAccelHour)]) if t else ("%s tok/s · %s/Mtok" % [Kit.num(c.tokensPerSec), Kit.price(c.pricePerMTok)])
 	v.add_child(Kit.label("%s · %d mo · SLA %.1f%%" % [head, int(c.durationMonths), c.slaAvailability * 100.0], 14, Kit.CY))
 	if t: v.add_child(Kit.label("≈ %s/month at full size · total ≈ %s" % [Kit.usd(c.minAccelerators * c.pricePerAccelHour * 730.0), Kit.usd(c.minAccelerators * c.pricePerAccelHour * 730.0 * c.durationMonths)], 12, Kit.DIM, true))
 	var f := _checks(v, c)

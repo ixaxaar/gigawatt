@@ -82,6 +82,12 @@ func _ready() -> void:
 		hall.auto_orbit = true; hall.orbit_speed = float(OS.get_environment("GW_ORBIT")); hall._update_cam()
 	if OS.get_environment("GW_CLEAN") != "": get_tree().process_frame.connect(func(): _shell_visible(false); coach.stop(false); guide.visible = false, CONNECT_ONE_SHOT)   # website capture: bare hall
 	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
+	if OS.get_environment("GW_CARD") != "":   # docs: show a story card (chapter:N or dilemma:N)
+		var cd := OS.get_environment("GW_CARD").split(":")
+		get_tree().create_timer(1.0).timeout.connect(func():
+			var sample: Dictionary = b.q("storySample", [cd[0], int(cd[1]) if cd.size() > 1 else 0])
+			if cd[0] == "chapter": story_ui.open_chapter(sample)
+			else: story_ui.open_dilemma(sample))
 	if OS.get_environment("GW_SHOT") != "":   # docs/tests: save the window to a PNG after GW_SHOT_AT seconds (default 6) and quit
 		get_tree().create_timer(float(OS.get_environment("GW_SHOT_AT")) if OS.get_environment("GW_SHOT_AT") != "" else 6.0).timeout.connect(func(): get_viewport().get_texture().get_image().save_png(OS.get_environment("GW_SHOT")); get_tree().quit())
 
@@ -192,6 +198,7 @@ func _on_changed() -> void:
 	_seen_log = g.log.size()
 	hall.rebuild()
 	_apply_unlocks()
+	_hall_audio()
 	_check_end()
 	check_keynote()
 	coach.tick()
@@ -206,7 +213,7 @@ func toast(text: String, level := "info") -> void:
 	var cue := "good" if level == "good" else ("bad" if level == "bad" else "click")
 	var low := text.to_lower()
 	if level == "bad" and ("fire" in low or "outage" in low or "cut" in low or "went down" in low or "failed" in low): cue = "alarm"; audio.crisis()
-	elif level == "bad" and ("power" in low or "blackout" in low or "brownout" in low): cue = "power_down"
+	elif level == "bad" and ("power" in low or "blackout" in low or "brownout" in low): cue = "power_down"; audio.hum_dip()
 	elif level == "bad": cue = "incident" if ("incident" in low or "warning" in low) else "bad"
 	elif level == "good" and ("online" in low or "commissioned" in low): cue = "online"
 	elif level == "good" and ("saved" in low): cue = "save"
@@ -219,6 +226,13 @@ func toast(text: String, level := "info") -> void:
 	var tw := create_tween(); tw.tween_interval(6.0); tw.tween_property(p, "modulate:a", 0.0, 1.0); tw.tween_callback(p.queue_free)
 
 func sfx(k: String) -> void: audio.play(k)
+
+func _hall_audio() -> void:
+	var racks := 0; var liquid := false
+	for h in b.g.halls:
+		var on: int = h.racks.filter(func(r): return r.status == "online").size(); racks += on
+		if on > 0 and (h.coolingClass == "dlc" or h.coolingClass == "immersion"): liquid = true
+	audio.set_hall_load(racks, liquid)
 
 ## Click a rack in the hall: a small inspector with what it is, who uses it, and what you can do with it.
 var inspector: PanelContainer

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Glossary · GIGAWATT Wiki</title>
+<meta name="description" content="Forty-one datacenter terms, one line each, alphabetical.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/glossary.html">
+<meta property="og:title" content="Glossary · GIGAWATT Wiki">
+<meta property="og:description" content="Forty-one datacenter terms, one line each, alphabetical.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/glossary.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html" aria-current="page">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Glossary</h1>
+    <p class="lede2">Forty-one datacenter terms, one line each, alphabetical.</p>
+    
+    <figure><img loading="lazy" src="img/codex.webp" alt="The Codex"><figcaption>The in-game Codex: every part and concept, with tradeoffs.</figcaption></figure>
+<ul><li><strong>Allocation</strong> — per-quarter caps on how many units of a constrained part (usually GPUs) you may buy; vendor relationships and frameworks raise yours.</li><li><strong>ATS (automatic transfer switch)</strong> — gear that moves hall load from the utility to your generators without human action; part of the N+1 chain.</li><li><strong>Bisection bandwidth</strong> — the total traffic rate a fabric can carry across its middle; the headline number for whether a cluster trains well.</li><li><strong>Burn-in</strong> — the soak test after rack installation (power-on, firmware, stress tests) that finds dead GPUs and optics before customers do.</li><li><strong>CDU (coolant distribution unit)</strong> — the pump-and-isolation box between a liquid-cooling plant and the cold plates on chips in DLC halls.</li><li><strong>Chiller</strong> — central plant that makes cold water for CRAHs and CDUs; paired with a tower or dry cooler that rejects heat to outside air.</li><li><strong>Cluster</strong> — online racks plus a network fabric wired into one machine that contracts are assigned to.</li><li><strong>Commissioning</strong> — the full bring-up of a rack (installation plus burn-in); its length is a policy choice in Operations.</li><li><strong>CRAH (computer-room air handler)</strong> — the fans-and-coil unit of air-cooled halls; pushes cold air through the floor and pulls hot air back.</li><li><strong>DLC (direct-to-chip liquid cooling)</strong> — coolant through cold plates on GPUs/CPUs; required beyond roughly 40 kW per rack.</li><li><strong>Easy Path</strong> — the button that signs a contract and orders, installs, deploys, clusters and assigns the hardware for you.</li><li><strong>Fabric</strong> — the leaf/spine network (switches and cables) that turns a group of racks into one cluster.</li><li><strong>Fat-tree</strong> — the classic multi-tier cluster topology; <em>rail-optimized</em> variants give each GPU its own leaf path.</li><li><strong>Genset</strong> — diesel or gas generator set that carries the hall through long utility outages.</li><li><strong>HBM (high-bandwidth memory)</strong> — stacked memory on accelerators; its capacity and bandwidth decide how big a model fits and how fast it serves.</li><li><strong>Heat rejection</strong> — cooling capacity in kW; must meet or exceed IT load or hardware fails roughly three times more often.</li><li><strong>Inference</strong> — serving a trained model to users; memory-bandwidth-bound, priced per million tokens.</li><li><strong>KV cache</strong> — per-request state that inference keeps in GPU memory alongside the weights; its size caps how many users you can batch.</li><li><strong>Lead time</strong> — months between ordering a part and holding it; the reason to order ahead of need.</li><li><strong>MFU (model FLOPS utilization)</strong> — the share of peak compute a training run actually achieves; low MFU usually blames the network.</li><li><strong>NIC (network interface card)</strong> — the host's scale-out port; rule of thumb is one per GPU for training, one per two for inference.</li><li><strong>NVLink</strong> — NVIDIA's scale-up interconnect (with NVSwitch), joining GPUs inside a rack into one memory domain at TB/s.</li><li><strong>N+1 redundancy</strong> — one more unit (generator, battery string, chiller) than strictly needed, so any single failure has zero customer impact.</li><li><strong>Oversubscription</strong> — the ratio of leaf downlink capacity to spine uplink capacity; 1:1 for training, 2–4:1 for inference.</li><li><strong>PPA (power purchase agreement)</strong> — a long contract for fixed MW at a fixed price from a plant, paid whether or not you draw it.</li><li><strong>PUE (power usage effectiveness)</strong> — total facility power ÷ IT power; 1.0 is perfect, 1.1–1.5 typical, and you pay the difference monthly.</li><li><strong>Rack density</strong> — kW per rack; the real physical limit of a hall (air ≈ 20–25 kW, RDHx toward 40, DLC beyond).</li><li><strong>Ramp window</strong> — the months after signing a contract to get serving (default about four); miss it and the customer walks.</li><li><strong>RDHx (rear-door heat exchanger)</strong> — a water coil on the rack's back door that cools exhaust air without plumbing the servers.</li><li><strong>Residual value</strong> — what a rack is still worth as it ages and generations pass; quick-sale pays a fraction of it.</li><li><strong>RMA (return merchandise authorization)</strong> — the months-long vendor repair path for a failed part when you have no spare on the shelf.</li><li><strong>Scale-out</strong> — InfiniBand/Ethernet networking between nodes at 25–100+ GB/s per GPU; carries data-parallel traffic.</li><li><strong>Scale-up</strong> — NVLink-class linking of GPUs inside a node or rack into one domain; carries model-parallel and MoE traffic.</li><li><strong>SLA (service-level agreement)</strong> — the availability a contract demands (commonly 95–99.5%); misses cost reputation and renewals.</li><li><strong>Spot market (GPU)</strong> — selling idle GPUs hour-by-hour at a floating price with no commitment; pre-emptible by any contract.</li><li><strong>Spot market (power)</strong> — buying electricity at the volatile utility rate instead of under a PPA.</li><li><strong>Take-or-pay</strong> — the PPA clause: you pay for the committed megawatts whether you use them or not; surplus is resold at a discount.</li><li><strong>Training</strong> — renting a coherent cluster to train a model; compute- and network-bound, priced per GPU-hour.</li><li><strong>Transformer / switchgear</strong> — the hall's power feed; steps utility voltage down and caps maximum IT load in kW.</li><li><strong>TTFT (time to first token)</strong> — how long an inference request waits before its first token; the latency number customers feel.</li><li><strong>UPS (uninterruptible power supply)</strong> — inverter plus battery (or flywheel) that rides through grid dips while generators start.</li></ul>
+<p>Related: the in-game Codex carries the full encyclopedia with per-part engineering notes.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="faq.html">← FAQ</a>
+      <span></span>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/glossary.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

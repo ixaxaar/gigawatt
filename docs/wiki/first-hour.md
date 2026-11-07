@@ -4,6 +4,9 @@
 
 The **Missions** panel on the Overview screen always shows your next three missions with a **Go →** button that jumps to the right screen. Each completed mission pays a cash reward and teaches one lesson. This page walks the opening ten in order. If you ever feel stuck, the [Easy Path](customers-and-contracts.md) on the Customers screen can order, install, deploy and assign a contract for you.
 
+![Every January a chapter card sets the scene for the year ahe](img/story-chapter.png)
+*Every January a chapter card sets the scene for the year ahead.*
+
 ## 1 · Place your first order (Procure)
 
 Open **Supply → Procure**. The guided planner walks you through: pick a **platform** (a GPU generation, pre-engineered), say **how many accelerators** you want, choose **how to buy** — DIY (cheapest, you integrate), an OEM integrated rack, or turnkey (priciest, fastest) — check your hall can feed and cool it, then order from the bill of materials. The lesson: hardware has **lead times** and, for GPUs, **allocation**. Parts arrive months later, so order early.

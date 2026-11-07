@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Strategy tips · GIGAWATT Wiki</title>
+<meta name="description" content="Habits that separate a thriving AI factory from a beautiful hall full of idle GPUs. (Deliberately qualitative — balance numbers shift with tuning, the habits don't.)">
+<link rel="canonical" href="https://gigawatt.ing/wiki/strategy-tips.html">
+<meta property="og:title" content="Strategy tips · GIGAWATT Wiki">
+<meta property="og:description" content="Habits that separate a thriving AI factory from a beautiful hall full of idle GPUs. (Deliberately qualitative — balance numbers shift with tuning, the habits don't.)">
+<meta property="og:url" content="https://gigawatt.ing/wiki/strategy-tips.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html" aria-current="page">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Strategy tips</h1>
+    <p class="lede2">Habits that separate a thriving AI factory from a beautiful hall full of idle GPUs. (Deliberately qualitative — balance numbers shift with tuning, the habits don't.)</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#buy-before-you-need">Buy before you need</a></li><li><a href="#grow-the-boring-parts-first">Grow the boring parts first</a></li><li><a href="#match-hardware-to-workload">Match hardware to workload</a></li><li><a href="#utilization-is-the-business">Utilization is the business</a></li><li><a href="#run-it-like-an-operator">Run it like an operator</a></li><li><a href="#mind-the-money">Mind the money</a></li><li><a href="#sell-hardware-on-a-cadence">Sell hardware on a cadence</a></li><li><a href="#hedge-what-you-can-t-control">Hedge what you can't control</a></li><li><a href="#learn-the-stack">Learn the stack</a></li><li><a href="#keep-it-boring">Keep it boring</a></li></ul></nav>
+    <figure><img loading="lazy" src="img/end-screen.webp" alt="The end screen: how the story finished, your revenue and cas"><figcaption>The end screen: how the story finished, your revenue and cash over eight years, your best deal, your worst incident and how you stacked up against the rivals.</figcaption></figure>
+<h2 id="buy-before-you-need">Buy before you need</h2>
+<p>Lead times and allocation punish just-in-time thinking. Order transformers, plant and racks for the contracts you <em>expect</em>, not just the ones you've signed. When a keynote announces a part that changes your market, a pre-order is a cheap place in the queue — you can cancel most of it back if plans change.</p>
+<h2 id="grow-the-boring-parts-first">Grow the boring parts first</h2>
+<p>Power and cooling cap everything. Expand the feed and the cooling plant ahead of the racks that will use them, and keep both gauges out of the red zone before you deploy. A second hall takes longer than you think — start it before you need it, and use it to separate air-cooled and liquid-cooled fleets.</p>
+<h2 id="match-hardware-to-workload">Match hardware to workload</h2>
+<p>Memory capacity and bandwidth decide inference economics; compute, scale-up domains and fabric decide training economics. Read the contract checks before buying anything, let the &quot;what you need to buy&quot; box do the arithmetic, and don't buy premium fabric for inference or starved memory for serving.</p>
+<h2 id="utilization-is-the-business">Utilization is the business</h2>
+<p>Idle GPUs still burn power and depreciation. Put every idle online rack on the spot market, chase the ramp window on signed contracts, and prefer renewals over hunting for fresh customers — delivered contracts compound reputation and bring follow-on offers.</p>
+<h2 id="run-it-like-an-operator">Run it like an operator</h2>
+<ul><li>Keep the spares shelf at the advised level; the RMA months you skip are the outages you avoid</li><li>Hire ahead of the fleet; understaffed sites fail more and repair slower</li><li>Choose burn-in and maintenance policies deliberately — shipping dead GPUs and skipping prevention both cost more than they save</li><li>Two carriers on diverse paths, N+1 power before high-SLA contracts</li></ul>
+<h2 id="mind-the-money">Mind the money</h2>
+<p>Watch the <em>Next month</em> preview before committing cash: deliveries, burn-ins, completions, expiring offers, warnings. Watch runway and never let cash go negative for long — bankruptcy is a short walk from one over-ordered quarter. Borrow to build earning capacity, not to cover burn; interest accrues monthly whether the GPUs work or not.</p>
+<h2 id="sell-hardware-on-a-cadence">Sell hardware on a cadence</h2>
+<p>Under the yearly cadence, GPUs lose value to successor generations faster than to wear. Refresh on rhythm, reassign the previous generation to inference or spot, and sell racks while residual value is real. A fleet that never refreshes ends up running hardware no customer wants to pay for.</p>
+<h2 id="hedge-what-you-can-t-control">Hedge what you can't control</h2>
+<p>A PPA sized to your steady load turns energy crises into non-events; over-committing turns them into monthly losses. Blend contract kinds (training and inference) and customers so a default or a demand dip doesn't idle the campus.</p>
+<h2 id="learn-the-stack">Learn the stack</h2>
+<p>The Codex's &quot;Datacenter 101&quot; verdicts tell you whether you need each concept <em>right now</em> — read them, click <em>Show me where</em>, and close gaps in order. Missions pay you to learn the whole stack; finish the Learning path before you decide which habits to skip.</p>
+<figure><img loading="lazy" src="img/campus-aisle.webp" alt="Down the cold aisle"><figcaption>Cold aisle discipline: containment, labels and no surprises.</figcaption></figure>
+<h2 id="keep-it-boring">Keep it boring</h2>
+<p>The endgame scoring rewards net worth, reliability and scale — and all three come from the same place: racks bought, filled, refreshed and sold on schedule, with no fires, no outages and no missed ramp windows. Spectacular is what it looks like when you didn't prepare.</p>
+<p>Related: <a href="incidents-and-resilience.html">Incidents and resilience</a> · <a href="money-and-operations.html">Money and operations</a> · <a href="hardware-roadmap.html">Hardware roadmap</a>.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="incidents-and-resilience.html">← Incidents and resilience</a>
+      <a href="faq.html">FAQ →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/strategy-tips.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

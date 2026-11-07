@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Money and operations · GIGAWATT Wiki</title>
+<meta name="description" content="Cash, loans and interest, depreciation, staffing, hardware lifecycle and resale — everything on the Operations screen.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/money-and-operations.html">
+<meta property="og:title" content="Money and operations · GIGAWATT Wiki">
+<meta property="og:description" content="Cash, loans and interest, depreciation, staffing, hardware lifecycle and resale — everything on the Operations screen.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/money-and-operations.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html" aria-current="page">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Money and operations</h1>
+    <p class="lede2">Cash, loans and interest, depreciation, staffing, hardware lifecycle and resale — everything on the Operations screen.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#cash-loans-and-bankruptcy">Cash, loans and bankruptcy</a></li><li><a href="#team">Team</a></li><li><a href="#operating-policy">Operating policy</a></li><li><a href="#hardware-lifecycle-and-resale">Hardware lifecycle and resale</a></li><li><a href="#clearing-stock">Clearing stock</a></li><li><a href="#vendor-relationships-and-frameworks">Vendor relationships and frameworks</a></li><li><a href="#market-competition">Market competition</a></li></ul></nav>
+    <p>The core equation, visible on the Overview plaques: <strong>revenue − burn = net</strong>, where burn is power + staff + support + interest, and the net figure is stated after depreciation. Utilization is everything — an idle rack earns nothing while it still draws power and depreciates. <strong>Net worth = cash − debt + assets at residual value</strong>: only profitable months compound, borrowed scale does not.</p>
+<h2 id="cash-loans-and-bankruptcy">Cash, loans and bankruptcy</h2>
+<p>Loans land in cash instantly and interest accrues monthly; the credit limit grows with your installed assets. Repay in chunks or all at once when cash allows — interest is a silent burn line, so gear up for builds, not for idle balances.</p>
+<p><strong>Three consecutive months of negative cash is bankruptcy</strong> and the campaign ends with your creditors closing you down. The <em>Next month</em> preview on the Overview screen shows cash after next month and your runway at the current burn — check it before every big order. Learner mode cannot go bankrupt.</p>
+<h2 id="team">Team</h2>
+<p>Racks don't run themselves. The staffing rule: <strong>one ops technician per 10 online racks</strong>, plus a <strong>liquid-cooling specialist</strong> once a DLC/immersion hall has online racks, plus a <strong>network engineer per 1,024 clustered accelerators</strong> — a skeleton crew of one even when empty. Understaffing multiplies failure rates and slows repairs; the screen shows the exact effect. Hire ahead of the fleet, not after it: a failed rack costs far more than an early hire.</p>
+<h2 id="operating-policy">Operating policy</h2>
+<p>Two dials with real trade-offs:</p>
+<ul><li><strong>Burn-in</strong> — how long racks soak before going live. Skipping it ships dead GPUs; longer soak catches more failures at the price of extra months of lead time.</li><li><strong>Maintenance</strong> — reactive (no fee), preventive, or premium. Higher tiers cut failure rates for a monthly per-rack fee.</li></ul>
+<h2 id="hardware-lifecycle-and-resale">Hardware lifecycle and resale</h2>
+<p>The lifecycle table lists every rack with its age, its accelerator, its <strong>residual value</strong> percentage and a sale price — sorted worst-first, with advice per rack. GPUs lose value to successor generations faster than to wear: under the yearly cadence, resale timing is part of the business model. Sell while residual value is real; a rack must be unclustered first, and quick-sale pays less than residual value as the convenience discount. The Learning path has a mission for your first decommissioned rack, because a fleet that never refreshes ends up running hardware no customer wants.</p>
+<h2 id="clearing-stock">Clearing stock</h2>
+<p>Leftover parts in the warehouse can be sold from <em>Clear warehouse stock</em> at a discount to list. Useful after design changes and cancelled builds; don't let a stale inventory become a junk drawer.</p>
+<h2 id="vendor-relationships-and-frameworks">Vendor relationships and frameworks</h2>
+<p>Buying from a vendor builds a <strong>relationship</strong>: better allocation multipliers on constrained parts and relationship pricing. <strong>Frameworks</strong> go further — commit to a spend over a set term for a discount on that vendor's parts, with a deposit paid up front. A framework that expires with its commitment unmet costs a penalty on the shortfall. Frameworks matter most when a hot generation is allocation-constrained (see <a href="hardware-roadmap.html">Hardware roadmap</a>).</p>
+<h2 id="market-competition">Market competition</h2>
+<p>The Operations screen tracks rival operators: their share, their fleet size, and whether they price above or below list. When rivals undercut, incoming offers are priced down; when your scale commands the market, offers are priced up. The price index tells you which world you're in.</p>
+<p>Related: <a href="customers-and-contracts.html">Customers and contracts</a> for the revenue side, <a href="energy-and-spot.html">Energy and the spot market</a> for one of the largest burn lines.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="customers-and-contracts.html">← Customers and contracts</a>
+      <a href="energy-and-spot.html">Energy and the spot market →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/money-and-operations.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

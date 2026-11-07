@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Power and cooling · GIGAWATT Wiki</title>
+<meta name="description" content="Transformers, UPS and generators, PUE, CRAH, RDHx, direct-to-chip liquid and chillers — and why heat, not floor space, is what limits your hall.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/power-and-cooling.html">
+<meta property="og:title" content="Power and cooling · GIGAWATT Wiki">
+<meta property="og:description" content="Transformers, UPS and generators, PUE, CRAH, RDHx, direct-to-chip liquid and chillers — and why heat, not floor space, is what limits your hall.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/power-and-cooling.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html" aria-current="page">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Power and cooling</h1>
+    <p class="lede2">Transformers, UPS and generators, PUE, CRAH, RDHx, direct-to-chip liquid and chillers — and why heat, not floor space, is what limits your hall.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#transformer-switchgear-the-power-feed">Transformer / switchgear — the power feed</a></li><li><a href="#ups-batteries-and-generators">UPS, batteries and generators</a></li><li><a href="#pue-the-number-on-your-bill">PUE — the number on your bill</a></li><li><a href="#the-cooling-ladder">The cooling ladder</a></li><li><a href="#chillers-and-cooling-towers">Chillers and cooling towers</a></li><li><a href="#reading-the-screen">Reading the screen</a></li></ul></nav>
+    <p>Every watt a GPU draws turns into a watt of heat inside your hall. The Build screen has two gauges that matter more than anything else: <strong>IT load vs your power feed</strong> and <strong>heat rejection vs installed cooling</strong>. If racks draw more than the feed, breakers trip or racks throttle. If heat rejection is below IT load, hardware fails roughly three times more often. Both gauges warn you as you approach the limit.</p>
+<h2 id="transformer-switchgear-the-power-feed">Transformer / switchgear — the power feed</h2>
+<p>The transformer steps utility voltage down to what the hall uses and sets the maximum IT load in kW you may draw. It arrives in your warehouse after a lead time and is installed from the Build screen. Plan feed capacity ahead of rack purchases — transformers have lead times measured in months, and a 100 MW campus starts with grid interconnection and transformers ordered years ahead.</p>
+<h2 id="ups-batteries-and-generators">UPS, batteries and generators</h2>
+<p>Grid power blips. Customers sign SLAs at 95–99.5% availability, and a grid dip without protection restarts every training job. The protection chain, all visible in the <em>Outage protection</em> panel:</p>
+<ul><li><strong>UPS</strong> — batteries (or flywheels) that ride through dips; needs both inverter capacity and a battery string sized to IT load</li><li><strong>Generator</strong> — takes over for long outages; must be sized to at least your IT load</li><li><strong>Transfer switch (ATS/STS)</strong> — moves load to the generator automatically</li><li><strong>N+1</strong> — a second generator that can parallel (or an oversized UPS), so any single engine, battery string or chiller can fail with zero customer impact; this is what enterprise and sovereign customers pay for</li></ul>
+<p>The panel shows your tier (<strong>none / basic / N / N+1</strong>), the share of outages you ride through, and exactly which gap is holding you back. Enterprise contracts with SLAs at 98%+ expect this chain before you sign.</p>
+<h2 id="pue-the-number-on-your-bill">PUE — the number on your bill</h2>
+<p><strong>PUE = total facility power ÷ IT power.</strong> A perfect hall would score 1.0; 1.1–1.5 is typical. You pay for the overhead — cooling, conversion losses — on top of IT power every single month, so a lower PUE (efficient cooling, liquid instead of air at density) directly cuts your power bill. Each hall's PUE shows on its Build panel.</p>
+<h2 id="the-cooling-ladder">The cooling ladder</h2>
+<p>Cooling classes are set per hall when you build it (<strong>air, RDHx, DLC, immersion</strong>), and each class has its own equipment:</p>
+<div class="tbl"><table><thead><tr><th>Class</th><th>Works up to</th><th>How</th></tr></thead><tbody><tr><td><strong>CRAH (air)</strong></td><td>~20–25 kW per rack</td><td>Air handlers push cold air under the floor and pull hot air back</td></tr><tr><td><strong>Rear-door heat exchanger</strong></td><td>~40 kW per rack</td><td>A water coil on the rack's back door cools exhaust before it re-enters the room — no server plumbing</td></tr><tr><td><strong>DLC (direct-to-chip)</strong></td><td>40 kW and beyond</td><td>Coolant flows through cold plates on GPUs/CPUs; a <strong>CDU</strong> (coolant distribution unit) isolates and pumps the loop</td></tr><tr><td><strong>Immersion</strong></td><td>highest densities</td><td>Servers submerged in dielectric fluid</td></tr></tbody></table></div>
+<p>Air cannot carry away 40+ kW from one rack. GB200 NVL72 racks (~120 kW) are liquid-only: they need a DLC hall, CDUs, and a floor planned for the loop — the same rack format continues with later generations.</p>
+<h2 id="chillers-and-cooling-towers">Chillers and cooling towers</h2>
+<p>CRAHs and CDUs don't destroy heat, they move it. Past a certain heat load — or in any liquid-cooled hall — you need a central plant: a chiller makes cold water, and a cooling tower or dry cooler throws the heat to outside air. Chiller trips are a real incident (see <a href="incidents-and-resilience.html">Incidents and resilience</a>); N+1 chillers with automatic switchover keep the water cold while one unit is repaired.</p>
+<figure><img loading="lazy" src="img/thermal.webp" alt="Thermal view"><figcaption>Press T: the thermal view shows where your heat actually is.</figcaption></figure>
+<figure><img loading="lazy" src="img/campus-rdhx.webp" alt="Rear-door heat exchangers"><figcaption>An RDHx hall — water coils on the rack doors stretch air cooling to denser racks.</figcaption></figure>
+<h2 id="reading-the-screen">Reading the screen</h2>
+<ul><li>The <strong>gauges</strong> turn red when you exceed feed or cooling; the ≥80% zone is your cue to expand</li><li><strong>Hall checks</strong> lists validation issues for the selected hall</li><li><strong>Floor space</strong> is bought in blocks with a commissioning delay — but space is rarely your real limit</li><li>The <strong>Codex → Datacenter 101</strong> view gives a live &quot;do I need this right now?&quot; verdict for every concept on this page, with a <em>Show me where</em> jump</li></ul>
+<p>Related: <a href="servers-and-racks.html">Servers and racks</a> for rack density, <a href="energy-and-spot.html">Energy and the spot market</a> for what power costs.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="first-hour.html">← Your first hour</a>
+      <a href="servers-and-racks.html">Servers and racks →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/power-and-cooling.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>

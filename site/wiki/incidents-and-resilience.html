@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Incidents and resilience · GIGAWATT Wiki</title>
+<meta name="description" content="Fires, chiller trips, outages, supply shocks and customer defaults — what can go wrong and how to be the operator it doesn't happen to.">
+<link rel="canonical" href="https://gigawatt.ing/wiki/incidents-and-resilience.html">
+<meta property="og:title" content="Incidents and resilience · GIGAWATT Wiki">
+<meta property="og:description" content="Fires, chiller trips, outages, supply shocks and customer defaults — what can go wrong and how to be the operator it doesn't happen to.">
+<meta property="og:url" content="https://gigawatt.ing/wiki/incidents-and-resilience.html">
+<meta property="og:image" content="https://gigawatt.ing/assets/og.jpg">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050912">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="wiki.css">
+</head>
+<body class="wiki">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+  <nav aria-label="Primary">
+    <a href="index.html">Wiki</a>
+    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <a href="../#download" class="btn mini go">Download</a>
+  </nav>
+</header>
+<div class="wiki-wrap">
+  <aside class="side" aria-label="Wiki pages">
+    <label class="sr" for="q">Search the wiki</label>
+    <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
+    <ul id="results" class="results" hidden></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html" aria-current="page">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+  </aside>
+  <main id="main" class="doc">
+    <h1>Incidents and resilience</h1>
+    <p class="lede2">Fires, chiller trips, outages, supply shocks and customer defaults — what can go wrong and how to be the operator it doesn't happen to.</p>
+    <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#the-incident-catalog">The incident catalog</a></li><li><a href="#hardware-failures-always">Hardware failures (always)</a></li><li><a href="#the-preparation-checklist">The preparation checklist</a></li></ul></nav>
+    <p>After an opening grace period, roughly one world event fires every few months. Each one tests a decision you made earlier — or teaches you the decision you should have made. The event log on the Overview screen explains the lesson every time.</p>
+<figure><img loading="lazy" src="img/story-decision.webp" alt="Now and then a decision with two honest answers. Ignore it a"><figcaption>Now and then a decision with two honest answers. Ignore it and the offer lapses after three months.</figcaption></figure>
+<h2 id="the-incident-catalog">The incident catalog</h2>
+<p><strong>Utility outage.</strong> A weak power chain (no UPS, no battery string, an undersized generator, no transfer switch) means running jobs restart from checkpoint, every serving contract takes an SLA miss, and reputation drops. A complete chain — UPS + battery + generator + transfer switch, sized N+1 — rides through with zero customer impact. The Outage protection panel on the Build screen shows your tier and the exact gap to close.</p>
+<p><strong>Fiber cut.</strong> A backhoe takes out a fiber route. With a <strong>second carrier on a physically diverse path</strong>, customers never notice; with one circuit, it's an outage and a reputation hit. Two carriers is a Learning-path mission for a reason.</p>
+<p><strong>Fire.</strong> One online rack burns. A hall whose power chain is at N tier or better contains the fire to a short rebuild; in any weaker hall the rack is destroyed, the rebuild takes many months and reputation suffers.</p>
+<p><strong>Chiller trip.</strong> A compressor fault drops the cooling loop for hours: every serving contract takes an SLA miss and emergency pumping costs money per affected rack. N+1 chillers with automatic switchover keep the water cold while one unit is repaired.</p>
+<p><strong>Energy crisis.</strong> The spot utility rate jumps. PPAs cover the committed block (see <a href="energy-and-spot.html">Energy and the spot market</a>); a lower PUE shrinks the exposed part.</p>
+<p><strong>Heatwave.</strong> Dry coolers derate in hot ambient air and extra chiller energy costs money. Warm-water liquid cooling tolerates hot days far better than air-cooled halls.</p>
+<p><strong>Customer default.</strong> A serving customer goes bankrupt mid-deal: the contract dies, a month of expected revenue never lands, reputation drops, and the cluster suddenly idles. A balanced contract book across several customers absorbs it.</p>
+<p><strong>Supply-chain shock.</strong> A fab substrate shortage and a port strike: every in-transit order slips. Dual-sourcing and safety stock are insurance, not waste.</p>
+<p><strong>Demand shock (March 2023).</strong> ChatGPT goes viral: allocation is slashed and accelerators already in your pipeline slip. Lead times quoted in a soft market are fiction in a hot one.</p>
+<h2 id="hardware-failures-always">Hardware failures (always)</h2>
+<p>Independent of events, parts fail at a steady rate — GPUs, PSUs, NICs, NVMe drives, DIMMs, CPUs, ToR switches. A <strong>spare on the shelf</strong> puts the rack back in about a month; the vendor RMA without a spare takes roughly four, during which the rack misses SLAs and earns nothing while still depreciating. The Warehouse spares table tracks <em>have vs advised</em> per part; orders bundle the advised spares by default. Understaffing multiplies failure rates and slows repairs (see <a href="money-and-operations.html">Money and operations</a>).</p>
+<h2 id="the-preparation-checklist">The preparation checklist</h2>
+<ol><li>Complete power chain per hall, N+1 before signing high-SLA contracts</li><li>Two carriers on diverse paths</li><li>N+1 chillers once a central plant exists</li><li>Spares shelf at the advised level, checked monthly</li><li>Staffing at or ahead of need</li><li>A PPA block covering baseline load</li><li>A contract book spread across customers and workload kinds</li></ol>
+<figure><img loading="lazy" src="img/campus-thermal.webp" alt="Thermal view of a campus"><figcaption>Press T in the hall: seeing heat early is half of preventing failures.</figcaption></figure>
+<p>Resilience is not a cost center — it's what tier-III customers pay for, and what keeps one bad month from ending the campaign.</p>
+    <nav class="pager" aria-label="Previous and next">
+      <a href="hardware-roadmap.html">← Hardware roadmap</a>
+      <a href="strategy-tips.html">Strategy tips →</a>
+    </nav>
+    <p class="fine">Found a mistake or something missing? <a href="https://github.com/ixaxaar/gigawatt/edit/master/docs/wiki/incidents-and-resilience.md">Edit this page on GitHub</a> or ask in <a href="https://github.com/ixaxaar/gigawatt/discussions">Discussions</a>.</p>
+  </main>
+</div>
+<script src="wiki.js" defer></script>
+</body>
+</html>
