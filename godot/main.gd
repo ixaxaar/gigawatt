@@ -70,6 +70,13 @@ func _ready() -> void:
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 	if OS.get_environment("GW_GUIDE") != "": get_tree().create_timer(0.6).timeout.connect(func(): guide.visible = true; guide.open())
 	if OS.get_environment("GW_INSPECT") != "": get_tree().create_timer(0.8).timeout.connect(func(): _inspect(int(OS.get_environment("GW_INSPECT"))))
+	if OS.get_environment("GW_ORBIT") != "":   # website capture: frame the hall, then orbit it
+		var hl: Dictionary = b.g.halls[hall.hall_i]; var mx := 0
+		for r in hl.racks: mx = maxi(mx, int(r.slot))
+		var far: Vector3 = hall.slot_pos(mx); var w: float = (hall.cols - 1) * HallView.PITCH
+		hall.yaw = 0.55; hall.pitch = 0.6; hall.dist = (w + far.z) * 0.5 + 6.0; hall.target = Vector3(w * 0.5 + 2.0, 0.8, far.z * 0.5)
+		hall.auto_orbit = true; hall.orbit_speed = float(OS.get_environment("GW_ORBIT")); hall._update_cam()
+	if OS.get_environment("GW_CLEAN") != "": get_tree().process_frame.connect(func(): _shell_visible(false); coach.stop(false); guide.visible = false, CONNECT_ONE_SHOT)   # website capture: bare hall
 	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
 
 func _fatal(msg: String) -> void:

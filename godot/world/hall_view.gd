@@ -29,6 +29,7 @@ var pitch := 0.42
 var dist := 17.0
 var target := Vector3.ZERO
 var auto_orbit := true
+var orbit_speed := 0.04
 var _drag := 0
 var _lpress := Vector2.ZERO
 var _lmoved := false
@@ -428,7 +429,7 @@ func _update_cam() -> void:
 
 func _process(dt: float) -> void:
 	_t += dt
-	if auto_orbit and not Settings.reduced_motion: yaw += dt * 0.04; _update_cam()
+	if auto_orbit and not Settings.reduced_motion: yaw += dt * orbit_speed; _update_cam()
 	if _beacon != null: _beacon.light_energy = 1.5 + 1.5 * sin(_t * 6.0)
 	var k := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): k.x -= 1
