@@ -201,39 +201,6 @@
  },
  "music": [
   {
-   "id": "cold-boot",
-   "title": "Cold Boot",
-   "genre": "Arcade chiptune",
-   "bpm": 128,
-   "moods": [
-    "title",
-    "play"
-   ],
-   "file": "music/cold-boot.ogg"
-  },
-  {
-   "id": "aisle-seven",
-   "title": "Aisle Seven",
-   "genre": "Lo-fi chill",
-   "bpm": 76,
-   "moods": [
-    "play",
-    "calm"
-   ],
-   "file": "music/aisle-seven.ogg"
-  },
-  {
-   "id": "rack-attack",
-   "title": "Rack Attack",
-   "genre": "Funk pop",
-   "bpm": 110,
-   "moods": [
-    "play",
-    "drive"
-   ],
-   "file": "music/rack-attack.ogg"
-  },
-  {
    "id": "neon-overclock",
    "title": "Neon Overclock",
    "genre": "Synthwave",
@@ -245,47 +212,69 @@
    "file": "music/neon-overclock.ogg"
   },
   {
-   "id": "fabric-four",
-   "title": "Fabric Four",
-   "genre": "Trance / techno",
-   "bpm": 138,
+   "id": "cold-aisle",
+   "title": "Cold Aisle",
+   "genre": "Lo-fi hip-hop",
+   "bpm": 78,
+   "moods": [
+    "title",
+    "play",
+    "calm"
+   ],
+   "file": "music/cold-aisle.ogg"
+  },
+  {
+   "id": "sub-zero",
+   "title": "Sub Zero",
+   "genre": "Dub techno",
+   "bpm": 112,
    "moods": [
     "play",
     "drive"
    ],
-   "file": "music/fabric-four.ogg"
+   "file": "music/sub-zero.ogg"
   },
   {
-   "id": "brownout",
-   "title": "Brownout",
-   "genre": "Dark tension",
-   "bpm": 88,
+   "id": "heat-sink",
+   "title": "Heat Sink",
+   "genre": "Trip-hop",
+   "bpm": 84,
    "moods": [
-    "crisis"
+    "play"
    ],
-   "file": "music/brownout.ogg"
+   "file": "music/heat-sink.ogg"
   },
   {
-   "id": "gigawatt-anthem",
-   "title": "Gigawatt Anthem",
-   "genre": "Heroic march",
-   "bpm": 120,
-   "moods": [
-    "play",
-    "triumph"
-   ],
-   "file": "music/gigawatt-anthem.ogg"
-  },
-  {
-   "id": "capacity-planning",
-   "title": "Capacity Planning",
-   "genre": "Bossa jazz",
-   "bpm": 104,
+   "id": "night-shift",
+   "title": "Night Shift",
+   "genre": "Ambient chill",
+   "bpm": 66,
    "moods": [
     "play",
     "calm"
    ],
-   "file": "music/capacity-planning.ogg"
+   "file": "music/night-shift.ogg"
+  },
+  {
+   "id": "blue-light",
+   "title": "Blue Light",
+   "genre": "Future garage",
+   "bpm": 132,
+   "moods": [
+    "play",
+    "drive"
+   ],
+   "file": "music/blue-light.ogg"
+  },
+  {
+   "id": "brownout",
+   "title": "Brownout",
+   "genre": "Dark ambient",
+   "bpm": 70,
+   "moods": [
+    "crisis"
+   ],
+   "file": "music/brownout.ogg"
   }
  ]
 }
