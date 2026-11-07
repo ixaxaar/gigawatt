@@ -47,7 +47,7 @@ func _design_row(parent: Control, d: Dictionary) -> void:
 	if r.buildableNow > 0:
 		var opts := []; for h in g.halls: opts.append([h.id, "%s (%d/%d)" % [h.name, h.racks.size(), int(h.rackSlots)]])
 		h1.add_child(Kit.option(opts, hall_id, func(v): hall_id = v))
-		h1.add_child(Kit.btn("DEPLOY 1", func(): msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("buy"); refresh(), "go", 14))
+		h1.add_child(Kit.btn("DEPLOY 1", func(): msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("rack_place"); refresh(), "go", 14))
 	var active: bool = int(g.get("rackReserve", {}).get(d.id, 0)) > 0 or int(r.buildableNow) > 0 or open_missing.has(d.id)
 	for l in r.lines:
 		if l.have > 0 or l.onOrder > 0: active = true

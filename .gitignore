@@ -6,3 +6,4 @@ godot/.godot/
 *.import
 godot/build/
 dist/
+__pycache__/

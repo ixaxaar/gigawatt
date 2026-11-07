@@ -51,12 +51,12 @@ func _ready() -> void:
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
-	audio = GameAudio.new(); add_child(audio)
+	audio = GameAudio.new(); add_child(audio); audio.hook_ui(get_tree())
 	ui = CanvasLayer.new(); ui.layer = 10; add_child(ui)
 	root = Control.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var th := Theme.new(); th.default_font_size = 17; th.default_font = Fonts.regular; th.set_font("bold_font", "RichTextLabel", Fonts.bold); th.set_font("normal_font", "RichTextLabel", Fonts.regular); root.theme = th
 	ui.add_child(root)
-	_build_shell(); _title()
+	_build_shell(); _title(); audio.play("boot")
 	pad = Pad.new(); pad.app = self; add_child(pad)
 	coach = Coach.new(); coach.app = self; add_child(coach)
 	b.changed.connect(_on_changed)
@@ -95,7 +95,7 @@ func _build_shell() -> void:
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
 	lbl.mode = Kit.btn("", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); hb.add_child(lbl.mode)
 	hb.add_child(Kit.btn("How to play", func(): guide.visible = true; guide.open(), "", 14))
-	hb.add_child(Kit.btn("Sound", func(): audio.muted = not audio.muted, "", 14))
+	hb.add_child(Kit.btn("Sound", func(): audio.toggle_mute(), "", 14))
 	hb.add_child(Kit.btn("Save", func(): var r := b.act("save", [cur_slot]); toast("Game saved." if r.get("ok", false) else "Could not save: %s" % r.get("message", "?"), "good" if r.get("ok", false) else "bad"), "", 14))
 	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
 		var bt := Kit.btn(s[0], func(): set_speed(s[1]), "", 15); bt.custom_minimum_size = Vector2(46, 0); lbl["sp%d" % s[1]] = bt; hb.add_child(bt)
@@ -122,7 +122,7 @@ func _shell_visible(v: bool) -> void:
 	toasts.visible = v
 
 func _title() -> void:
-	started = false; _shell_visible(false); hall.b = b
+	started = false; _shell_visible(false); hall.b = b; audio.set_mood("title")
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); h.name = "title"; root.add_child(h)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -310; vb.offset_bottom = 310; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110, Kit.CY))
@@ -174,9 +174,10 @@ func _new_game(mode: String) -> void:
 func _begin() -> void:
 	var tt := root.get_node_or_null("title")
 	if tt: tt.queue_free()
-	started = true; _seen_log = b.g.log.size(); speed = 0; clock = 0.0
+	started = true; _seen_log = b.g.log.size(); speed = 0; clock = 0.0; audio.set_mood("play")
 	hall.cam.h_offset = 0.0; hall.hall_i = 0; hall.auto_orbit = false
 	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild(); hall.top_view()
+	if OS.get_environment("GW_SETTINGS") != "": get_tree().create_timer(0.5).timeout.connect(func(): if settings_ui == null: _settings())
 
 func _on_changed() -> void:
 	if not started: return
@@ -203,8 +204,13 @@ func toast(text: String, level := "info") -> void:
 		if t.has_meta("txt") and t.get_meta("txt") == text: return
 	var cue := "good" if level == "good" else ("bad" if level == "bad" else "click")
 	var low := text.to_lower()
-	if level == "bad" and ("fire" in low or "outage" in low or "cut" in low or "went down" in low or "failed" in low): cue = "alarm"
+	if level == "bad" and ("fire" in low or "outage" in low or "cut" in low or "went down" in low or "failed" in low): cue = "alarm"; audio.crisis()
+	elif level == "bad" and ("power" in low or "blackout" in low or "brownout" in low): cue = "power_down"
+	elif level == "bad": cue = "incident" if ("incident" in low or "warning" in low) else "bad"
 	elif level == "good" and ("online" in low or "commissioned" in low): cue = "online"
+	elif level == "good" and ("saved" in low): cue = "save"
+	elif level == "good" and ("loaded" in low): cue = "load"
+	elif level == "good" and ("deliver" in low or "arrived" in low): cue = "delivery"
 	audio.play(cue)
 	var p := PanelContainer.new(); p.set_meta("txt", text); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
 	p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.12, 0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
@@ -338,11 +344,11 @@ func check_keynote() -> void:
 	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE"): b.act("ackNews"); return
 	var l: Dictionary = b.q("launches")
 	if l.news.is_empty(): b.act("ackNews"); return
-	keynote.open(l.news[0], l.news.size() - 1); speed = 0; clock = 0.0; audio.play("good")
+	keynote.open(l.news[0], l.news.size() - 1); speed = 0; clock = 0.0; audio.play("keynote")
 	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == 0 else Color.WHITE
 
 func _claim() -> void:
-	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("good"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
+	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("fanfare"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
 
 func _process(dt: float) -> void:
 	_process_tip()
@@ -439,11 +445,22 @@ func _settings() -> void:
 	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -360; pn.offset_right = 360; pn.offset_top = -245; pn.offset_bottom = 245
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -360; pn.offset_right = 360; pn.offset_top = -310; pn.offset_bottom = 310
 	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 24)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
 	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
-	var vol := _slider_row(vb, "Volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
+	var vol := _slider_row(vb, "Master volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
+	_slider_row(vb, "Music", 0.0, 1.0, Settings.music_volume, func(v): Settings.music_volume = v; audio.apply_volumes(); Settings.save_all())
+	_slider_row(vb, "Effects", 0.0, 1.0, Settings.sfx_volume, func(v): Settings.sfx_volume = v; audio.apply_volumes(); Settings.save_all(); audio.play("confirm"))
+	var mr := HBoxContainer.new(); mr.add_theme_constant_override("separation", 14); vb.add_child(mr)
+	var ml := Kit.label("Music style", 16, Kit.TX); ml.custom_minimum_size = Vector2(130, 0); mr.add_child(ml)
+	var mo := OptionButton.new(); var ids := ["auto", "off"]; mo.add_item("Auto (changes with the game)"); mo.add_item("Off")
+	for t in audio.catalog.music: mo.add_item("%s — %s" % [t.genre, t.title]); ids.append(t.id)
+	mo.selected = maxi(0, ids.find(Settings.music_mode)); mr.add_child(mo)
+	var np := Kit.label("", 13, Kit.DIM); np.custom_minimum_size = Vector2(230, 0)
+	var upd := func(): np.text = ("♪ %s" % audio.now.title) if audio.now.has("title") else ""
+	mo.item_selected.connect(func(i): Settings.music_mode = ids[i]; Settings.save_all(); audio.music_changed(); upd.call())
+	mr.add_child(Kit.btn("Next ▶", func(): if Settings.music_mode != "off": audio.next_track(1.0); upd.call(), "", 13)); mr.add_child(np); upd.call()
 	var scl := _slider_row(vb, "UI scale", 0.8, 2.0, Settings.ui_scale, func(v): Settings.ui_scale = snappedf(v, 0.05); Settings.apply(get_window()); Settings.save_all())
 	var cb := CheckBox.new(); cb.text = "Colour-blind-safe cluster palette"; cb.button_pressed = Settings.colorblind; cb.toggled.connect(func(on): Settings.colorblind = on; Settings.save_all(); hall.rebuild()); vb.add_child(cb)
 	var rm := CheckBox.new(); rm.text = "Reduced motion (no auto-orbit camera)"; rm.button_pressed = Settings.reduced_motion; rm.toggled.connect(func(on): Settings.reduced_motion = on; Settings.save_all()); vb.add_child(rm)
@@ -538,7 +555,7 @@ func _menu_do(a: String) -> void:
 		"load": _menu(); _slots("load")
 		"settings": _menu(); _settings()
 		"coach": _menu(); if started: coach.start()
-		"mute": audio.muted = not audio.muted
+		"mute": audio.toggle_mute()
 		"title": _autosave(); b.stop(); get_tree().reload_current_scene()
 		"quit":
 			_autosave()

@@ -124,7 +124,7 @@ func _planner(root: Control) -> void:
 	var is_pre: bool = q.get("preorder", false)
 	if is_pre: bm[1].add_child(Kit.label("PRE-ORDER: ships %s. You queue behind the hyperscalers at the launch premium, delivery lands after the ship date, and cancelling refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
 	var ob := Kit.btn("NOT ENOUGH CASH" if cant_afford else "%s %d RACK%s · %s" % ["PRE-ORDER" if is_pre else "ORDER", racks, "S" if racks > 1 else "", Kit.usd(q.cost)], func():
-		pmsg = b.act("buyTemplate", [t.id, racks]); app.sfx("buy" if pmsg.ok else "bad"); refresh(), "go", 17)
+		pmsg = b.act("buyTemplate", [t.id, racks]); app.sfx(("cash_big" if racks >= 20 else "order") if pmsg.ok else "error"); refresh(), "go", 17)
 	ob.disabled = cant_afford or q.unavailable.size() > 0; ob.custom_minimum_size = Vector2(0, 52); bm[1].add_child(ob)
 	if not pmsg.is_empty():
 		bm[1].add_child(Kit.label(pmsg.message, 14, Kit.GR if pmsg.ok else Kit.RD, true))

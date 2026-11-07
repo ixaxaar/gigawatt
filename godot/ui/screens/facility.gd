@@ -23,7 +23,7 @@ func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);
 func on_slot(_slot: int) -> void:
 	if design == "": return
 	var b: Bridge = app.b; var h: Dictionary = b.g.halls[app.hall.hall_i]
-	msg = b.act("placeRack", [h.id, design]).message; app.sfx("buy"); refresh()
+	msg = b.act("placeRack", [h.id, design]).message; app.sfx("rack_place"); refresh()
 
 func _gauge(parent: Control, label: String, v: float, mx: float, unit: String) -> void:
 	var h := HBoxContainer.new(); parent.add_child(h); h.add_child(Kit.label(label, 13, Kit.DIM)); var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(sp)
@@ -143,7 +143,7 @@ func _rebuild() -> void:
 		var bom: Dictionary = b.q("rackBom", [design])
 		for id in bom:
 			if g.inventory.get(id, 0) < bom[id]: missing.append(id)
-	var pb := Kit.btn("PLACE RACK", func(): msg = b.act("placeRack", [hall.id, design]).message; app.sfx("buy"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0; dr.add_child(pb)
+	var pb := Kit.btn("PLACE RACK", func(): msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0; dr.add_child(pb)
 	if missing.size() > 0: dr.add_child(Kit.label("missing %d part type(s)" % missing.size(), 12, Kit.AM))
 	if design != "" and missing.size() > 0:
 		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)

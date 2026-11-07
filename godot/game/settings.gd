@@ -2,6 +2,10 @@ class_name Settings
 extends RefCounted
 ## User preferences (user://settings.cfg): volume, UI scale, colour-blind palette, reduced motion.
 static var volume := 0.8
+## Music and effects sit under the master volume. music_mode: "auto" (mood-driven shuffle), "off", or a catalog song id (loops that genre).
+static var music_volume := 0.7
+static var sfx_volume := 0.9
+static var music_mode := "auto"
 static var ui_scale := 1.0
 static var colorblind := false
 static var reduced_motion := false
@@ -20,6 +24,7 @@ static func load_all() -> void:
 	if c.load(PATH) != OK: return
 	var qenv := OS.has_environment("GW_QUALITY")
 	volume = clampf(float(c.get_value("a", "volume", 0.8)), 0.0, 1.0)
+	music_volume = clampf(float(c.get_value("a", "music_volume", 0.7)), 0.0, 1.0); sfx_volume = clampf(float(c.get_value("a", "sfx_volume", 0.9)), 0.0, 1.0); music_mode = str(c.get_value("a", "music_mode", "auto"))
 	ui_scale = clampf(float(c.get_value("a", "ui_scale", ui_scale)), 0.8, 2.0)
 	colorblind = bool(c.get_value("a", "colorblind", false))
 	reduced_motion = bool(c.get_value("a", "reduced_motion", false))
@@ -28,7 +33,7 @@ static func load_all() -> void:
 
 static func save_all() -> void:
 	var c := ConfigFile.new()
-	c.set_value("a", "volume", volume); c.set_value("a", "ui_scale", ui_scale)
+	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode); c.set_value("a", "ui_scale", ui_scale)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "quality", quality); c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)
 	c.save(PATH)
 

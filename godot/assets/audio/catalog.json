@@ -1,0 +1,291 @@
+{
+ "sfx": {
+  "hover": {
+   "group": "ui",
+   "db": -16,
+   "jitter": true,
+   "ms": 30
+  },
+  "click": {
+   "group": "ui",
+   "db": -9,
+   "jitter": true,
+   "ms": 40
+  },
+  "confirm": {
+   "group": "ui",
+   "db": -8,
+   "jitter": false,
+   "ms": 200
+  },
+  "cancel": {
+   "group": "ui",
+   "db": -9,
+   "jitter": false,
+   "ms": 155
+  },
+  "toggle_on": {
+   "group": "ui",
+   "db": -10,
+   "jitter": false,
+   "ms": 130
+  },
+  "toggle_off": {
+   "group": "ui",
+   "db": -10,
+   "jitter": false,
+   "ms": 130
+  },
+  "error": {
+   "group": "ui",
+   "db": -8,
+   "jitter": false,
+   "ms": 250
+  },
+  "tab": {
+   "group": "ui",
+   "db": -10,
+   "jitter": true,
+   "ms": 50
+  },
+  "tick": {
+   "group": "ui",
+   "db": -14,
+   "jitter": true,
+   "ms": 22
+  },
+  "open": {
+   "group": "ui",
+   "db": -12,
+   "jitter": false,
+   "ms": 120
+  },
+  "close": {
+   "group": "ui",
+   "db": -12,
+   "jitter": false,
+   "ms": 120
+  },
+  "notif": {
+   "group": "ui",
+   "db": -9,
+   "jitter": false,
+   "ms": 230
+  },
+  "step_ok": {
+   "group": "ui",
+   "db": -9,
+   "jitter": false,
+   "ms": 270
+  },
+  "buy": {
+   "group": "money",
+   "db": -7,
+   "jitter": false,
+   "ms": 850
+  },
+  "sell": {
+   "group": "money",
+   "db": -8,
+   "jitter": false,
+   "ms": 920
+  },
+  "cash_big": {
+   "group": "money",
+   "db": -6,
+   "jitter": false,
+   "ms": 1150
+  },
+  "order": {
+   "group": "money",
+   "db": -8,
+   "jitter": false,
+   "ms": 340
+  },
+  "loan": {
+   "group": "money",
+   "db": -8,
+   "jitter": false,
+   "ms": 540
+  },
+  "month": {
+   "group": "event",
+   "db": -14,
+   "jitter": true,
+   "ms": 210
+  },
+  "rack_place": {
+   "group": "event",
+   "db": -8,
+   "jitter": false,
+   "ms": 330
+  },
+  "online": {
+   "group": "event",
+   "db": -8,
+   "jitter": false,
+   "ms": 840
+  },
+  "delivery": {
+   "group": "event",
+   "db": -9,
+   "jitter": false,
+   "ms": 1100
+  },
+  "good": {
+   "group": "event",
+   "db": -8,
+   "jitter": false,
+   "ms": 900
+  },
+  "fanfare": {
+   "group": "event",
+   "db": -6,
+   "jitter": false,
+   "ms": 1900
+  },
+  "keynote": {
+   "group": "event",
+   "db": -7,
+   "jitter": false,
+   "ms": 1760
+  },
+  "bad": {
+   "group": "event",
+   "db": -8,
+   "jitter": false,
+   "ms": 520
+  },
+  "incident": {
+   "group": "event",
+   "db": -8,
+   "jitter": false,
+   "ms": 600
+  },
+  "alarm": {
+   "group": "event",
+   "db": -9,
+   "jitter": false,
+   "ms": 800
+  },
+  "power_down": {
+   "group": "event",
+   "db": -8,
+   "jitter": false,
+   "ms": 600
+  },
+  "gameover": {
+   "group": "event",
+   "db": -6,
+   "jitter": false,
+   "ms": 2440
+  },
+  "save": {
+   "group": "event",
+   "db": -10,
+   "jitter": false,
+   "ms": 410
+  },
+  "load": {
+   "group": "event",
+   "db": -10,
+   "jitter": false,
+   "ms": 340
+  },
+  "boot": {
+   "group": "event",
+   "db": -6,
+   "jitter": false,
+   "ms": 1450
+  }
+ },
+ "music": [
+  {
+   "id": "cold-boot",
+   "title": "Cold Boot",
+   "genre": "Arcade chiptune",
+   "bpm": 128,
+   "moods": [
+    "title",
+    "play"
+   ],
+   "file": "music/cold-boot.ogg"
+  },
+  {
+   "id": "aisle-seven",
+   "title": "Aisle Seven",
+   "genre": "Lo-fi chill",
+   "bpm": 76,
+   "moods": [
+    "play",
+    "calm"
+   ],
+   "file": "music/aisle-seven.ogg"
+  },
+  {
+   "id": "rack-attack",
+   "title": "Rack Attack",
+   "genre": "Funk pop",
+   "bpm": 110,
+   "moods": [
+    "play",
+    "drive"
+   ],
+   "file": "music/rack-attack.ogg"
+  },
+  {
+   "id": "neon-overclock",
+   "title": "Neon Overclock",
+   "genre": "Synthwave",
+   "bpm": 104,
+   "moods": [
+    "play",
+    "drive"
+   ],
+   "file": "music/neon-overclock.ogg"
+  },
+  {
+   "id": "fabric-four",
+   "title": "Fabric Four",
+   "genre": "Trance / techno",
+   "bpm": 138,
+   "moods": [
+    "play",
+    "drive"
+   ],
+   "file": "music/fabric-four.ogg"
+  },
+  {
+   "id": "brownout",
+   "title": "Brownout",
+   "genre": "Dark tension",
+   "bpm": 88,
+   "moods": [
+    "crisis"
+   ],
+   "file": "music/brownout.ogg"
+  },
+  {
+   "id": "gigawatt-anthem",
+   "title": "Gigawatt Anthem",
+   "genre": "Heroic march",
+   "bpm": 120,
+   "moods": [
+    "play",
+    "triumph"
+   ],
+   "file": "music/gigawatt-anthem.ogg"
+  },
+  {
+   "id": "capacity-planning",
+   "title": "Capacity Planning",
+   "genre": "Bossa jazz",
+   "bpm": 104,
+   "moods": [
+    "play",
+    "calm"
+   ],
+   "file": "music/capacity-planning.ogg"
+  }
+ ]
+}

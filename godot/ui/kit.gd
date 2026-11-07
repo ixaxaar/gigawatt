@@ -103,7 +103,7 @@ static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
 	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
 	b.add_theme_stylebox_override("pressed", st.pressed); b.add_theme_stylebox_override("disabled", st.disabled)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, st.ink)
-	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.pressed.connect(cb); return b
+	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.set_meta("kind", kind); b.pressed.connect(cb); return b
 
 static func link(text: String, cb: Callable, size := 14) -> Button:
 	var b := Button.new(); b.text = text; b.flat = true; b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.add_theme_font_size_override("font_size", size)
