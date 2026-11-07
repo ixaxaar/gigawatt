@@ -12,6 +12,13 @@ const DIM := Color(0.58, 0.68, 0.78)
 const TX := Color(0.9, 0.95, 1.0)
 const VENDOR := {"nvidia": "#76b900", "amd": "#ed1c24", "tenstorrent": "#8a5cf6", "cerebras": "#ff7a1a", "intel": "#0071c5", "groq": "#f5d90a"}
 
+## Smallest font used anywhere (px at 1080p). Handheld screens scale the UI up, so this stays readable on a Steam Deck.
+const MIN_FONT := 13
+static func fs(n: int) -> int: return maxi(MIN_FONT, n)
+static func plural(n, word: String, many := "") -> String:
+	var i := int(n)
+	return "%d %s" % [i, word if i == 1 else (many if many != "" else word + "s")]
+
 static func vendor_color(v: String) -> Color: return Color(VENDOR.get(v, "#4fd1ff"))
 
 static func sb(bg: Color = PANEL, border: Color = LINE, r := 10, bw := 1, pad := 12) -> StyleBoxFlat:
@@ -22,9 +29,10 @@ static func sb(bg: Color = PANEL, border: Color = LINE, r := 10, bw := 1, pad :=
 ## and screens create thousands of labels.
 static var _ls_cache := {}
 static func ls(size: int, col: Color) -> LabelSettings:
+	size = fs(size)
 	var k := Vector3i(size, col.r8 | (col.g8 << 8) | (col.b8 << 16), col.a8)
 	if _ls_cache.has(k): return _ls_cache[k]
-	var s := LabelSettings.new(); s.font_size = size; s.font_color = col
+	size = fs(size); var s := LabelSettings.new(); s.font_size = size; s.font_color = col
 	if size >= 20:   # headlines and big numbers: bold with a dark outline and hard shadow, like a comic caption
 		s.font = Fonts.bold; s.outline_size = 5; s.outline_color = Color(0.01, 0.015, 0.03)
 		s.shadow_size = 1; s.shadow_color = Color(0, 0, 0, 0.85); s.shadow_offset = Vector2(3, 3)
@@ -37,7 +45,7 @@ static func label(t: String, size := 16, col: Color = TX, wrap := false) -> Labe
 
 static func rich(t: String, size := 15) -> RichTextLabel:
 	var r := RichTextLabel.new(); r.bbcode_enabled = true; r.fit_content = true; r.scroll_active = false; r.text = t
-	r.add_theme_font_size_override("normal_font_size", size); r.add_theme_font_size_override("bold_font_size", size); r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size = fs(size); r.add_theme_font_size_override("normal_font_size", size); r.add_theme_font_size_override("bold_font_size", size); r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE; return r
 
 static var pad_mode := false       # set by Pad: true while the player is using a controller
@@ -57,7 +65,7 @@ static func drawer_sb(acc: Color, full: bool) -> StyleBoxFlat:
 ## Dock button: chunky tab with a coloured underline and a hotkey badge.
 static func dock_btn(t: String, key: String, col: Color, cb: Callable) -> Button:
 	var b := Button.new(); b.text = "%s\n[%s]" % [t, key]; b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.custom_minimum_size = Vector2(138, 58)
-	b.add_theme_font_size_override("font_size", 14); b.add_theme_font_override("font", Fonts.bold)
+	b.add_theme_font_size_override("font_size", fs(14)); b.add_theme_font_override("font", Fonts.bold)
 	b.set_meta("col", col); dock_set(b, false); b.pressed.connect(cb); return b
 
 static func dock_set(b: Button, on: bool) -> void:
@@ -97,7 +105,7 @@ static func _styles(kind: String) -> Dictionary:
 	_btn_styles[kind] = st; return st
 
 static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
-	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", size); b.add_theme_font_override("font", Fonts.bold); b.focus_mode = focus_mode()
+	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", fs(size)); b.custom_minimum_size.y = 36; b.add_theme_font_override("font", Fonts.bold); b.focus_mode = focus_mode()
 	var st := _styles(kind)
 	b.add_theme_stylebox_override("focus", st.focus)
 	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
@@ -105,8 +113,48 @@ static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, st.ink)
 	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.set_meta("kind", kind); b.pressed.connect(cb); return b
 
+## Re-skin a button as one of the kinds ("", "pri", "go", "danger").
+static func skin(b: Button, kind: String) -> void:
+	var st := _styles(kind)
+	b.add_theme_stylebox_override("focus", st.focus)
+	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
+	b.add_theme_stylebox_override("pressed", st.pressed); b.add_theme_stylebox_override("disabled", st.disabled)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, st.ink)
+
+## A labelled on/off switch that is visibly on or off (green ON, grey OFF).
+static func toggle(text: String, on: bool, cb: Callable) -> HBoxContainer:
+	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 14)
+	var l := label(text, 16, TX); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(l)
+	var b := Button.new(); b.toggle_mode = true; b.button_pressed = on; b.focus_mode = focus_mode(); b.custom_minimum_size = Vector2(92, 38)
+	b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
+	var paint := func(v: bool): b.text = "ON" if v else "OFF"; skin(b, "go" if v else "")
+	paint.call(on)
+	b.toggled.connect(func(v): paint.call(v); cb.call(v))
+	h.add_child(b); return h
+
+## Slide + fade a control in from the right (drawers) or fade + grow it (workshops, modals). Reduced motion: a short fade, no travel.
+static func appear(c: Control, from_right := true, dur := 0.18) -> void:
+	if c == null or not c.is_inside_tree(): return
+	if c.has_meta("tw"):
+		var old: Tween = c.get_meta("tw")
+		if old != null and old.is_valid(): old.kill()
+	c.modulate.a = 0.0
+	await c.get_tree().process_frame   # let anchors settle so the resting position is read correctly
+	if not is_instance_valid(c) or not c.visible: return
+	var tw := c.create_tween(); c.set_meta("tw", tw)
+	if Settings.reduced_motion:
+		tw.tween_property(c, "modulate:a", 1.0, 0.06); return
+	tw.set_parallel(true)
+	if from_right:
+		var x0 := c.position.x; c.position.x = x0 + 70.0
+		tw.tween_property(c, "position:x", x0, dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	else:
+		c.pivot_offset = c.size * 0.5; c.scale = Vector2(0.97, 0.97)
+		tw.tween_property(c, "scale", Vector2.ONE, dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "modulate:a", 1.0, dur)
+
 static func link(text: String, cb: Callable, size := 14) -> Button:
-	var b := Button.new(); b.text = text; b.flat = true; b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.add_theme_font_size_override("font_size", size)
+	var b := Button.new(); b.text = text; b.flat = true; b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.add_theme_font_size_override("font_size", fs(size))
 	b.add_theme_color_override("font_color", CY); b.add_theme_color_override("font_hover_color", Color.WHITE); b.pressed.connect(cb); return b
 
 static func tabs(parent: Control, names: Array, current: String, cb: Callable) -> HBoxContainer:
@@ -131,6 +179,7 @@ static func chip(t: String, col: Color, size := 13) -> PanelContainer:
 
 static var _lsb_cache := {}
 static func ls_bold(size: int, col: Color) -> LabelSettings:
+	size = fs(size)
 	var k := Vector3i(size, col.r8 | (col.g8 << 8) | (col.b8 << 16), col.a8)
 	if _lsb_cache.has(k): return _lsb_cache[k]
 	var s := LabelSettings.new(); s.font_size = size; s.font_color = col; s.font = Fonts.bold; _lsb_cache[k] = s; return s

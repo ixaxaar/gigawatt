@@ -14,7 +14,8 @@ case $target in
     cp "$nodedir/bin/node" "$d/runtime/node"; chmod +x "$d"/GIGAWATT.x86_64 "$d/runtime/node"
     cp "$root/godot/sidecar/bridge.mjs" "$d/sidecar/"
     cp "$root/LICENSE" "$d/" 2>/dev/null || true
-    printf '#!/bin/sh\ncd "$(dirname "$0")" && exec ./GIGAWATT.x86_64 "$@"\n' > "$d/gigawatt.sh"; chmod +x "$d/gigawatt.sh"
+    cp "$root/scripts/gigawatt.sh" "$d/gigawatt.sh"; chmod +x "$d/gigawatt.sh"
+    cp "$root/godot/assets/brand/icon.png" "$d/gigawatt.png"
     (cd "$stage" && tar czf "$out/$name.tar.gz" GIGAWATT) ;;
   windows)
     d=$stage/GIGAWATT; mkdir -p "$d/runtime" "$d/sidecar"

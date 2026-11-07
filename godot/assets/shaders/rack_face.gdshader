@@ -1,12 +1,13 @@
 shader_type spatial;
 render_mode cull_disabled;
 // One quad = the whole 42U face of a rack: ToR switch, 4U GPU servers, blanks, PDUs, cable looms.
-uniform float seed = 1.0;
-uniform float fill : hint_range(0.0, 1.0) = 0.85;
-uniform vec3 accent = vec3(0.35, 1.0, 0.5);
-uniform int state = 0;          // 0 online, 1 commissioning, 2 failed
-uniform float heat = 0.0;       // 0..1, thermal view tint (-1 = off)
-uniform bool rear = false;
+uniform int lod = 0;            // 0 full detail, 1 no vent grille / drive bays, 2 flat
+instance uniform float seed = 1.0;
+instance uniform float fill : hint_range(0.0, 1.0) = 0.85;
+instance uniform vec3 accent = vec3(0.35, 1.0, 0.5);
+instance uniform int state = 0;          // 0 online, 1 commissioning, 2 failed
+instance uniform float heat = 0.0;       // 0..1, thermal view tint (-1 = off)
+instance uniform bool rear = false;
 
 float h11(float x) { return fract(sin(x * 127.1 + seed * 31.7) * 43758.5453); }
 float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.3) * 43758.5453); }
@@ -68,11 +69,11 @@ void fragment() {
 			// vent grille: staggered hex-ish dots in the middle
 			vec2 gp = vec2(bp.x * 70.0, bp.y * 30.0 + (floor(bp.x * 70.0) * 0.5));
 			vec2 gc = fract(gp) - 0.5;
-			float hole = step(length(gc), 0.28) * step(0.22, bp.x) * step(bp.x, 0.78) * step(0.08, bp.y) * step(bp.y, 0.92);
+			float hole = step(length(gc), 0.28) * step(0.22, bp.x) * step(bp.x, 0.78) * step(0.08, bp.y) * step(bp.y, 0.92) * float(lod < 1);
 			alb = mix(alb, vec3(0.0), hole * 0.9);
 			// 2 rows of drive bays on the left
 			vec2 dp = vec2((bp.x - 0.09) / 0.12 * 4.0, bp.y * 2.0);
-			float bay = step(0.09, bp.x) * step(bp.x, 0.21) * box(fract(dp), vec2(0.5, 0.5), vec2(0.4, 0.34));
+			float bay = step(0.09, bp.x) * step(bp.x, 0.21) * box(fract(dp), vec2(0.5, 0.5), vec2(0.4, 0.34)) * float(lod < 1);
 			alb = mix(alb, vec3(0.012), bay);
 			float bled = step(0.09, bp.x) * step(bp.x, 0.21) * box(fract(dp), vec2(0.82, 0.5), vec2(0.07, 0.08));
 			float blink = step(0.55, fract(sin(floor(dp.x) * 11.0 + floor(dp.y) * 5.0 + floor(t * (2.0 + h21(vec2(block, floor(dp.x)))) * 3.0) + block * 13.0) * 777.0));
@@ -122,6 +123,11 @@ void fragment() {
 	if (heat >= 0.0) {
 		vec3 hc = mix(vec3(0.1, 0.8, 0.3), vec3(1.0, 0.15, 0.05), clamp(heat, 0.0, 1.0));
 		alb = mix(alb, hc * 0.5, 0.55); em = mix(em, hc * 1.2, 0.2);
+	}
+	if (lod == 0) {   // emboss: ports, vents and bays are darker than the plate around them, so the dark parts read as recessed
+		float lum = dot(alb, vec3(0.333)) * 30.0;
+		vec2 g = vec2(dFdx(lum), dFdy(lum));
+		NORMAL_MAP = vec3(0.5 - clamp(g.x, -0.35, 0.35), 0.5 + clamp(g.y, -0.35, 0.35), 1.0);
 	}
 	ALBEDO = alb * 2.6; ROUGHNESS = rough; METALLIC = min(metal, 0.45); EMISSION = em;
 }

@@ -49,7 +49,8 @@ var next_btn: Button
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
-	Settings.load_all(); Settings.apply(get_window()); if get("hall") != null: hall.apply_quality()
+	Settings.load_all(); Settings.apply(get_window()); Settings.write_log(get_window())
+	get_window().size_changed.connect(func(): get_window().content_scale_factor = Settings.effective_ui_scale(get_window()))
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
@@ -59,6 +60,7 @@ func _ready() -> void:
 	var th := Theme.new(); th.default_font_size = 17; th.default_font = Fonts.regular; th.set_font("bold_font", "RichTextLabel", Fonts.bold); th.set_font("normal_font", "RichTextLabel", Fonts.regular); root.theme = th
 	ui.add_child(root)
 	_build_shell(); _title(); audio.play("boot")
+	if Settings.compat and Settings.preset < 0: get_tree().create_timer(1.2).timeout.connect(func(): toast("Running in compatibility mode on %s (no Forward+). Effects are reduced; see the wiki's Performance page." % Settings.adapter, "info"))
 	pad = Pad.new(); pad.app = self; add_child(pad)
 	coach = Coach.new(); coach.app = self; add_child(coach)
 	b.changed.connect(_on_changed)
@@ -130,6 +132,9 @@ func _shell_visible(v: bool) -> void:
 func _title() -> void:
 	started = false; _shell_visible(false); hall.b = b; audio.set_mood("title")
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); h.name = "title"; root.add_child(h)
+	var gt := GradientTexture2D.new(); var gr := Gradient.new(); gr.colors = PackedColorArray([Color(0.01, 0.02, 0.04, 0.88), Color(0.01, 0.02, 0.04, 0.0)]); gr.offsets = PackedFloat32Array([0.0, 1.0])
+	gt.gradient = gr; gt.fill_from = Vector2(0, 0); gt.fill_to = Vector2(1, 0); gt.width = 512; gt.height = 8
+	var shade := TextureRect.new(); shade.texture = gt; shade.stretch_mode = TextureRect.STRETCH_SCALE; shade.set_anchors_preset(Control.PRESET_LEFT_WIDE); shade.anchor_right = 0.62; shade.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(shade)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -310; vb.offset_bottom = 310; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110, Kit.CY))
 	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
@@ -144,10 +149,13 @@ func _title() -> void:
 	vb.add_child(Kit.btn("LOAD GAME", func(): _slots("load", func(): h.queue_free()), "", 16))
 	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
 	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
-	vb.add_child(Kit.label("Left-drag pan · right-drag orbit · wheel zoom · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
+	vb.add_child(Kit.label("Settings has the full list of controls.", 14, Kit.DIM))
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
 
-func _demo_hall() -> void: pass
+## The title screen's backdrop: a short scripted game, so the first thing you see is a lit hall with racks in it.
+func _demo_hall() -> void:
+	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_AUTOSTART"): return
+	var q := quiet; quiet = true; b.env("autoplay", ["operator", 22]); quiet = q
 
 ## Screenshot helper (GW_SCENARIO=<id>, GW_HALL=<index>, GW_CAM=auto|yaw,pitch,dist,x,z): load an agent-env scenario into the UI.
 func _load_scenario(id: String) -> void:
@@ -180,7 +188,8 @@ func _new_game(mode: String) -> void:
 func _begin() -> void:
 	var tt := root.get_node_or_null("title")
 	if tt: tt.queue_free()
-	started = true; _seen_log = b.g.log.size(); speed = 0; clock = 0.0; audio.set_mood("play")
+	started = true; _seen_log = b.g.log.size(); speed = 0; clock = 0.0; audio.set_mood("play"); _unlocked.clear()
+	for d in DOCK: _unlocked[d[0]] = is_unlocked(d[0])   # what is open at the start is not "unlocked" news
 	hall.cam.h_offset = 0.0; hall.hall_i = 0; hall.auto_orbit = false
 	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild(); hall.top_view()
 	if OS.get_environment("GW_SETTINGS") != "": get_tree().create_timer(0.5).timeout.connect(func(): if settings_ui == null: _settings())
@@ -203,7 +212,16 @@ func _on_changed() -> void:
 	check_keynote()
 	coach.tick()
 	if hall.get_meta("n", 0) == 0: pass
-	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
+	_refresh_cur()
+
+## The open screen is rebuilt on every change. While the game auto-advances, rebuilds are coalesced to a few per second so a
+## month tick never stalls a frame twice a second; paused play still refreshes immediately so buttons feel instant.
+var _refresh_due := false
+var _refresh_at := 0
+func _refresh_cur() -> void:
+	if not screens.has(cur) or not screens[cur].has_method("refresh") or cur == "codex": return   # the Codex is static reference text
+	if speed == 0 or Time.get_ticks_msec() >= _refresh_at: _refresh_due = false; _refresh_at = Time.get_ticks_msec() + 350; screens[cur].refresh()
+	else: _refresh_due = true
 
 var quiet := false
 func toast(text: String, level := "info") -> void:
@@ -314,6 +332,7 @@ func _dock(key: String) -> void:
 	else: show_screen(last_tab.get(key, key))
 
 func show_screen(id: String) -> void:
+	var prev := cur
 	for sc in screens.values(): sc.visible = false
 	cur = id; last_tab[dock_key(id)] = id
 	if coach != null: coach.visited(dock_key(id))
@@ -333,6 +352,7 @@ func show_screen(id: String) -> void:
 	if not OVERLAY.has(id) and not FULL.has(id): scr.offset_left = -drawer_w(id)
 	scr.visible = true
 	if scr.has_method("refresh"): scr.refresh()
+	if started and prev != id and not quiet and not OS.has_environment("GW_SHOT") and not OS.has_environment("GW_SMOKE"): Kit.appear(scr, not (FULL.has(id) or FULL.has(prev)), 0.18)
 	for k in dock_btns: Kit.dock_set(dock_btns[k], k == dock_key(id))
 
 ## Tab strip for a drawer that groups several screens (Procure|Warehouse, Build|Energy).
@@ -411,6 +431,9 @@ func _claim() -> void:
 
 func _process(dt: float) -> void:
 	_process_tip()
+	if _refresh_due and Time.get_ticks_msec() >= _refresh_at: _refresh_cur()
+	var idle := started and speed == 0 and Time.get_ticks_msec() - _last_input > 3000
+	if idle != Settings.idle: Settings.idle = idle; Settings.apply_fps()
 	if not started or speed == 0 or menu_ui != null or keynote.visible or story_ui.visible: return
 	clock += dt / SECS[speed]; bar_month.value = clock
 	if clock >= 1.0: clock = 0.0; next_month()
@@ -419,7 +442,9 @@ func _dbg() -> void:
 	for k in screens: print(k, " rect=", screens[k].get_global_rect(), " vis=", screens[k].visible)
 	print("holder=", holder.get_global_rect(), " root=", root.get_global_rect(), " top=", top.get_global_rect())
 
+var _last_input := 0
 func _input(e: InputEvent) -> void:
+	_last_input = Time.get_ticks_msec()
 	if e is InputEventKey and e.pressed and not e.echo:
 		if e.keycode == KEY_Q and e.ctrl_pressed: _menu_do("quit" if started else "quit")
 		elif e.keycode == KEY_ESCAPE and started: get_viewport().set_input_as_handled(); _menu()
@@ -499,16 +524,79 @@ func _smoke() -> void:
 
 # ---------- settings + controls ----------
 var settings_ui: Control
-const CONTROLS := "[b]Space[/b] next month   [b]1-9, 0[/b] screens   [b]T[/b] thermal view   [b]Esc[/b] menu   [b]F1[/b] this panel\n[b]Left-drag[/b] or [b]WASD[/b] pan   [b]Right-drag[/b] orbit   [b]Wheel[/b] zoom   [b]Q/E[/b] rotate   [b]V[/b] top view   [b]L[/b] rack labels   [b]Ctrl+Q[/b] quit\n[b]Speed buttons[/b] pause / 1x / 2x / 3x auto-advance\n[b]Controller:[/b] A select · B back · X inspect rack · Y next month · LB/RB drawers · LT/RT zoom · L-stick pan · R-stick orbit · D-pad navigate · Start menu · View speed"
+var _settings_tab := "Display"
+const KEYS := [["Space", "Next month"], ["1-8", "Open a drawer or workshop"], ["T", "Thermal view"], ["V", "Top view"], ["L", "Rack labels"], ["Esc", "Pause menu"], ["F1", "Settings"], ["Ctrl+Q", "Quit"],
+	["Left-drag / WASD", "Pan the hall"], ["Right-drag / Q E", "Orbit the hall"], ["Wheel", "Zoom"], ["Speed button", "Pause, 1x, 2x, 3x"]]
+const PAD_KEYS := [["A", "Select"], ["B", "Back"], ["X", "Inspect rack"], ["Y", "Next month"], ["LB / RB", "Switch drawer"], ["LT / RT", "Zoom"], ["Left stick", "Pan"], ["Right stick", "Orbit"], ["D-pad", "Navigate"], ["Start", "Menu"], ["View", "Speed"]]
 func _settings() -> void:
 	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -360; pn.offset_right = 360; pn.offset_top = -310; pn.offset_bottom = 310
-	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 24)); h.add_child(pn)
-	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -400; pn.offset_right = 400; pn.offset_top = -340; pn.offset_bottom = 340
+	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
+	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
-	var vol := _slider_row(vb, "Master volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
+	var tabs := HBoxContainer.new(); tabs.add_theme_constant_override("separation", 6); vb.add_child(tabs)
+	var body := VBoxContainer.new(); body.add_theme_constant_override("separation", 12); body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.add_child(body); body.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vb.add_child(sc)
+	_settings_fill(body, tabs)
+	vb.add_child(Kit.btn("Close", func(): settings_ui.queue_free(); settings_ui = null, "pri", 18))
+
+func _settings_fill(body: VBoxContainer, tabs: HBoxContainer) -> void:
+	for c in tabs.get_children(): c.queue_free()
+	for t in ["Display", "Graphics", "Audio", "Accessibility", "Controls"]:
+		tabs.add_child(Kit.btn(t, func(): _settings_tab = t; _settings_fill(body, tabs), "pri" if t == _settings_tab else "", 15))
+	for c in body.get_children(): c.queue_free()
+	match _settings_tab:
+		"Display": _set_display(body)
+		"Graphics": _set_graphics(body)
+		"Audio": _set_audio(body)
+		"Accessibility": _set_access(body)
+		"Controls": _set_controls(body)
+
+func _opt_row(parent: Control, title: String, items: Array, selected: int, cb: Callable) -> OptionButton:
+	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); parent.add_child(r)
+	var l := Kit.label(title, 16, Kit.TX); l.custom_minimum_size = Vector2(170, 0); r.add_child(l)
+	var o := OptionButton.new(); o.add_theme_font_size_override("font_size", 16); for n in items: o.add_item(n)
+	o.selected = clampi(selected, 0, items.size() - 1); o.size_flags_horizontal = Control.SIZE_EXPAND_FILL; o.item_selected.connect(cb); r.add_child(o); return o
+
+func _set_display(vb: VBoxContainer) -> void:
+	_opt_row(vb, "Window mode", ["Windowed", "Fullscreen (borderless)", "Exclusive fullscreen"], Settings.window_mode, func(i): Settings.window_mode = i; Settings.save_all(); Settings.apply(get_window()))
+	_opt_row(vb, "V-Sync", ["Off", "On", "Adaptive"], Settings.vsync, func(i): Settings.vsync = i; Settings.save_all(); Settings.apply(get_window()))
+	var caps := [0, 30, 40, 60, 90, 120, 144, 1000]
+	_opt_row(vb, "Frame rate limit", ["Automatic", "30", "40", "60", "90", "120", "144", "Unlimited"], maxi(0, caps.find(Settings.fps_cap)), func(i): Settings.fps_cap = caps[i]; Settings.save_all(); Settings.apply_fps())
+	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); vb.add_child(r)
+	var l := Kit.label("UI size", 16, Kit.TX); l.custom_minimum_size = Vector2(170, 0); r.add_child(l)
+	var val := Kit.label("", 15, Kit.DIM); val.custom_minimum_size = Vector2(70, 0)
+	var sl := HSlider.new(); sl.min_value = 0.7; sl.max_value = 2.0; sl.step = 0.05; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sl.custom_minimum_size = Vector2(240, 28)
+	sl.value = Settings.ui_scale if Settings.ui_scale > 0.0 else 0.7
+	val.text = "Auto" if Settings.ui_scale <= 0.0 else "%d%%" % int(Settings.ui_scale * 100.0)
+	sl.value_changed.connect(func(v): Settings.ui_scale = 0.0 if v < 0.75 else snappedf(v, 0.05); val.text = "Auto" if Settings.ui_scale <= 0.0 else "%d%%" % int(Settings.ui_scale * 100.0); Settings.apply(get_window()); Settings.save_all())
+	r.add_child(sl); r.add_child(val)
+	vb.add_child(Kit.label("Slide fully left for Auto: small screens and handhelds are scaled up to stay readable.", 13, Kit.DIM, true))
+	vb.add_child(Kit.label("%s\n%s" % [Settings.adapter, "%s · %s" % [RenderingServer.get_current_rendering_driver_name(), RenderingServer.get_current_rendering_method()]], 14, Kit.DIM, true))
+	vb.add_child(Kit.btn("Copy diagnostics (for bug reports)", func(): DisplayServer.clipboard_set(Settings.diagnostics(get_window())); toast("Diagnostics copied to the clipboard.", "good"), "", 15))
+
+func _set_graphics(vb: VBoxContainer) -> void:
+	var names := ["Auto (%s)" % Settings.TIER_NAMES[Settings.detected]]; names.append_array(Settings.TIER_NAMES)
+	var info := Kit.label("", 14, Kit.DIM, true)
+	var upd := func():
+		var t := Settings.tier()
+		info.text = "3D at %d%% resolution · %s anti-aliasing · shadows %s · %s lights · textures %d px%s" % [int(t.scale * 100.0), str(t.aa).to_upper(), "on" if t.shadows else "off", "all" if t.lights >= 999 else str(t.lights), t.tex, " · compatibility renderer" if Settings.compat else ""]
+	_opt_row(vb, "Graphics preset", names, Settings.preset + 1, func(i): Settings.preset = i - 1; Settings.save_all(); hall.apply_quality(); upd.call())
+	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); vb.add_child(r)
+	var l := Kit.label("3D resolution", 16, Kit.TX); l.custom_minimum_size = Vector2(170, 0); r.add_child(l)
+	var val := Kit.label("", 15, Kit.DIM); val.custom_minimum_size = Vector2(70, 0)
+	var sl := HSlider.new(); sl.min_value = 0.35; sl.max_value = 1.0; sl.step = 0.05; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sl.custom_minimum_size = Vector2(240, 28)
+	sl.value = Settings.render_scale if Settings.render_scale > 0.0 else 0.35
+	val.text = "Preset" if Settings.render_scale <= 0.0 else "%d%%" % int(Settings.render_scale * 100.0)
+	sl.value_changed.connect(func(v): Settings.render_scale = 0.0 if v < 0.38 else snappedf(v, 0.05); val.text = "Preset" if Settings.render_scale <= 0.0 else "%d%%" % int(Settings.render_scale * 100.0); Settings.save_all(); hall.apply_quality(); upd.call())
+	r.add_child(sl); r.add_child(val)
+	vb.add_child(info); upd.call()
+	vb.add_child(Kit.label("The menus always draw at full resolution; only the 3D hall is scaled (FSR). Lower it on a weak GPU or a 4K screen.", 13, Kit.DIM, true))
+
+func _set_audio(vb: VBoxContainer) -> void:
+	_slider_row(vb, "Master volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
 	_slider_row(vb, "Music", 0.0, 1.0, Settings.music_volume, func(v): Settings.music_volume = v; audio.apply_volumes(); Settings.save_all())
 	_slider_row(vb, "Effects", 0.0, 1.0, Settings.sfx_volume, func(v): Settings.sfx_volume = v; audio.apply_volumes(); Settings.save_all(); audio.play("confirm"))
 	var mr := HBoxContainer.new(); mr.add_theme_constant_override("separation", 14); vb.add_child(mr)
@@ -520,16 +608,23 @@ func _settings() -> void:
 	var upd := func(): np.text = ("♪ %s" % audio.now.title) if audio.now.has("title") else ""
 	mo.item_selected.connect(func(i): Settings.music_mode = ids[i]; Settings.save_all(); audio.music_changed(); upd.call())
 	mr.add_child(Kit.btn("Next ▶", func(): if Settings.music_mode != "off": audio.next_track(1.0); upd.call(), "", 13)); mr.add_child(np); upd.call()
-	var scl := _slider_row(vb, "UI scale", 0.8, 2.0, Settings.ui_scale, func(v): Settings.ui_scale = snappedf(v, 0.05); Settings.apply(get_window()); Settings.save_all())
-	var cb := CheckBox.new(); cb.text = "Colour-blind-safe cluster palette"; cb.button_pressed = Settings.colorblind; cb.toggled.connect(func(on): Settings.colorblind = on; Settings.save_all(); hall.rebuild()); vb.add_child(cb)
-	var rm := CheckBox.new(); rm.text = "Reduced motion (no auto-orbit camera)"; rm.button_pressed = Settings.reduced_motion; rm.toggled.connect(func(on): Settings.reduced_motion = on; Settings.save_all()); vb.add_child(rm)
-	var qr := HBoxContainer.new(); qr.add_theme_constant_override("separation", 14); vb.add_child(qr)
-	var ql := Kit.label("Graphics", 16, Kit.TX); ql.custom_minimum_size = Vector2(130, 0); qr.add_child(ql)
-	var qo := OptionButton.new(); for n in ["Low (fastest)", "Balanced", "High (all effects)"]: qo.add_item(n)
-	qo.selected = Settings.quality; qo.item_selected.connect(func(i): Settings.quality = i; Settings.save_all(); hall.apply_quality()); qr.add_child(qo)
-	vb.add_child(Kit.label("CONTROLS", 14, Kit.DIM)); vb.add_child(Kit.rich(CONTROLS, 15))
-	vb.add_child(Kit.btn("Close", func(): settings_ui.queue_free(); settings_ui = null, "pri", 18))
-	vol.grab_focus()
+
+func _set_access(vb: VBoxContainer) -> void:
+	vb.add_child(Kit.toggle("Colour-blind-safe cluster palette", Settings.colorblind, func(on): Settings.colorblind = on; Settings.save_all(); hall.rebuild()))
+	vb.add_child(Kit.toggle("Reduced motion (no auto-orbit, no sliding panels)", Settings.reduced_motion, func(on): Settings.reduced_motion = on; Settings.save_all()))
+	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); vb.add_child(r)
+	var l := Kit.label("Text size boost", 16, Kit.TX); l.custom_minimum_size = Vector2(170, 0); r.add_child(l)
+	var val := Kit.label("%d%%" % int(Settings.text_boost * 100.0), 15, Kit.DIM); val.custom_minimum_size = Vector2(70, 0)
+	var sl := HSlider.new(); sl.min_value = 1.0; sl.max_value = 1.5; sl.step = 0.05; sl.value = Settings.text_boost; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sl.custom_minimum_size = Vector2(240, 28)
+	sl.value_changed.connect(func(v): Settings.text_boost = snappedf(v, 0.05); val.text = "%d%%" % int(v * 100.0); Settings.apply(get_window()); Settings.save_all())
+	r.add_child(sl); r.add_child(val)
+
+func _set_controls(vb: VBoxContainer) -> void:
+	for set_ in [["KEYBOARD AND MOUSE", KEYS], ["CONTROLLER", PAD_KEYS]]:
+		vb.add_child(Kit.label(set_[0], 14, Kit.DIM))
+		var g := GridContainer.new(); g.columns = 2; g.add_theme_constant_override("h_separation", 28); g.add_theme_constant_override("v_separation", 4); vb.add_child(g)
+		for kv in set_[1]:
+			var k := Kit.label(kv[0], 15, Kit.CY); k.custom_minimum_size = Vector2(190, 0); g.add_child(k); g.add_child(Kit.label(kv[1], 15, Kit.TX))
 
 func _slider_row(parent: Control, title: String, lo: float, hi: float, val: float, on_change: Callable) -> HSlider:
 	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); parent.add_child(r)
@@ -640,6 +735,9 @@ func _autosave() -> void:
 	if started and b != null and end_ui == null: b.act("save", ["auto"])
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		Settings.focused = what == NOTIFICATION_APPLICATION_FOCUS_IN; Settings.apply_fps()
+		if what == NOTIFICATION_APPLICATION_FOCUS_OUT and started and b != null and not OS.has_environment("GW_SMOKE"): speed = 0; _autosave()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_autosave()
 		if b != null: b.stop()

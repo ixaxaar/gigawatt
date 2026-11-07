@@ -4,6 +4,11 @@ uniform vec2 area = vec2(20.0, 20.0);
 uniform vec2 center = vec2(0.0);
 uniform vec2 fade = vec2(1e6);
 uniform vec4 perf_rect = vec4(0, 0, 0, 0); // x0, z0, x1, z1 in local metres for perforated cold-aisle tiles (unused when zero)
+uniform sampler2D tex_c : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D tex_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D tex_r : hint_roughness_r, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform bool use_tex = false;
+uniform bool use_normal = false;
 varying vec3 wpos;
 void vertex() { wpos = VERTEX; }
 float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -22,5 +27,16 @@ void fragment() {
 	vec2 q = (wpos.xz - center);
 	float edge = clamp(1.0 - max(smoothstep(fade.x * 0.6, fade.x * 1.6, abs(q.x)), smoothstep(fade.y * 0.5, fade.y * 1.6, abs(q.y))), 0.0, 1.0);
 	base *= mix(0.12, 1.0, edge);
-	ALBEDO = base; ROUGHNESS = mix(0.28, 0.8, clamp(seam, 0.0, 1.0)); METALLIC = 0.05; SPECULAR = 0.7;
+	float rough = mix(0.34, 0.8, clamp(seam, 0.0, 1.0));
+	if (use_tex) {
+		// anti-static vinyl / steel grain, one texture repeat per 1.2 m (two tiles), tinted per tile so no two tiles match
+		vec2 tuv = p / 1.2 + vec2(h(tile) * 0.37, h(tile + 7.0) * 0.41);
+		vec3 d = texture(tex_c, tuv).rgb;
+		base *= mix(0.6, 1.35, dot(d, vec3(0.333)));
+		base *= 0.92 + 0.16 * h(tile + 3.0);
+		rough = clamp(rough * (0.6 + 1.1 * texture(tex_r, tuv).r), 0.12, 0.95);
+		if (use_normal) NORMAL_MAP = mix(vec3(0.5, 0.5, 1.0), texture(tex_n, tuv).rgb, 0.8 * (1.0 - clamp(seam, 0.0, 1.0)));
+		// scuffed aisles: slightly glossier worn strip along every tile row centre line
+	}
+	ALBEDO = base; ROUGHNESS = rough; METALLIC = 0.05; SPECULAR = 0.7;
 }
