@@ -1,6 +1,38 @@
 import { createInterface } from "node:readline";
+import { mkdirSync, unlinkSync, writeFileSync, renameSync, existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 const mem$2 = /* @__PURE__ */ new Map();
 globalThis.localStorage = { getItem: (k2) => mem$2.get(k2) ?? null, setItem: (k2, v2) => void mem$2.set(k2, v2), removeItem: (k2) => void mem$2.delete(k2) };
+function useFileStorage(dir) {
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch {
+    return false;
+  }
+  const file = (k2) => join(dir, encodeURIComponent(k2) + ".json");
+  globalThis.localStorage = {
+    getItem: (k2) => {
+      try {
+        const f = file(k2);
+        return existsSync(f) ? readFileSync(f, "utf8") : null;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (k2, v2) => {
+      const f = file(k2);
+      writeFileSync(f + ".tmp", v2);
+      renameSync(f + ".tmp", f);
+    },
+    removeItem: (k2) => {
+      try {
+        unlinkSync(file(k2));
+      } catch {
+      }
+    }
+  };
+  return true;
+}
 function createStore(init2) {
   let state2;
   const subs = /* @__PURE__ */ new Set();
@@ -7621,11 +7653,12 @@ const readIndex = () => {
     return {};
   }
 };
+let lastAt = 0;
 function writeSlot(slot, g) {
   try {
     localStorage.setItem(slotKey(slot), JSON.stringify({ ...g, saveVersion: SAVE_VERSION }));
     const idx = readIndex();
-    idx[slot] = { slot, month: g.month, cash: g.cash, debt: g.debt, racks: g.halls.reduce((n, h) => n + h.racks.length, 0), mode: g.mode ?? "operator", status: g.status ?? "playing" };
+    idx[slot] = { slot, month: g.month, cash: g.cash, debt: g.debt, racks: g.halls.reduce((n, h) => n + h.racks.length, 0), mode: g.mode ?? "operator", status: g.status ?? "playing", at: lastAt = Math.max(Date.now(), lastAt + 1) };
     localStorage.setItem(INDEX_KEY, JSON.stringify(idx));
     return true;
   } catch {
@@ -7643,7 +7676,7 @@ function readSlot(slot) {
     return { error: "Save file unreadable." };
   }
 }
-const listSaves = () => Object.values(readIndex()).sort((a, b) => (a.slot === "auto" ? 1 : 0) - (b.slot === "auto" ? 1 : 0) || b.month - a.month);
+const listSaves = () => Object.values(readIndex()).sort((a, b) => (b.at ?? 0) - (a.at ?? 0) || b.month - a.month);
 const round2$1 = (x) => Math.round(x * 100) / 100;
 const clusterContextOf = (state2) => ({
   getRack: (id) => {
@@ -12585,6 +12618,7 @@ function handle(req) {
     return { ...base2, ok: false, error: String(e?.stack ?? e) };
   }
 }
+if (process.argv[2]) useFileStorage(process.argv[2]);
 createInterface({ input: process.stdin }).on("line", (line) => {
   let req;
   try {

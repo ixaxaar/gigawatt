@@ -29,6 +29,7 @@ var holder: Control
 var screens := {}
 var cur := "dash"
 var started := false
+var cur_slot := "main"   # the slot the Save button writes to (the one last saved to or loaded from)
 var speed := 0
 var clock := 0.0
 var _seen_log := 0
@@ -66,6 +67,7 @@ func _ready() -> void:
 	if OS.get_environment("GW_SETTINGS") != "": _settings()
 	if OS.get_environment("GW_AUTOPLAY") != "": quiet = true; var ap := OS.get_environment("GW_AUTOPLAY").split(":"); b.env("autoplay", [ap[0], int(ap[1])]);; quiet = false   # screenshots: "tycoon:48"
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
+	if OS.get_environment("GW_CONTINUE") != "" and b.q("saves").size() > 0: _load_slot(str(b.q("saves")[0].slot))   # tests: press CONTINUE
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 	if OS.get_environment("GW_GUIDE") != "": get_tree().create_timer(0.6).timeout.connect(func(): guide.visible = true; guide.open())
@@ -94,12 +96,12 @@ func _build_shell() -> void:
 	lbl.mode = Kit.btn("", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); hb.add_child(lbl.mode)
 	hb.add_child(Kit.btn("How to play", func(): guide.visible = true; guide.open(), "", 14))
 	hb.add_child(Kit.btn("Sound", func(): audio.muted = not audio.muted, "", 14))
-	hb.add_child(Kit.btn("Save", func(): var r := b.act("save"); toast("Game saved.", "good"), "", 14))
+	hb.add_child(Kit.btn("Save", func(): var r := b.act("save", [cur_slot]); toast("Game saved." if r.get("ok", false) else "Could not save: %s" % r.get("message", "?"), "good" if r.get("ok", false) else "bad"), "", 14))
 	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
 		var bt := Kit.btn(s[0], func(): set_speed(s[1]), "", 15); bt.custom_minimum_size = Vector2(46, 0); lbl["sp%d" % s[1]] = bt; hb.add_child(bt)
 	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
 	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
-	hb.add_child(Kit.btn("QUIT ✕", func(): _menu_do("quit"), "danger", 14))
+	hb.add_child(Kit.btn("SAVE & QUIT ✕", func(): _menu_do("quit"), "danger", 14))
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
 	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -600; dock.offset_right = 600; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
 	for i in DOCK.size():
@@ -122,13 +124,18 @@ func _shell_visible(v: bool) -> void:
 func _title() -> void:
 	started = false; _shell_visible(false); hall.b = b
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); h.name = "title"; root.add_child(h)
-	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -270; vb.offset_bottom = 270; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -310; vb.offset_bottom = 310; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110, Kit.CY))
 	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
 	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
 		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): h.queue_free(); _new_game(m[0]), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	b.act("newGame", [7, "operator"]); _demo_hall()
-	vb.add_child(Kit.btn("CONTINUE SAVED GAME", func(): _slots("load", func(): h.queue_free(); _begin()), "", 18))
+	var recent: Array = b.q("saves")
+	if recent.size() > 0:
+		var rs: Dictionary = recent[0]
+		var cont := Kit.btn("CONTINUE\n%s · %s · %d racks" % [Kit.date_of(int(rs.month)), Kit.usd(float(rs.cash)), int(rs.racks)], func(): _load_slot(str(rs.slot), func(): h.queue_free()), "go", 18); cont.custom_minimum_size = Vector2(640, 76); cont.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		vb.add_child(cont); vb.move_child(cont, 3)
+	vb.add_child(Kit.btn("LOAD GAME", func(): _slots("load", func(): h.queue_free()), "", 16))
 	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
 	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
 	vb.add_child(Kit.label("Left-drag pan · right-drag orbit · wheel zoom · Space next month · 1-9 screens · Esc menu", 14, Kit.DIM))
@@ -480,6 +487,18 @@ func _check_end() -> void:
 var end_seen := false
 
 ## Save-slot picker. mode = "save" or "load"; used by the pause menu and the title screen.
+## Load a save slot into the running engine, then enter the game (resuming the tutorial where it was left).
+func _load_slot(slot: String, on_loaded: Callable = Callable()) -> void:
+	var r := b.act("load", [slot])
+	if not r.get("ok", false): toast(str(r.get("message", "Load failed.")), "bad"); return
+	cur_slot = slot if slot != "auto" else "main"
+	if on_loaded.is_valid(): on_loaded.call()
+	var t := root.get_node_or_null("title")
+	if t: t.queue_free()
+	_begin(); toast("Loaded %s." % Kit.date_of(int(b.g.month)), "good")
+	if Settings.tutorial == "on" and Settings.tutorial_step < Coach.STEPS.size() and not OS.has_environment("GW_SMOKE"): coach.start(Settings.tutorial_step)
+	check_keynote()
+
 func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h)
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
@@ -497,11 +516,8 @@ func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 		if info.has(slot):
 			var i: Dictionary = info[slot]; d = "%s · %s · %d racks%s" % [Kit.date_of(int(i.month)), Kit.usd(float(i.cash)), int(i.racks), "" if i.status == "playing" else " · " + str(i.status).to_upper()]
 		var bt := Kit.btn("%s\n%s" % [nm, d], func():
-			if mode == "save": b.act("save", [slot]); toast("Saved to %s." % nm, "good"); h.queue_free()
-			else:
-				var r := b.act("load", [slot])
-				if r.get("ok", false): h.queue_free(); if on_loaded.is_valid(): on_loaded.call()
-				else: toast(str(r.get("message", "Load failed.")), "bad"), "", 17)
+			if mode == "save": b.act("save", [slot]); cur_slot = slot; toast("Saved to %s." % nm, "good"); h.queue_free()
+			else: h.queue_free(); _load_slot(slot, on_loaded), "", 17)
 		bt.custom_minimum_size = Vector2(0, 62); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	if mode == "load" and info.is_empty(): vb.add_child(Kit.label("No saved games yet.", 16, Kit.DIM))
 	vb.add_child(Kit.btn("Close", func(): h.queue_free(), "", 16))
@@ -512,25 +528,30 @@ func _menu() -> void:
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -220; vb.offset_bottom = 220; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
-	for a in [["Resume", "resume"], ["Save game", "save"], ["Settings", "settings"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
 		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
 
 func _menu_do(a: String) -> void:
 	match a:
 		"resume": _menu()
 		"save": _menu(); _slots("save")
+		"load": _menu(); _slots("load")
 		"settings": _menu(); _settings()
 		"coach": _menu(); if started: coach.start()
 		"mute": audio.muted = not audio.muted
-		"title": b.act("save"); b.stop(); get_tree().reload_current_scene()
+		"title": _autosave(); b.stop(); get_tree().reload_current_scene()
 		"quit":
-			if started and b != null: b.act("save")
+			_autosave()
 			if b != null: b.stop()
 			get_tree().quit()
 
+## Quitting never overwrites a manual slot: the latest state goes to the autosave, which Continue picks up.
+func _autosave() -> void:
+	if started and b != null and end_ui == null: b.act("save", ["auto"])
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if started and b != null: b.act("save")
+		_autosave()
 		if b != null: b.stop()
 		get_tree().quit()
 

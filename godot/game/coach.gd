@@ -52,9 +52,9 @@ func _ready() -> void:
 	var rs := StyleBoxFlat.new(); rs.bg_color = Color(0, 0, 0, 0); rs.border_color = Kit.AM; rs.set_border_width_all(4); rs.set_corner_radius_all(12); ring.add_theme_stylebox_override("panel", rs); app.root.add_child(ring)
 	_tw = create_tween().set_loops(); _tw.tween_property(ring, "modulate:a", 0.25, 0.55); _tw.tween_property(ring, "modulate:a", 1.0, 0.55)
 
-func start() -> void:
-	active = true; idx = 0; seen = {}; base_month = int(app.b.g.month)
-	Settings.tutorial = "on"; Settings.save_all()
+func start(at := 0) -> void:
+	active = true; idx = at; seen = {}; base_month = int(app.b.g.month)
+	Settings.tutorial = "on"; Settings.tutorial_step = at; Settings.save_all()
 	_advance_if_done(); _build()
 
 func stop(done := true) -> void:
@@ -96,6 +96,7 @@ func _next() -> void:
 	_advance_if_done(); _build()
 
 func _build() -> void:
+	if active and Settings.tutorial_step != idx: Settings.tutorial_step = idx; Settings.save_all()   # so a later session resumes at this step
 	for c in card.get_children(): c.queue_free()
 	if not active or idx >= STEPS.size(): card.visible = false; ring.visible = false; return
 	var s: Dictionary = STEPS[idx]
@@ -120,7 +121,7 @@ func _build() -> void:
 		var sp2 := Control.new(); sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; f.add_child(sp2)
 		f.add_child(Kit.btn("Skip", _next, "", 13))
 		f.add_child(Kit.btn("Hide tutorial", func(): stop(), "", 13))
-	call_deferred("_fit")
+	call_deferred("_fit"); get_tree().create_timer(0.15).timeout.connect(_fit)
 
 func _fit() -> void:
 	card.size = Vector2(420, 0)

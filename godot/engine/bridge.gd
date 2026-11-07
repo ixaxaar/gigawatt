@@ -29,7 +29,9 @@ func start() -> bool:
 	if path == "": path = ProjectSettings.globalize_path("res://sidecar/bridge.mjs")  # running from the editor
 	var node := _shipped("runtime/node.exe" if OS.get_name() == "Windows" else "runtime/node")
 	if node == "": node = "node"                                                       # fall back to system Node
-	var p := OS.execute_with_pipe(node, [path])
+	var saves := ProjectSettings.globalize_path("user://saves")   # saves live in the user data folder so they survive quitting
+	DirAccess.make_dir_recursive_absolute(saves)
+	var p := OS.execute_with_pipe(node, [path, saves])
 	if p.is_empty(): last_error = "Could not start the engine (%s). Install Node.js 18+ or use the packaged release." % node; return false
 	_io = p.stdio; _pid = p.pid
 	var r := _req({"fn": "init"})

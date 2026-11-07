@@ -9,7 +9,7 @@ export const DEFAULT_SLOT = 'main';
 const INDEX_KEY = 'gigawatt-saves';
 const slotKey = (slot: string) => (slot === DEFAULT_SLOT ? SAVE_KEY : `gigawatt-save-${slot}`);
 
-export interface SaveInfo { slot: string; month: number; cash: number; debt: number; racks: number; mode: string; status: string }
+export interface SaveInfo { slot: string; month: number; cash: number; debt: number; racks: number; mode: string; status: string; at?: number }
 
 /** Each step upgrades a save from version N to N+1 in place. */
 const MIGRATIONS: Record<number, (g: GameState) => void> = {
@@ -45,11 +45,12 @@ export function migrate(g: GameState): string | null {
 
 const readIndex = (): Record<string, SaveInfo> => { try { return JSON.parse(localStorage.getItem(INDEX_KEY) ?? '{}'); } catch { return {}; } };
 
+let lastAt = 0;   // strictly increasing, so two saves in the same millisecond still order correctly
 export function writeSlot(slot: string, g: GameState): boolean {
   try {
     localStorage.setItem(slotKey(slot), JSON.stringify({ ...g, saveVersion: SAVE_VERSION }));
     const idx = readIndex();
-    idx[slot] = { slot, month: g.month, cash: g.cash, debt: g.debt, racks: g.halls.reduce((n, h) => n + h.racks.length, 0), mode: g.mode ?? 'operator', status: g.status ?? 'playing' };
+    idx[slot] = { slot, month: g.month, cash: g.cash, debt: g.debt, racks: g.halls.reduce((n, h) => n + h.racks.length, 0), mode: g.mode ?? 'operator', status: g.status ?? 'playing', at: (lastAt = Math.max(Date.now(), lastAt + 1)) };
     localStorage.setItem(INDEX_KEY, JSON.stringify(idx));
     return true;
   } catch { return false; } // storage unavailable (private mode / headless) — nothing to do
@@ -65,7 +66,7 @@ export function readSlot(slot: string): { game?: GameState; error?: string } {
   } catch { return { error: 'Save file unreadable.' }; }
 }
 
-export const listSaves = (): SaveInfo[] => Object.values(readIndex()).sort((a, b) => (a.slot === 'auto' ? 1 : 0) - (b.slot === 'auto' ? 1 : 0) || b.month - a.month);
+export const listSaves = (): SaveInfo[] => Object.values(readIndex()).sort((a, b) => (b.at ?? 0) - (a.at ?? 0) || b.month - a.month);   // most recently written first
 
 export const hasSave = (slot: string = DEFAULT_SLOT): boolean => {
   try { return localStorage.getItem(slotKey(slot)) !== null; } catch { return false; }
