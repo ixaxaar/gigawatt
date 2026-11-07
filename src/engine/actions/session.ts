@@ -18,6 +18,8 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
       set({ game: g });
     },
 
+    ackNews: () => set(s => ({ game: { ...s.game, news: (s.game.news ?? []).slice(1) } })),
+
     setMode: (m) => set(s => ({ game: { ...s.game, mode: m } })),
 
     patchProject: (id, patch) => set(s => ({ game: { ...s.game, projects: (s.game.projects ?? []).map(p => p.id === id ? { ...p, ...patch } : p) } })),

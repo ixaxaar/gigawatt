@@ -7,6 +7,8 @@ static var colorblind := false
 static var reduced_motion := false
 ## Graphics: 0 low, 1 balanced (default), 2 high. Screen-space effects and volumetric fog are the expensive part.
 static var quality := 1
+## Guided first run: "on" until finished or dismissed, then "off" (restart it from the menu).
+static var tutorial := "on"
 const PATH := "user://settings.cfg"
 
 static func load_all() -> void:
@@ -21,11 +23,12 @@ static func load_all() -> void:
 	colorblind = bool(c.get_value("a", "colorblind", false))
 	reduced_motion = bool(c.get_value("a", "reduced_motion", false))
 	if not qenv: quality = clampi(int(c.get_value("a", "quality", 1)), 0, 2)
+	tutorial = str(c.get_value("a", "tutorial", "on"))
 
 static func save_all() -> void:
 	var c := ConfigFile.new()
 	c.set_value("a", "volume", volume); c.set_value("a", "ui_scale", ui_scale)
-	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "quality", quality)
+	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "quality", quality); c.set_value("a", "tutorial", tutorial)
 	c.save(PATH)
 
 ## Push the current values into the engine (call after load and after every change).

@@ -477,6 +477,10 @@ export interface GameState {
   utilityUSDPerKWh: number;
   codexSeen: string[];
   missionsDone: string[];
+  /** Launch keynotes (ids) that fired and have not been dismissed yet; the UI shows them one at a time. */
+  news?: string[];
+  /** Every launch keynote that has fired this game. */
+  launchesSeen?: string[];
   history: { month: number; revenue: number; opex: number; cash: number; utilization: number }[];
   /** Power procurement (optional so old saves load). */
   powerOffers?: PowerOffer[];

@@ -50,6 +50,8 @@ export interface GameStore {
   startEasy: (contractId: string, templateId: string, racks: number) => ActionResult;
   stepEasy: () => void;
   setMode: (m: GameMode) => void;
+  /** Dismiss the oldest launch keynote card. */
+  ackNews: () => void;
   /** Sell a placed rack (must be unclustered) for its residual value; frees the slot. */
   decommissionRack: (rackId: string) => ActionResult;
   /** Sell warehouse stock at a discount (clear obsolete parts). */

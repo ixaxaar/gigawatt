@@ -34,4 +34,16 @@ describe('open orders', () => {
     expect(S().reduceOrder(id, 9).ok).toBe(false);
     expect(S().game.cash).toBeLessThan(before);
   });
+
+  it('a pre-order of an announced rack is refused before the keynote, accepted after, arrives after shipping, and can be cancelled', () => {
+    S().newGame(1); const t = TEMPLATES.find((x) => x.id === 'tpl-gb200-nvidia-turnkey')!;
+    useGame.setState((s) => ({ game: { ...s.game, month: 40, cash: 5e9 } }));
+    expect(S().buyTemplate(t.id, 1).ok).toBe(false);
+    useGame.setState((s) => ({ game: { ...s.game, month: 56 } }));
+    const r = S().buyTemplate(t.id, 1); expect(r.ok).toBe(true);
+    const arrive = Math.max(...S().game.orders.map((o) => o.arriveMonth));
+    expect(arrive).toBeGreaterThanOrEqual(57 + 1);
+    expect(S().cancelOrder(S().game.orders[0].id).ok).toBe(true);
+    expect(S().game.orders.length).toBe(0);
+  });
 });

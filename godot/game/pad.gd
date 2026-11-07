@@ -59,7 +59,8 @@ func _input(e: InputEvent) -> void:
 func _back() -> void:
 	var m: Control = app.modal()
 	if m != null:
-		if m == app.guide: app.guide.visible = false
+		if m == app.keynote: app.keynote._ack(false)
+		elif m == app.guide: app.guide.visible = false
 		elif m == app.settings_ui: app._settings()
 		elif m == app.menu_ui: app._menu()
 		elif m.name == "slots": m.queue_free()

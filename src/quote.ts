@@ -3,19 +3,20 @@ import { getItem } from './data';
 import { offerAt, volumeDiscount } from './store';
 import { templateBom, templateFacts, racksFor } from './plan';
 
-export interface Quote { cost: number; lead: number; lines: { id: string; name: string; n: number; unit: number; total: number }[]; unavailable: string[]; capped: string[] }
-export function quote(t: SystemTemplate, racks: number, month: number): Quote {
-  const lines: Quote['lines'] = []; const unavailable: string[] = []; const capped: string[] = []; let cost = 0, lead = 1;
+export interface Quote { preorder?: boolean; ships?: number; cost: number; lead: number; lines: { id: string; name: string; n: number; unit: number; total: number }[]; unavailable: string[]; capped: string[] }
+export function quote(t: SystemTemplate, racks: number, month: number, preorder = false): Quote {
+  const lines: Quote['lines'] = []; const unavailable: string[] = []; const capped: string[] = []; let cost = 0, lead = 1; let pre = false, ships = 0;
   for (const [id, n] of Object.entries(templateBom(t, racks))) {
-    const item = getItem(id)!; const o = offerAt(item, month);
+    const item = getItem(id)!; const o = offerAt(item, month, preorder);
     if (!o.available) { unavailable.push(item.name); continue; }
     if (o.qtyCap && n > o.qtyCap) capped.push(`${item.name} (cap ${o.qtyCap}/qtr)`);
     const unit = Math.round(o.unitPrice * (1 - volumeDiscount(item, n, o.unitPrice)) * (1 + t.premium));
+    if (o.preorder) { pre = true; ships = Math.max(ships, o.ships ?? 0); }
     lines.push({ id, name: item.name, n, unit, total: unit * n }); cost += unit * n;
     lead = Math.max(lead, Math.max(1, Math.round(o.leadMonths * t.leadFactor)));
   }
   lines.sort((a, b) => b.total - a.total);
-  return { cost, lead, lines, unavailable, capped };
+  return { cost, lead, lines, unavailable, capped, ...(pre ? { preorder: true, ships } : {}) };
 }
 export interface HallCheck { ok: boolean; label: string; detail: string }
 export function hallChecks(g: GameState, t: SystemTemplate, racks: number): HallCheck[] {

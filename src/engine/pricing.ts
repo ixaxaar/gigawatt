@@ -2,8 +2,12 @@ import { VENDORS } from '../data';
 import { estimateCapexBasis } from '../sim/economy';
 import { capMultiplier, frameworkDiscount, frameworkFor, relDiscount } from '../sim/vendors';
 import { CatalogItem, GameState, monthToYear } from '../types';
+import { preorderOpens, shipMonthOf } from '../data/launches';
 
 // ---------- procurement model (deterministic: f(item, month)) ----------
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthLabel = (m: number) => `${MONTH_NAMES[((m % 12) + 12) % 12]} ${2020 + Math.floor(m / 12)}`;
 
 export const DEMAND_CURVE: [number, number][] = [
   [2020, 0.2], [2022.4, 0.4], [2023.3, 1.0], [2024.6, 0.9], [2026, 0.55], [2028, 0.5],
@@ -33,18 +37,42 @@ export interface Offer {
   leadMonths: number;
   /** Per-quarter allocation cap, if the vendor rations this part. */
   qtyCap?: number;
+  /** Announced but not shipping yet: you can queue for it now at the launch premium. */
+  preorder?: boolean;
+  /** Month the part starts shipping (set on pre-orders and on announced-but-not-open parts). */
+  ships?: number;
+  /** Month pre-orders open (set when the part is announced). */
+  opens?: number;
 }
 
 /** Price drift + lead-time modulation + availability for a catalog item this month. */
-export const offerAt = (item: CatalogItem, month: number): Offer => {
+export const offerAt = (item: CatalogItem, month: number, preorder = false): Offer => {
   const year = monthToYear(month);
   if (year < item.availableFrom) {
+    const opens = preorderOpens(item);
+    const ships = shipMonthOf(item);
+    if (preorder && opens !== undefined && month >= opens) {
+      // Queue behind the hyperscalers: delivery lands a few months after the part starts shipping, at the launch premium.
+      const demand = demandIndex(item.availableFrom);
+      const lead = Math.max(1, Math.round(item.leadTimeMonths * (1 + demand * (item.kind === 'accelerator' ? 1 : 0.25))));
+      const boom = 1 + demand * (item.kind === 'accelerator' ? 0.18 : 0.06);
+      return {
+        item, available: true, preorder: true, ships, opens,
+        unitPrice: Math.round(item.priceUSD * 1.12 * boom),
+        leadMonths: Math.max(1, ships - month + Math.ceil(lead / 2)),
+        qtyCap: item.allocationPerQuarter !== undefined ? Math.max(1, Math.floor(item.allocationPerQuarter / 2)) : undefined,
+      };
+    }
     return {
       item,
       available: false,
-      reason: `Not shipping until ${Math.floor(item.availableFrom)} — labs and hyperscalers queue first.`,
+      reason: opens !== undefined && month < opens
+        ? `Announced — pre-orders open ${monthLabel(opens)}, shipping ${monthLabel(ships)}.`
+        : `Not shipping until ${Math.floor(item.availableFrom)} — labs and hyperscalers queue first.`,
       unitPrice: 0,
       leadMonths: 0,
+      ships: opens !== undefined ? ships : undefined,
+      opens,
     };
   }
   if (item.eolAfter && year > item.eolAfter) {
@@ -77,7 +105,7 @@ export const offerAt = (item: CatalogItem, month: number): Offer => {
 /** offerAt for this month, adjusted for the player's vendor standing: relationship + framework
  *  discounts off the unit price, allocation cap scaled by relationship/reputation. */
 export const offerFor = (g: GameState, item: CatalogItem): Offer => {
-  const o = offerAt(item, g.month);
+  const o = offerAt(item, g.month, true);
   if (!o.available) return o;
   const fw = frameworkFor(g, item.vendor);
   const disc = relDiscount(g, item.vendor) + (fw ? frameworkDiscount(fw) : 0);

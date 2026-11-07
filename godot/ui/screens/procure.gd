@@ -3,7 +3,9 @@ extends Control
 ## Procurement: Guided planner (platform -> how many -> how to buy -> hall check -> BOM -> order) and the advanced Parts bin.
 
 var app
+static var next_tab := OS.get_environment("GW_PTAB")
 var tab := "plan"
+var road_open := ""
 var plat := ""
 var want := 64
 var tier_sel := ""
@@ -24,19 +26,25 @@ func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
+	if next_tab != "": tab = next_tab; next_tab = ""
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)
 	hd.add_child(Kit.label("PROCUREMENT", 26, Kit.CY))
 	hd.add_child(Kit.btn("Guided planner", func(): tab = "plan"; refresh(), "pri" if tab == "plan" else ""))
 	hd.add_child(Kit.btn("Parts bin (advanced)", func(): tab = "parts"; refresh(), "pri" if tab == "parts" else ""))
-	if tab == "plan": _planner(root)
+	hd.add_child(Kit.btn("Roadmap", func(): tab = "road"; refresh(), "pri" if tab == "road" else ""))
+	if tab == "road": _roadmap(root)
+	elif tab == "plan": _planner(root)
 	else: _parts(root)
 
 # ---------- guided planner ----------
 func _state(p: String) -> Dictionary:
 	var b: Bridge = app.b; var ts := b.templates.filter(func(t): return t.platform == p)
 	var a: Dictionary = ts[0]; var y := b.year(); var from: float = a.availableFrom; var eol = a.get("eolAfter")
-	return {"ts": ts, "from": from, "live": y >= from and (eol == null or y <= float(eol)), "future": y < from}
+	var pre := false; var ships := 0
+	if y < from:
+		var qq: Dictionary = b.q("quote", [a.id, 1]); pre = qq.unavailable.is_empty(); ships = int(qq.get("ships", 0))
+	return {"ts": ts, "from": from, "live": (y >= from and (eol == null or y <= float(eol))) or pre, "future": y < from, "pre": pre, "ships": ships}
 
 func _planner(root: Control) -> void:
 	var b: Bridge = app.b
@@ -70,6 +78,7 @@ func _planner(root: Control) -> void:
 		var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(v)
 		v.add_child(Kit.label(p, 15, Kit.TX if st.live else Kit.DIM, true))
 		var sub := "%d accel / rack · %d kW · %s" % [ff.accels, int(ff.kWPerRack), a.rack.cooling] if st.live else ("ships %d (locked)" % int(st.from) if st.future else "end of sale")
+		if st.pre: sub = "PRE-ORDER · ships %s · %d kW" % [Kit.date_of(st.ships), int(ff.kWPerRack)]
 		v.add_child(Kit.label(sub, 12, Kit.DIM, true))
 		var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Control.FOCUS_NONE
 		click.pressed.connect(func(): if st.live: plat = p; tier_sel = ""; app.sfx("click"); refresh())
@@ -112,7 +121,9 @@ func _planner(root: Control) -> void:
 	var tot := HBoxContainer.new(); tot.add_child(Kit.label("TOTAL", 16)); var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tot.add_child(sp); tot.add_child(Kit.label(Kit.usd(q.cost), 18, Kit.CY)); bm[1].add_child(tot)
 	bm[1].add_child(Kit.label("Cash %s · arrives ~%s" % [Kit.usd(b.g.cash), Kit.date_of(b.g.month + q.lead)], 13, Kit.DIM, true))
 	if q.capped.size() > 0: bm[1].add_child(Kit.label("Allocation limits: " + ", ".join(q.capped), 13, Kit.AM, true))
-	var ob := Kit.btn("NOT ENOUGH CASH" if cant_afford else "ORDER %d RACK%s · %s" % [racks, "S" if racks > 1 else "", Kit.usd(q.cost)], func():
+	var is_pre: bool = q.get("preorder", false)
+	if is_pre: bm[1].add_child(Kit.label("PRE-ORDER: ships %s. You queue behind the hyperscalers at the launch premium, delivery lands after the ship date, and cancelling refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
+	var ob := Kit.btn("NOT ENOUGH CASH" if cant_afford else "%s %d RACK%s · %s" % ["PRE-ORDER" if is_pre else "ORDER", racks, "S" if racks > 1 else "", Kit.usd(q.cost)], func():
 		pmsg = b.act("buyTemplate", [t.id, racks]); app.sfx("buy" if pmsg.ok else "bad"); refresh(), "go", 17)
 	ob.disabled = cant_afford or q.unavailable.size() > 0; ob.custom_minimum_size = Vector2(0, 52); bm[1].add_child(ob)
 	if not pmsg.is_empty():
@@ -120,6 +131,32 @@ func _planner(root: Control) -> void:
 		if pmsg.ok: bm[1].add_child(Kit.btn("Next: deploy it from the Warehouse →", func(): app.go("stock"), "pri", 14))
 
 var lbl_hint: Label
+
+# ---------- roadmap: keynotes, what shipped, what is coming ----------
+func _roadmap(root: Control) -> void:
+	var b: Bridge = app.b
+	var L: Dictionary = b.q("launches"); var now: int = int(b.g.month)
+	var col: VBoxContainer = Kit.cols2(root)[0]
+	col.add_child(Kit.tip("Hardware is announced at keynotes months before it ships. After the keynote you can PRE-ORDER (launch premium, delivery after the ship date, cancel for 90% back). Wait and you pay the going rate and the queue behind the hyperscalers. Each card explains the technology and what it changes in your hall."))
+	var upcoming: Array = L.list.filter(func(k): return int(k.month) > now)
+	if not upcoming.is_empty():
+		var nx: Dictionary = upcoming[0]
+		col.add_child(Kit.label("Next keynote: %s · %s" % [nx.venue, Kit.date_of(int(nx.month))], 15, Kit.AM, true))
+	var past: Array = L.list.filter(func(k): return int(k.month) <= now); past.reverse()
+	if past.is_empty(): col.add_child(Kit.label("No keynotes yet. They appear here as they happen.", 13, Kit.DIM))
+	for k in past:
+		var open: bool = road_open == str(k.id)
+		var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM if open else Kit.PANEL_EDGE, Kit.PANEL_FILL, 2 if open else 1, 12)); col.add_child(card)
+		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); card.add_child(v)
+		var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)
+		h.add_child(Kit.chip("%s · %s" % [Kit.date_of(int(k.month)), str(k.venue)], Kit.AM, 12))
+		var pre: bool = k.items.any(func(i): return i.state == "preorder")
+		if pre: h.add_child(Kit.chip("PRE-ORDER OPEN", Kit.GR, 12))
+		v.add_child(Kit.label(str(k.title), 16, Kit.TX, true)); v.add_child(Kit.label(str(k.headline), 13, Kit.DIM, true))
+		if open:
+			KeynoteOverlay.body(v, k)
+			if k.items.size() > 0: v.add_child(Kit.btn("Look at these parts in the Parts bin →", func(): tab = "parts"; kind = "accelerator"; vendor = "all"; sel = str(k.items[0].id); road_open = ""; future = true; refresh(), "pri", 14))
+		v.add_child(Kit.btn("Hide" if open else "Read the keynote", func(): road_open = "" if open else str(k.id); refresh(), "", 13))
 
 # ---------- parts bin ----------
 func _parts(root: Control) -> void:
@@ -151,7 +188,10 @@ func _parts(root: Control) -> void:
 		var rb := Kit.btn(txt, func(): sel = it.id; bmsg = ""; refresh(), "pri" if sel == it.id else "", 13); rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.clip_text = true
 		if not o.available: rb.modulate = Color(1, 1, 1, 0.5)
 		lc.add_child(rb)
-		lc.add_child(Kit.label("    %s · %d" % [it.vendor, int(it.availableFrom)], 11, Kit.DIM))
+		var sub := "    %s · %d" % [it.vendor, int(it.availableFrom)]
+		if o.get("preorder", false): sub += " · PRE-ORDER, ships %s" % Kit.date_of(int(o.ships))
+		elif o.get("opens") != null and not o.available: sub += " · announced, orders open %s" % Kit.date_of(int(o.opens))
+		lc.add_child(Kit.label(sub, 11, Kit.GR if o.get("preorder", false) else Kit.DIM))
 	var dc := Kit.column(cols, 460, false)
 	if sel != "" and offers.has(sel):
 		var o: Dictionary = offers[sel]; var it: Dictionary = o.item
@@ -172,6 +212,7 @@ func _parts(root: Control) -> void:
 			var line := "%s ea" % Kit.usd(o.unitPrice)
 			if disc > 0: line += " · −%d%% volume" % int(round(disc * 100.0))
 			line += " · arrives in %s mo" % o.leadMonths
+			if o.get("preorder", false): line += " · PRE-ORDER: ships %s, launch premium, cancel refunds 90%%" % Kit.date_of(int(o.ships))
 			if o.get("qtyCap") != null: line += " · allocation %s/qtr" % Kit.num(o.qtyCap)
 			dp[1].add_child(Kit.label(line, 13, Kit.DIM, true))
 		else: dp[1].add_child(Kit.label(str(o.get("reason", "")), 14, Kit.AM, true))

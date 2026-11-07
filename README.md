@@ -20,11 +20,12 @@ The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-mode
 | **Customers** | Market offers with live fit verdicts and "what you need to buy"; an **Easy Path** that orders, installs, deploys and assigns for you; serve straight from racks. |
 | **Energy** | Power purchase agreements, the spot GPU market, offering idle capacity. |
 | **Operations** | Staffing (the crew you need scales with racks, liquid cooling and fabric size; understaffing raises failures and slows repairs), loans and repayment, a **hardware lifecycle** table (age, obsolescence, residual value, sell old racks), and clearing warehouse stock. |
+| **Roadmap** | Hardware keynotes (GTC, Computex, SC, OCP, AMD Advancing AI) fire on their real dates: a card explains the technology and what it changes in your hall. Announced parts can be **pre-ordered** at a launch premium and arrive after they ship; cancelling refunds 90%. |
 | **Codex** | "Datacenter 101": every concept with a live *do I need this right now?* verdict, plus the accelerator timeline. |
 
 The campaign runs Dec 2020 → Dec 2028 and ends with a scored report (net worth, reliability, scale); three months of negative cash is bankruptcy (Learner mode can't go bankrupt). Saves are versioned with three slots plus a monthly autosave.
 
-Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon** — and a mission track that teaches the stack as you go.
+Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon**. A short guided tutorial walks a first run from the first customer to the first revenue, then hands over to a seven-chapter **Learning path** (power and cooling, silicon, networks, customers, money, resilience) with cash-rewarded goals and live "do I need this now?" concepts.
 
 ## Screenshots
 

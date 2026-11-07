@@ -7139,8 +7139,8 @@ const BY_ID = new Map(ALL_ITEMS.map((i) => [i.id, i]));
 const getItem = (id) => BY_ID.get(id);
 const ITEMS_BY_KIND = (k2) => ALL_ITEMS.filter((i) => i.kind === k2);
 const MONTHS_PER_YEAR = 12;
-const BASE_YEAR = 2020;
-const monthToYear = (m) => BASE_YEAR + m / MONTHS_PER_YEAR;
+const BASE_YEAR$1 = 2020;
+const monthToYear = (m2) => BASE_YEAR$1 + m2 / MONTHS_PER_YEAR;
 function mulberry32(seed) {
   let a = seed >>> 0;
   return () => {
@@ -7279,12 +7279,12 @@ function rollArchetype(rng, reputation) {
 }
 function generateContracts(state2, month, rng) {
   const year = monthToYear(month);
-  const eligible = MODELS.filter((m) => m.era <= year + 0.01);
+  const eligible = MODELS.filter((m2) => m2.era <= year + 0.01);
   if (eligible.length === 0) return [];
   const out = [];
   const n = 1 + Math.floor(rng() * 3);
   for (let i = 0; i < n; i++) {
-    const tail = eligible.filter((m) => m.activeParamsB <= 80 && m.paramsB <= 700);
+    const tail = eligible.filter((m2) => m2.activeParamsB <= 80 && m2.paramsB <= 700);
     const model = rng() < 0.5 && tail.length ? pick(rng, tail) : pick(rng, rng() < 0.6 ? eligible.slice(-4) : eligible.slice(-8));
     const trainP = model.paramsB > 200 ? 0.7 : model.paramsB < 15 ? 0.12 : 0.4;
     const archetype = rollArchetype(rng, state2.reputation);
@@ -8134,194 +8134,6 @@ function recordSpend(g, vendorId, usd2) {
   if (fw) fw.spentUSD += usd2;
   adjustRel(g, vendorId, Math.min(REL_GAIN_PER_ORDER_MAX, usd2 * REL_GAIN_PER_USD));
 }
-const DEMAND_CURVE = [
-  [2020, 0.2],
-  [2022.4, 0.4],
-  [2023.3, 1],
-  [2024.6, 0.9],
-  [2026, 0.55],
-  [2028, 0.5]
-];
-const lerpCurve = (pts, x) => {
-  if (x <= pts[0][0]) return pts[0][1];
-  for (let i = 1; i < pts.length; i++) {
-    if (x <= pts[i][0]) {
-      const [x0, y0] = pts[i - 1];
-      const [x1, y1] = pts[i];
-      return y0 + (x - x0) / (x1 - x0) * (y1 - y0);
-    }
-  }
-  return pts[pts.length - 1][1];
-};
-const START_MONTH = 11;
-const demandIndex = (year) => lerpCurve(DEMAND_CURVE, year);
-const offerAt = (item, month) => {
-  const year = monthToYear(month);
-  if (year < item.availableFrom) {
-    return {
-      item,
-      available: false,
-      reason: `Not shipping until ${Math.floor(item.availableFrom)} — labs and hyperscalers queue first.`,
-      unitPrice: 0,
-      leadMonths: 0
-    };
-  }
-  if (item.eolAfter && year > item.eolAfter) {
-    return {
-      item,
-      available: false,
-      reason: "End-of-sale: the vendor no longer ships this generation. Look at newer parts.",
-      unitPrice: 0,
-      leadMonths: 0
-    };
-  }
-  const age = year - item.availableFrom;
-  const hype = age < 0.4 ? 1.12 : 1;
-  const decay = Math.max(0.55, 1 - 0.1 * Math.max(0, age - 0.4));
-  const demand = demandIndex(year);
-  const boom = 1 + demand * (item.kind === "accelerator" ? 0.18 : 0.06);
-  const lead = Math.max(
-    1,
-    Math.round(item.leadTimeMonths * (1 + demand * (item.kind === "accelerator" ? 1 : 0.25)))
-  );
-  return {
-    item,
-    available: true,
-    unitPrice: Math.round(item.priceUSD * hype * decay * boom),
-    leadMonths: lead,
-    qtyCap: item.allocationPerQuarter
-  };
-};
-const offerFor = (g, item) => {
-  const o2 = offerAt(item, g.month);
-  if (!o2.available) return o2;
-  const fw = frameworkFor(g, item.vendor);
-  const disc = relDiscount(g, item.vendor) + (fw ? frameworkDiscount(fw) : 0);
-  return {
-    ...o2,
-    unitPrice: Math.max(0, Math.round(o2.unitPrice * (1 - disc))),
-    qtyCap: o2.qtyCap !== void 0 ? Math.floor(o2.qtyCap * capMultiplier(g, item.vendor)) : void 0
-  };
-};
-const volumeDiscount = (item, qty, unitPrice) => {
-  const vendor = VENDORS.find((v2) => v2.id === item.vendor);
-  if (!vendor || qty <= 0) return 0;
-  const doublings = Math.floor(Math.log2(Math.max(1, unitPrice * qty) / 1e6));
-  if (doublings <= 0) return 0;
-  return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
-};
-const rackBom = (state2, designId) => {
-  const design = state2.racks.find((r) => r.id === designId);
-  if (!design) return void 0;
-  const need = { [design.rackId]: 1 };
-  for (const item of design.items) {
-    if (item.type === "tray") {
-      const tray = state2.trays.find((t) => t.id === item.trayId);
-      if (!tray) return void 0;
-      for (const p of tray.parts) need[p.itemId] = (need[p.itemId] ?? 0) + p.count * item.count;
-    } else {
-      const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
-      need[id] = (need[id] ?? 0) + item.count;
-    }
-  }
-  return need;
-};
-const availableFor = (g, designId) => {
-  const bom = rackBom(g, designId) ?? {};
-  const held = {};
-  for (const [did, n] of Object.entries(g.rackReserve ?? {})) {
-    if (did === designId || !(n > 0)) continue;
-    for (const [p, per] of Object.entries(rackBom(g, did) ?? {})) held[p] = (held[p] ?? 0) + per * n;
-  }
-  const out = {};
-  for (const p of Object.keys(bom)) out[p] = Math.max(0, (g.inventory[p] ?? 0) - (held[p] ?? 0));
-  return out;
-};
-const reserve = (g, designId, n) => {
-  g.rackReserve = { ...g.rackReserve ?? {}, [designId]: Math.max(0, (g.rackReserve?.[designId] ?? 0) + n) };
-  if (!g.rackReserve[designId]) delete g.rackReserve[designId];
-};
-const FLOOR_UNIT_SLOTS = 10;
-const FLOOR_UNIT_COST = 25e4 * FLOOR_UNIT_SLOTS;
-const floorCommissionMonths = (units) => 2 + Math.ceil(units / 5);
-const creditLimit = (state2) => 5e6 + estimateCapexBasis(state2) * 0.6;
-function newGameState(seed) {
-  const hall = {
-    id: "hall-1",
-    name: "Hall A",
-    coolingClass: "air",
-    rackSlots: 40,
-    itPowerKW: 500,
-    coolingKW: 600,
-    pue: 1,
-    powerEquip: { "et-padmount-2500": 1, "se-galaxy-vs-500": 1 },
-    coolingEquip: { "vt-crah-100": 6 },
-    racks: [],
-    floorLoadKgPerRack: 1500
-  };
-  hall.pue = computePUE(hall, getItem);
-  const g = {
-    month: START_MONTH,
-    seed,
-    cash: 5e7,
-    debt: 0,
-    reputation: 10,
-    halls: [hall],
-    trays: [],
-    racks: [],
-    clusters: [],
-    inventory: {},
-    orders: [],
-    availableContracts: [],
-    activeContracts: [],
-    log: [],
-    staff: 2,
-    utilityUSDPerKWh: 0.07,
-    uplinks: { "transit-10g-a": 1 },
-    codexSeen: [],
-    missionsDone: [],
-    history: [],
-    powerOffers: [],
-    powerContracts: [],
-    spotClusters: [],
-    spotReserve: 0,
-    status: "playing",
-    negCashMonths: 0,
-    saveVersion: SAVE_VERSION,
-    stats: { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 },
-    rivals: initialRivals(seed),
-    marketPriceIndex: 1
-  };
-  g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
-  g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));
-  g.log.push({
-    month: START_MONTH,
-    level: "info",
-    text: "GIGAWATT day one: $50M cash, Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh."
-  });
-  g.log.push({
-    month: START_MONTH,
-    level: "info",
-    text: "Order parts, design a tray and rack, then place racks — contracts on the market pay once a cluster serves them."
-  });
-  return g;
-}
-function makeCtx(get, set) {
-  return {
-    get,
-    set,
-    commit: (mutate) => {
-      const g = JSON.parse(JSON.stringify(get().game));
-      const res = mutate(g) ?? ok();
-      if (res.ok) set({ game: g });
-      return res;
-    },
-    logln: (g, level, text) => {
-      g.log.push({ month: g.month, level, text });
-      if (g.log.length > 400) g.log.splice(0, g.log.length - 400);
-    }
-  };
-}
 const NAMES = { hpe: "HPE", asus: "ASUS", quanta: "Quanta (QCT)", wiwynn: "Wiwynn", cisco: "Cisco UCS", inspur: "Inspur", lenovo: "Lenovo", supermicro: "Supermicro", gigabyte: "Gigabyte", foxconn: "Foxconn", dell: "Dell", nvidia: "NVIDIA" };
 const DIY = (by = "generic") => ({
   tier: "diy",
@@ -8588,6 +8400,386 @@ const TEMPLATES = PLATFORMS.flatMap((p) => p.variants.map((v2) => {
   };
 }));
 const getTemplate = (id) => TEMPLATES.find((t) => t.id === id);
+const m = (year, month1) => (year - 2020) * 12 + (month1 - 1);
+const LAUNCHES = [
+  {
+    id: "gtc-2021-grace",
+    month: m(2021, 4),
+    venue: "GTC Spring 2021",
+    title: "NVIDIA unveils Grace, an Arm CPU built for GPUs",
+    headline: "Grace CPU + NVLink-C2C announced — the CPU becomes a GPU companion, not a bottleneck.",
+    tech: ["Grace is a 72-core Arm CPU wired to the GPU over NVLink-C2C at 900 GB/s — about 7× PCIe Gen5.", "CPU and GPU share one memory space, so a GPU can use CPU memory as a slow extension of its own HBM.", "BlueField DPUs move networking, storage and security off the host CPU."],
+    impact: ["Later Grace-based superchips (GH200, GB200) need fewer PCIe lanes and skip x86 hosts altogether.", "Nothing to buy for years — this is a roadmap keynote. Note the date: Grace ships in 2024."],
+    takeaway: "The fastest link in a server is the one between CPU and GPU — whoever shortens it wins on memory-bound work.",
+    items: ["nv-grace", "nv-bluefield3"]
+  },
+  {
+    id: "gtc-2022-hopper",
+    month: m(2022, 3),
+    venue: "GTC Spring 2022",
+    title: "Hopper H100: the Transformer Engine",
+    headline: "H100 announced — FP8 Transformer Engine, NVLink 4, HBM3. Pre-orders open; shipping in autumn.",
+    tech: ["FP8 tensor math doubles throughput on transformer layers versus FP16, with the hardware picking the precision per layer.", "HBM3 lifts memory bandwidth to ~3.35 TB/s; NVLink 4 gives 900 GB/s between GPUs. NVSwitch gen3 builds 256-GPU NVLink domains.", "Power goes up with it: 700 W per SXM GPU, so an 8-GPU node is ~10 kW."],
+    impact: ["Roughly 2–3× an A100 on LLM training; contracts that were out of reach become serviceable.", "Four H100 nodes per rack is ~40 kW: the edge of what air cooling can remove. Plan rear-door heat exchangers or liquid early.", "Allocation is rationed: pre-ordering is how you get in the queue before the rush."],
+    takeaway: "A new GPU generation is a power and cooling project first and a chip purchase second.",
+    items: ["nv-h100-sxm", "nv-h100-pcie", "nv-connectx7", "nv-nvswitch3"]
+  },
+  {
+    id: "computex-2023-gh200",
+    month: m(2023, 5),
+    venue: "Computex 2023",
+    title: "Grace Hopper in production, Spectrum-X, and the MGX modular rack",
+    headline: "GH200 superchip and Spectrum-X Ethernet announced; MGX makes servers modular.",
+    tech: ["GH200 pairs a Grace CPU with an H100 over NVLink-C2C: 576 GB of coherent memory per superchip.", "Spectrum-X is Ethernet tuned for AI: adaptive routing and congestion control that keeps big all-reduce traffic from stalling.", "MGX is a modular server spec: one chassis, many CPU/GPU/DPU combinations."],
+    impact: ["Huge-memory inference (large KV caches, big recommenders) gets cheaper per token on GH200.", "You now have a real alternative to InfiniBand for the scale-out fabric: Ethernet that behaves."],
+    takeaway: "Scale-out networking is a design choice: InfiniBand for lowest latency, tuned Ethernet for cost and openness.",
+    items: ["nv-gh200", "nv-sn5600"]
+  },
+  {
+    id: "amd-2023-mi300x",
+    month: m(2023, 6),
+    venue: "AMD Data Center & AI Premiere",
+    title: "AMD Instinct MI300X: 192 GB on one accelerator",
+    headline: "MI300X announced with 192 GB of HBM3 — the memory-capacity alternative to H100.",
+    tech: ["Chiplet design: eight GPU dies and four I/O dies stacked on one package with 192 GB HBM3 at 5.3 TB/s.", "ROCm is AMD’s CUDA equivalent. Software maturity is the real question, not the silicon."],
+    impact: ["A 70B-parameter model fits on one MI300X; inference needs fewer GPUs per replica and tokens/s per dollar improves.", "Software maturity is lower than CUDA: expect more tuning and lower utilization at first, at a lower price."],
+    takeaway: "Memory capacity and bandwidth, not FLOPS, decide inference economics.",
+    items: ["amd-mi300x"]
+  },
+  {
+    id: "sc-2023-h200",
+    month: m(2023, 11),
+    venue: "SC23",
+    title: "H200: the same compute, far more memory",
+    headline: "H200 announced — 141 GB of HBM3e, 4.8 TB/s. Same Hopper silicon, inference up to ~1.9×.",
+    tech: ["HBM3e is the next memory generation: 76% more capacity and 43% more bandwidth than H100 at the same 700 W.", "Decode (generating tokens) reads every weight for every token, so it scales with memory bandwidth, not with FLOPS."],
+    impact: ["Drops into H100 HGX baseboards: same power, same cooling, much better for inference contracts.", "Existing H100 racks do not upgrade in place — the GPUs are soldered to the baseboard."],
+    takeaway: "When a workload is memory-bound, faster memory is worth more than faster math.",
+    items: ["nv-h200-sxm"]
+  },
+  {
+    id: "gtc-2024-blackwell",
+    month: m(2024, 3),
+    venue: "GTC 2024",
+    title: "Blackwell: GB200 NVL72 and NVLink 5",
+    headline: "Blackwell announced — B200, GB200 NVL72 (72 GPUs as one), NVLink 5, 120 kW racks.",
+    tech: ["Two reticle-sized dies per GPU, FP4 support, and NVLink 5 at 1.8 TB/s per GPU.", "GB200 NVL72 links 72 GPUs and 36 Grace CPUs in one liquid-cooled rack through NVLink switch trays: one 13.5 TB memory domain.", "A rack draws ~120 kW — direct-to-chip liquid cooling is mandatory, and the floor needs a CDU loop.", "Quantum-X800 InfiniBand and Spectrum-X800 Ethernet move the scale-out fabric to 800 Gb/s per port."],
+    impact: ["Mixture-of-experts and trillion-parameter inference become practical because all-to-all traffic stays inside the NVLink domain.", "Your hall needs ~120 kW per rack and CDUs. Air-cooled halls cannot host this at all.", "These racks sell out before shipping: pre-order to join the queue, or wait and pay the allocation price."],
+    takeaway: "At rack scale the product is not a GPU, it is a liquid-cooled 120 kW machine that you have to build a hall around.",
+    items: ["nv-b200-sxm", "nv-gb200", "nv-nvlink-switch-tray5", "nv-qmx8000", "nv-connectx8"]
+  },
+  {
+    id: "cerebras-2024-cs3",
+    month: m(2024, 3),
+    venue: "Cerebras CS-3",
+    title: "Wafer-scale: the whole wafer is the chip",
+    headline: "Cerebras CS-3 (WSE-3) — 900,000 cores on one wafer, no GPU network needed inside the chip.",
+    tech: ["Instead of cutting a wafer into hundreds of chips, WSE-3 keeps it whole: 44 GB of on-chip SRAM at ~21 PB/s.", "On-chip SRAM is orders of magnitude faster than HBM, so small-batch inference is extremely quick; capacity is the limit."],
+    impact: ["A different architecture for latency-critical inference, not a drop-in GPU replacement.", "Delivered as a turnkey system: its own power, cooling and software stack."],
+    takeaway: "Specialised silicon can win on one axis (latency) while losing on flexibility.",
+    items: ["cb-wse-3"]
+  },
+  {
+    id: "computex-2024-roadmap",
+    month: m(2024, 6),
+    venue: "Computex 2024",
+    title: "The one-year rhythm: MI325X, Gaudi 3, Xeon 6, and the Rubin roadmap",
+    headline: "Vendors move to yearly cadence. AMD MI325X/MI350/MI400, Intel Gaudi 3, and NVIDIA Rubin revealed.",
+    tech: ["NVIDIA, AMD and Intel all commit to annual accelerator generations instead of two-year cycles.", "MI325X raises HBM3e to 256 GB; Gaudi 3 uses standard Ethernet scale-out; Xeon 6 brings 128 performance cores."],
+    impact: ["Hardware you buy depreciates faster: a part that is top of the line today is a generation behind in 12 months.", "Residual value drops faster, so sell or reassign older racks before the next generation lands."],
+    takeaway: "Under a yearly cadence, resale timing is part of the business model.",
+    items: ["amd-mi325x", "int-gaudi-3", "intel-xeon-6980p"]
+  },
+  {
+    id: "amd-2024-turin",
+    month: m(2024, 10),
+    venue: "AMD Advancing AI 2024",
+    title: "MI325X ships, EPYC Turin and Pensando Salina",
+    headline: "AMD launches EPYC Turin hosts and Pensando DPUs alongside MI325X.",
+    tech: ["EPYC 9005 “Turin” adds Zen 5 cores with up to 192 cores per socket for GPU hosts.", "Pensando Salina is a 400G DPU that offloads networking from the host CPU."],
+    impact: ["Better GPU host CPUs mean fewer sockets per tray for the same job.", "DPUs matter when many tenants share a cluster."],
+    takeaway: "The CPU and DPU around the GPUs decide how much of the GPU you can actually use.",
+    items: ["amd-epyc-turin", "amd-salina"]
+  },
+  {
+    id: "gtc-2025-ultra",
+    month: m(2025, 3),
+    venue: "GTC 2025",
+    title: "Blackwell Ultra now, Vera Rubin next",
+    headline: "GB300/B300 Blackwell Ultra announced; Vera Rubin NVL144 and Rubin Ultra roadmapped.",
+    tech: ["Blackwell Ultra raises HBM3e to 288 GB per GPU and adds ~50% more FP4 throughput within the same rack format.", "Vera Rubin NVL144 brings HBM4, NVLink 6, and the Vera CPU. Rubin Ultra scales to 576 GPUs in a rack-scale domain.", "Co-packaged optics put the laser inside the switch package to cut network power."],
+    impact: ["GB300 drops into GB200 racks: same 120 kW class, so the hall you built for GB200 keeps working.", "Rubin racks will draw considerably more power; start planning bigger feeds and CDUs now."],
+    takeaway: "Plan the building for two generations ahead: racks change yearly, power and cooling plants last decades.",
+    items: ["nv-b300-sxm", "nv-gb300"]
+  },
+  {
+    id: "computex-2025-hvdc",
+    month: m(2025, 5),
+    venue: "Computex 2025",
+    title: "NVLink Fusion and 800 V DC power",
+    headline: "NVLink Fusion opens NVIDIA’s fabric to other silicon; 800 V DC distribution proposed for 1 MW racks.",
+    tech: ["NVLink Fusion lets third-party CPUs and custom accelerators join an NVLink domain.", "At 100+ kW per rack, copper busbars carrying 54 V waste space and power; 800 V DC cuts current by ~15×."],
+    impact: ["Not purchasable yet: this explains why future halls look different: fewer, thicker power paths.", "RTX PRO Blackwell servers give you a cheaper air-cooled inference option today."],
+    takeaway: "Power distribution, not chips, is what stops racks reaching 1 MW.",
+    items: ["nv-rtx-pro-6000"]
+  },
+  {
+    id: "amd-2025-helios",
+    month: m(2025, 6),
+    venue: "AMD Advancing AI 2025",
+    title: "MI350 series ships; MI400 “Helios” rack announced",
+    headline: "MI355X launched; MI400X/Helios rack-scale system and UALink scale-up announced for 2026.",
+    tech: ["MI355X adds FP4/FP6 support and 288 GB HBM3e on a 3 nm compute die; liquid-cooled variants draw ~1.4 kW.", "Helios is AMD’s rack-scale answer to NVL72 using UALink for GPU-to-GPU traffic, an open alternative to NVLink.", "UALink and Ultra Ethernet are open standards for scale-up and scale-out."],
+    impact: ["AMD becomes a credible rack-scale vendor in 2026: more supply and more price pressure.", "Mixed-vendor halls need separate software stacks and cluster domains: you cannot join MI355X and B200 into one NVLink domain."],
+    takeaway: "Open standards (UALink, Ultra Ethernet) are how a second supplier becomes viable.",
+    items: ["amd-mi355x", "amd-mi400x", "amd-pollara-400"]
+  },
+  {
+    id: "gtc-dc-2025-rubin",
+    month: m(2025, 10),
+    venue: "GTC DC / OCP Global Summit 2025",
+    title: "Vera Rubin: orders open",
+    headline: "Vera Rubin NVL144, Vera CPU and NVLink 6 switch trays enter the order book for 2026.",
+    tech: ["Vera Rubin NVL144: HBM4 memory, NVLink 6 at 3.6 TB/s per GPU, and a rack that draws well beyond a GB300.", "BlueField-4 DPUs and ConnectX-9 1.6 Tb/s NICs arrive with it; the whole stack moves up a speed grade.", "OCP contributes the open rack, busbar and liquid-cooling specs that these racks are built on."],
+    impact: ["Expect longer queues than any prior generation: hyperscalers have already reserved the first quarters.", "GB200/GB300 prices soften as buyers wait for Rubin; sell older racks while residual value holds."],
+    takeaway: "Every generation turns the previous one into a discounted workhorse, if you can keep it busy.",
+    items: ["nv-rubin-vr200", "nv-vera", "nv-nvlink-switch-tray6", "nv-bluefield4", "nv-connectx9"]
+  },
+  {
+    id: "gtc-2026-ultra",
+    month: m(2026, 3),
+    venue: "GTC 2026",
+    title: "Rubin Ultra, 1.6 T Ethernet and 100 T switches",
+    headline: "Rubin Ultra NVL576, Spectrum-X800 1.6 T Ethernet and Tomahawk 6 switching arrive on the roadmap.",
+    tech: ["Rubin Ultra moves to 576 GPUs in one NVLink domain with HBM4e.", "Spectrum-X800 and Tomahawk 6 are 102.4 Tb/s switch silicon: half the switches for the same fabric size.", "UALink 1.0 switches open the scale-up market to non-NVIDIA accelerators."],
+    impact: ["Fewer, bigger switches reduce cabling and power per GPU at scale.", "The scale-up domain size decides which models you can serve efficiently."],
+    takeaway: "Switch radix is network economics: bigger switches mean fewer tiers and fewer hops.",
+    items: ["nv-rubin-ultra", "nv-sn6800", "gen-ualink-sw"]
+  }
+];
+const BASE_YEAR = 2020;
+const shipMonthOf = (item) => Math.ceil((item.availableFrom - BASE_YEAR) * 12 - 1e-6);
+const FIRST_ANNOUNCE = /* @__PURE__ */ new Map();
+for (const l of LAUNCHES) for (const id of l.items) if (!FIRST_ANNOUNCE.has(id) || l.month < FIRST_ANNOUNCE.get(id)) FIRST_ANNOUNCE.set(id, l.month);
+for (const t of TEMPLATES) {
+  const ids = [t.rack.rackId, t.tray.chassisId, ...t.tray.parts.map((p) => p.itemId)];
+  const first = Math.min(...ids.map((id) => FIRST_ANNOUNCE.get(id) ?? Infinity));
+  if (first === Infinity) continue;
+  for (const id of ids) if (!FIRST_ANNOUNCE.has(id)) FIRST_ANNOUNCE.set(id, first);
+}
+const preorderOpens = (item) => {
+  const a = FIRST_ANNOUNCE.get(item.id);
+  return a === void 0 ? void 0 : Math.max(a, shipMonthOf(item) - 12);
+};
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthLabel = (m2) => `${MONTH_NAMES[(m2 % 12 + 12) % 12]} ${2020 + Math.floor(m2 / 12)}`;
+const DEMAND_CURVE = [
+  [2020, 0.2],
+  [2022.4, 0.4],
+  [2023.3, 1],
+  [2024.6, 0.9],
+  [2026, 0.55],
+  [2028, 0.5]
+];
+const lerpCurve = (pts, x) => {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    if (x <= pts[i][0]) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      return y0 + (x - x0) / (x1 - x0) * (y1 - y0);
+    }
+  }
+  return pts[pts.length - 1][1];
+};
+const START_MONTH = 11;
+const demandIndex = (year) => lerpCurve(DEMAND_CURVE, year);
+const offerAt = (item, month, preorder = false) => {
+  const year = monthToYear(month);
+  if (year < item.availableFrom) {
+    const opens = preorderOpens(item);
+    const ships = shipMonthOf(item);
+    if (preorder && opens !== void 0 && month >= opens) {
+      const demand2 = demandIndex(item.availableFrom);
+      const lead2 = Math.max(1, Math.round(item.leadTimeMonths * (1 + demand2 * (item.kind === "accelerator" ? 1 : 0.25))));
+      const boom2 = 1 + demand2 * (item.kind === "accelerator" ? 0.18 : 0.06);
+      return {
+        item,
+        available: true,
+        preorder: true,
+        ships,
+        opens,
+        unitPrice: Math.round(item.priceUSD * 1.12 * boom2),
+        leadMonths: Math.max(1, ships - month + Math.ceil(lead2 / 2)),
+        qtyCap: item.allocationPerQuarter !== void 0 ? Math.max(1, Math.floor(item.allocationPerQuarter / 2)) : void 0
+      };
+    }
+    return {
+      item,
+      available: false,
+      reason: opens !== void 0 && month < opens ? `Announced — pre-orders open ${monthLabel(opens)}, shipping ${monthLabel(ships)}.` : `Not shipping until ${Math.floor(item.availableFrom)} — labs and hyperscalers queue first.`,
+      unitPrice: 0,
+      leadMonths: 0,
+      ships: opens !== void 0 ? ships : void 0,
+      opens
+    };
+  }
+  if (item.eolAfter && year > item.eolAfter) {
+    return {
+      item,
+      available: false,
+      reason: "End-of-sale: the vendor no longer ships this generation. Look at newer parts.",
+      unitPrice: 0,
+      leadMonths: 0
+    };
+  }
+  const age = year - item.availableFrom;
+  const hype = age < 0.4 ? 1.12 : 1;
+  const decay = Math.max(0.55, 1 - 0.1 * Math.max(0, age - 0.4));
+  const demand = demandIndex(year);
+  const boom = 1 + demand * (item.kind === "accelerator" ? 0.18 : 0.06);
+  const lead = Math.max(
+    1,
+    Math.round(item.leadTimeMonths * (1 + demand * (item.kind === "accelerator" ? 1 : 0.25)))
+  );
+  return {
+    item,
+    available: true,
+    unitPrice: Math.round(item.priceUSD * hype * decay * boom),
+    leadMonths: lead,
+    qtyCap: item.allocationPerQuarter
+  };
+};
+const offerFor = (g, item) => {
+  const o2 = offerAt(item, g.month, true);
+  if (!o2.available) return o2;
+  const fw = frameworkFor(g, item.vendor);
+  const disc = relDiscount(g, item.vendor) + (fw ? frameworkDiscount(fw) : 0);
+  return {
+    ...o2,
+    unitPrice: Math.max(0, Math.round(o2.unitPrice * (1 - disc))),
+    qtyCap: o2.qtyCap !== void 0 ? Math.floor(o2.qtyCap * capMultiplier(g, item.vendor)) : void 0
+  };
+};
+const volumeDiscount = (item, qty, unitPrice) => {
+  const vendor = VENDORS.find((v2) => v2.id === item.vendor);
+  if (!vendor || qty <= 0) return 0;
+  const doublings = Math.floor(Math.log2(Math.max(1, unitPrice * qty) / 1e6));
+  if (doublings <= 0) return 0;
+  return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
+};
+const rackBom = (state2, designId) => {
+  const design = state2.racks.find((r) => r.id === designId);
+  if (!design) return void 0;
+  const need = { [design.rackId]: 1 };
+  for (const item of design.items) {
+    if (item.type === "tray") {
+      const tray = state2.trays.find((t) => t.id === item.trayId);
+      if (!tray) return void 0;
+      for (const p of tray.parts) need[p.itemId] = (need[p.itemId] ?? 0) + p.count * item.count;
+    } else {
+      const id = item.type === "switch" ? item.switchId : item.type === "storage" ? item.storageId : item.powerId;
+      need[id] = (need[id] ?? 0) + item.count;
+    }
+  }
+  return need;
+};
+const availableFor = (g, designId) => {
+  const bom = rackBom(g, designId) ?? {};
+  const held = {};
+  for (const [did, n] of Object.entries(g.rackReserve ?? {})) {
+    if (did === designId || !(n > 0)) continue;
+    for (const [p, per] of Object.entries(rackBom(g, did) ?? {})) held[p] = (held[p] ?? 0) + per * n;
+  }
+  const out = {};
+  for (const p of Object.keys(bom)) out[p] = Math.max(0, (g.inventory[p] ?? 0) - (held[p] ?? 0));
+  return out;
+};
+const reserve = (g, designId, n) => {
+  g.rackReserve = { ...g.rackReserve ?? {}, [designId]: Math.max(0, (g.rackReserve?.[designId] ?? 0) + n) };
+  if (!g.rackReserve[designId]) delete g.rackReserve[designId];
+};
+const FLOOR_UNIT_SLOTS = 10;
+const FLOOR_UNIT_COST = 25e4 * FLOOR_UNIT_SLOTS;
+const floorCommissionMonths = (units) => 2 + Math.ceil(units / 5);
+const creditLimit = (state2) => 5e6 + estimateCapexBasis(state2) * 0.6;
+function newGameState(seed) {
+  const hall = {
+    id: "hall-1",
+    name: "Hall A",
+    coolingClass: "air",
+    rackSlots: 40,
+    itPowerKW: 500,
+    coolingKW: 600,
+    pue: 1,
+    powerEquip: { "et-padmount-2500": 1, "se-galaxy-vs-500": 1 },
+    coolingEquip: { "vt-crah-100": 6 },
+    racks: [],
+    floorLoadKgPerRack: 1500
+  };
+  hall.pue = computePUE(hall, getItem);
+  const g = {
+    month: START_MONTH,
+    seed,
+    cash: 5e7,
+    debt: 0,
+    reputation: 10,
+    halls: [hall],
+    trays: [],
+    racks: [],
+    clusters: [],
+    inventory: {},
+    orders: [],
+    availableContracts: [],
+    activeContracts: [],
+    log: [],
+    staff: 2,
+    utilityUSDPerKWh: 0.07,
+    uplinks: { "transit-10g-a": 1 },
+    codexSeen: [],
+    missionsDone: [],
+    history: [],
+    powerOffers: [],
+    powerContracts: [],
+    spotClusters: [],
+    spotReserve: 0,
+    status: "playing",
+    negCashMonths: 0,
+    saveVersion: SAVE_VERSION,
+    stats: { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 },
+    rivals: initialRivals(seed),
+    marketPriceIndex: 1
+  };
+  g.powerOffers = [...generatePowerOffers(g, mulberry32(seed + 1), 3)];
+  g.availableContracts = generateContracts(g, START_MONTH, mulberry32(seed));
+  g.log.push({
+    month: START_MONTH,
+    level: "info",
+    text: "GIGAWATT day one: $50M cash, Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh."
+  });
+  g.log.push({
+    month: START_MONTH,
+    level: "info",
+    text: "Order parts, design a tray and rack, then place racks — contracts on the market pay once a cluster serves them."
+  });
+  return g;
+}
+function makeCtx(get, set) {
+  return {
+    get,
+    set,
+    commit: (mutate) => {
+      const g = JSON.parse(JSON.stringify(get().game));
+      const res = mutate(g) ?? ok();
+      if (res.ok) set({ game: g });
+      return res;
+    },
+    logln: (g, level, text) => {
+      g.log.push({ month: g.month, level, text });
+      if (g.log.length > 400) g.log.splice(0, g.log.length - 400);
+    }
+  };
+}
 const trayIdOf = (t) => `tray-${t.id}`;
 const rackIdOf = (t) => `rack-${t.id}`;
 const trayOf = (t) => ({ id: trayIdOf(t), name: `${t.platform} tray`, chassisId: t.tray.chassisId, parts: t.tray.parts });
@@ -10202,6 +10394,22 @@ const vendorsSystem = {
       s2.vendorRel[vendorId] = Math.max(0, rel - REL_DECAY_PER_MONTH);
   }
 };
+const launchesSystem = {
+  id: "launches",
+  run: ({ s: s2, log }) => {
+    for (const l of LAUNCHES) {
+      if (l.month !== s2.month) continue;
+      s2.launchesSeen = [...s2.launchesSeen ?? [], l.id];
+      s2.news = [...s2.news ?? [], l.id];
+      log("info", `📣 ${l.venue}: ${l.headline}`);
+    }
+    for (const l of LAUNCHES) {
+      if (l.month >= s2.month) continue;
+      const shipping = l.items.map((id) => getItem(id)).filter((it2) => it2 && shipMonthOf(it2) === s2.month);
+      if (shipping.length) log("good", `📦 Now shipping: ${shipping.map((it2) => it2.name).join(", ")} (announced at ${l.venue}). Pre-orders are delivered first; everyone else orders at the going rate.`);
+    }
+  }
+};
 const DEFAULT_TICK = {
   accelFailureProbPerMonth: 1 / 8e3,
   commissionFailProb: 0.04,
@@ -10223,6 +10431,7 @@ const PIPELINE = [
   rivalsSystem,
   contractMarket,
   worldEvents,
+  launchesSystem,
   spotAndPower,
   finances,
   history,
@@ -10368,7 +10577,7 @@ const clustersActions = (c) => {
       if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(", ")}.`);
       const claimed = ids.filter((id) => placed2.get(id)?.clusterId);
       if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(", ")}.`);
-      const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m, c2) => Math.max(m, parseInt(c2.id.replace(/\D/g, "")) || 0), 0)) + 1;
+      const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m2, c2) => Math.max(m2, parseInt(c2.id.replace(/\D/g, "")) || 0), 0)) + 1;
       g.clusterSeq = nextN;
       const cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
       const stats = evaluateCluster(cluster, {
@@ -10407,26 +10616,31 @@ const clustersActions = (c) => {
     })
   };
 };
-function quote(t, racks, month) {
+function quote(t, racks, month, preorder = false) {
   const lines = [];
   const unavailable = [];
   const capped = [];
   let cost = 0, lead = 1;
+  let pre = false, ships = 0;
   for (const [id, n] of Object.entries(templateBom(t, racks))) {
     const item = getItem(id);
-    const o2 = offerAt(item, month);
+    const o2 = offerAt(item, month, preorder);
     if (!o2.available) {
       unavailable.push(item.name);
       continue;
     }
     if (o2.qtyCap && n > o2.qtyCap) capped.push(`${item.name} (cap ${o2.qtyCap}/qtr)`);
     const unit = Math.round(o2.unitPrice * (1 - volumeDiscount(item, n, o2.unitPrice)) * (1 + t.premium));
+    if (o2.preorder) {
+      pre = true;
+      ships = Math.max(ships, o2.ships ?? 0);
+    }
     lines.push({ id, name: item.name, n, unit, total: unit * n });
     cost += unit * n;
     lead = Math.max(lead, Math.max(1, Math.round(o2.leadMonths * t.leadFactor)));
   }
   lines.sort((a, b) => b.total - a.total);
-  return { cost, lead, lines, unavailable, capped };
+  return { cost, lead, lines, unavailable, capped, ...pre ? { preorder: true, ships } : {} };
 }
 function hallChecks(g, t, racks) {
   const f = templateFacts(t);
@@ -11074,7 +11288,8 @@ const sessionActions = (c) => {
       }
       set({ game: g });
     },
-    setMode: (m) => set((s2) => ({ game: { ...s2.game, mode: m } })),
+    ackNews: () => set((s2) => ({ game: { ...s2.game, news: (s2.game.news ?? []).slice(1) } })),
+    setMode: (m2) => set((s2) => ({ game: { ...s2.game, mode: m2 } })),
     patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
     addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
     nextMonth: () => {
@@ -11283,10 +11498,10 @@ function observe() {
   const g = G$2();
   const pnl = selectMonthlyPnL(g);
   const racks = g.halls.flatMap((h) => h.racks);
-  const by = (f) => racks.reduce((m, r) => {
+  const by = (f) => racks.reduce((m2, r) => {
     const k2 = f(r);
-    m[k2] = (m[k2] ?? 0) + 1;
-    return m;
+    m2[k2] = (m2[k2] ?? 0) + 1;
+    return m2;
   }, {});
   return {
     month: g.month,
@@ -11296,7 +11511,7 @@ function observe() {
     netWorth: selectNetWorth(g),
     reputation: g.reputation,
     monthlyPnL: pnl,
-    halls: g.halls.map((h) => ({ id: h.id, name: h.name, coolingClass: h.coolingClass, rackSlots: h.rackSlots, racks: h.racks.length, rackStatus: h.racks.reduce((m, r) => (m[r.status] = (m[r.status] ?? 0) + 1, m), {}), itPowerKW: h.itPowerKW, coolingKW: h.coolingKW, pue: h.pue, powerEquip: h.powerEquip, coolingEquip: h.coolingEquip })),
+    halls: g.halls.map((h) => ({ id: h.id, name: h.name, coolingClass: h.coolingClass, rackSlots: h.rackSlots, racks: h.racks.length, rackStatus: h.racks.reduce((m2, r) => (m2[r.status] = (m2[r.status] ?? 0) + 1, m2), {}), itPowerKW: h.itPowerKW, coolingKW: h.coolingKW, pue: h.pue, powerEquip: h.powerEquip, coolingEquip: h.coolingEquip })),
     rackStatus: by((r) => r.status),
     inventory: g.inventory,
     spares: g.spareStock ?? {},
@@ -11598,8 +11813,8 @@ const CONCEPTS = [
     when: "When any rack design exceeds ~40 kW or uses a liquid-cooled chassis.",
     go: "facility",
     status: (g) => {
-      const m = maxRackKW(g);
-      return m >= 40 ? { level: g.halls.some((h) => h.coolingClass === "dlc") ? "ok" : "now", text: `Your densest rack is ${m.toFixed(0)} kW — ${g.halls.some((h) => h.coolingClass === "dlc") ? "you have a liquid hall." : "build a DLC hall."}` } : { level: "na", text: `Densest rack ${m.toFixed(0)} kW — air is fine.` };
+      const m2 = maxRackKW(g);
+      return m2 >= 40 ? { level: g.halls.some((h) => h.coolingClass === "dlc") ? "ok" : "now", text: `Your densest rack is ${m2.toFixed(0)} kW — ${g.halls.some((h) => h.coolingClass === "dlc") ? "you have a liquid hall." : "build a DLC hall."}` } : { level: "na", text: `Densest rack ${m2.toFixed(0)} kW — air is fine.` };
     }
   },
   {
@@ -11611,8 +11826,8 @@ const CONCEPTS = [
     when: "Racks of 20–40 kW in an air hall.",
     go: "facility",
     status: (g) => {
-      const m = maxRackKW(g);
-      return m > 22 && m < 40 ? { level: "soon", text: `Your densest rack is ${m.toFixed(0)} kW — consider RDHx.` } : { level: "na", text: "Not needed at your rack density." };
+      const m2 = maxRackKW(g);
+      return m2 > 22 && m2 < 40 ? { level: "soon", text: `Your densest rack is ${m2.toFixed(0)} kW — consider RDHx.` } : { level: "na", text: "Not needed at your rack density." };
     }
   },
   {
@@ -12025,14 +12240,14 @@ const designQueries = {
 const catalogQueries = {
   offer: (itemId) => {
     const it2 = getItem(itemId);
-    return it2 ? offerAt(it2, G$1().month) : null;
+    return it2 ? offerAt(it2, G$1().month, true) : null;
   },
-  offersAll: () => Object.fromEntries(ALL_ITEMS.map((i) => [i.id, offerAt(i, G$1().month)])),
+  offersAll: () => Object.fromEntries(ALL_ITEMS.map((i) => [i.id, offerAt(i, G$1().month, true)])),
   volumeDiscount: (itemId, n, unit) => volumeDiscount(getItem(itemId), n, unit),
-  quote: (tid, racks) => quote(tpl(tid), racks, G$1().month),
+  quote: (tid, racks) => quote(tpl(tid), racks, G$1().month, true),
   hallChecks: (tid, racks) => hallChecks(G$1(), tpl(tid), racks),
   templateFacts: (tid) => templateFacts(tpl(tid)),
-  templatesAll: () => TEMPLATES.map((t) => ({ ...templateFacts(t), id: t.id, racksFor1: 1, quote1: quote(t, 1, G$1().month) })),
+  templatesAll: () => TEMPLATES.map((t) => ({ ...templateFacts(t), id: t.id, racksFor1: 1, quote1: quote(t, 1, G$1().month, true) })),
   templateBom: (tid, racks) => templateBom(tpl(tid), racks),
   racksFor: (tid, n) => racksFor(tpl(tid), n)
 };
@@ -12057,8 +12272,8 @@ const contractsQueries = {
     const g = G$1();
     const stats = evaluateCluster(cluster, ctxOf(g));
     const accel = getItem(stats.acceleratorId);
-    const m = MODELS.find((x) => x.id === modelId);
-    return { stats, train: accel ? trainingTokensPerSec(stats, accel, m) : null, infer: accel ? inferenceCapacity(stats, accel, m, { contextTokens: ctxTokens }) : null };
+    const m2 = MODELS.find((x) => x.id === modelId);
+    return { stats, train: accel ? trainingTokensPerSec(stats, accel, m2) : null, infer: accel ? inferenceCapacity(stats, accel, m2, { contextTokens: ctxTokens }) : null };
   },
   autoFabric: (rackIds, target) => autoFabric(G$1(), rackIds, target),
   contractFit: (cid) => {
@@ -12095,12 +12310,25 @@ const economyQueries = {
   powerSources: () => POWER_SOURCES
 };
 const knowledgeQueries = {
+  /** The keynote calendar with live status, plus the pending keynote cards. */
+  launches: () => {
+    const g = G$1();
+    const list = LAUNCHES.map((l) => {
+      const items = l.items.map((id) => getItem(id)).filter(Boolean).map((it2) => {
+        const ships = shipMonthOf(it2), opens = preorderOpens(it2) ?? ships;
+        return { id: it2.id, name: it2.name, vendor: it2.vendor, ships, opens, state: g.month >= ships ? "shipping" : g.month >= opens ? "preorder" : "announced" };
+      });
+      const status = g.month < l.month ? "upcoming" : items.length && items.every((i) => i.state === "shipping") ? "shipped" : items.some((i) => i.state === "preorder") ? "preorder" : items.length ? "announced" : "past";
+      return { ...l, items, status };
+    });
+    return { list, news: (g.news ?? []).map((id) => list.find((l) => l.id === id)).filter(Boolean) };
+  },
   models: () => {
     const y = 2020 + G$1().month / 12;
     return { all: MODELS, tier: scaleOutTier(y), anchor: gpuHourAnchor(y) };
   },
   concepts: () => CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G$1()) })),
-  missions: () => MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go, done: m.done(G$1()) }))
+  missions: () => MISSIONS.map((m2) => ({ id: m2.id, title: m2.title, hint: m2.hint, lesson: m2.lesson, reward: m2.reward, go: m2.go, done: m2.done(G$1()) }))
 };
 const lifecycleQueries = {
   lifecycle: () => {
@@ -12277,23 +12505,23 @@ function init() {
     vendors: VENDORS,
     templates: TEMPLATES,
     models: MODELS,
-    missions: MISSIONS.map((m) => ({ id: m.id, title: m.title, hint: m.hint, lesson: m.lesson, reward: m.reward, go: m.go })),
+    missions: MISSIONS.map((m2) => ({ id: m2.id, title: m2.title, hint: m2.hint, lesson: m2.lesson, reward: m2.reward, go: m2.go })),
     concepts: CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go })),
     actions: ACTIONS
   };
 }
 function claim() {
   const done = [];
-  for (const m of MISSIONS) {
+  for (const m2 of MISSIONS) {
     const g = G();
-    if (g.missionsDone.includes(m.id) || !m.done(g)) continue;
+    if (g.missionsDone.includes(m2.id) || !m2.done(g)) continue;
     useGame.setState((s2) => ({ game: {
       ...s2.game,
-      cash: s2.game.cash + m.reward,
-      missionsDone: [...s2.game.missionsDone, m.id],
-      log: [...s2.game.log, { month: s2.game.month, level: "good", text: `★ Mission complete: ${m.title} (+$${Math.round(m.reward).toLocaleString("en-US")}). ${m.lesson}` }]
+      cash: s2.game.cash + m2.reward,
+      missionsDone: [...s2.game.missionsDone, m2.id],
+      log: [...s2.game.log, { month: s2.game.month, level: "good", text: `★ Mission complete: ${m2.title} (+$${Math.round(m2.reward).toLocaleString("en-US")}). ${m2.lesson}` }]
     } }));
-    done.push({ id: m.id, title: m.title, reward: m.reward });
+    done.push({ id: m2.id, title: m2.title, reward: m2.reward });
     break;
   }
   return done;
@@ -12315,7 +12543,7 @@ function env(name, a) {
       return hash();
     case "autoplay": {
       const agent = (PERSONAS[a[0] ?? "operator"] ?? PERSONAS.operator)(G().seed);
-      for (let m = 0; m < (a[1] ?? 12); m++) {
+      for (let m2 = 0; m2 < (a[1] ?? 12); m2++) {
         if (G().status && G().status !== "playing") break;
         for (const act of agent(observe(), () => legalActions())) step(act);
       }

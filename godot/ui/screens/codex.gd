@@ -8,11 +8,13 @@ var folds := {}
 
 const KIND_LBL := {"accelerator": "Accelerators", "cpu": "CPUs", "memory": "Memory", "nic": "Network cards", "switch": "Switches", "cable": "Cables & optics", "chassis": "Chassis & boards", "storage": "Storage", "power": "Power", "cooling": "Cooling", "rack": "Racks", "uplink": "Internet uplinks"}
 
+static var next_view := ""
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b
+	if next_view != "": view = next_view; next_view = ""
 	if app.learn_id != "": sel = app.learn_id; app.learn_id = ""; view = "list"
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)

@@ -18,6 +18,7 @@ import { staffingCheck } from './systems/staffing';
 import { endgame } from './systems/endgame';
 import { rivalsSystem } from './systems/rivals';
 import { vendorsSystem } from './systems/vendors';
+import { launchesSystem } from './systems/launches';
 
 export type { TickOptions } from './systems/types';
 
@@ -42,7 +43,7 @@ export const rackFailureProb = (
 /** The month, in order. Add new dynamics by inserting a System here. */
 export const PIPELINE: readonly System[] = [
   deliveries, vendorsSystem, floorSpace, commissioning, clusterStats, staffingCheck, failures, pue,
-  serveContracts, rivalsSystem, contractMarket, worldEvents, spotAndPower, finances, history, endgame,
+  serveContracts, rivalsSystem, contractMarket, worldEvents, launchesSystem, spotAndPower, finances, history, endgame,
 ];
 
 export function advanceMonth(state: GameState, opts: TickOptions = {}): GameState {

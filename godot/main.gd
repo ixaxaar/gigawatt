@@ -40,6 +40,9 @@ var dock_btns := {}
 var menu_ui: Control
 var banner: Label
 var guide: GuideOverlay
+var keynote: KeynoteOverlay
+var coach: Coach
+var next_btn: Button
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
@@ -54,6 +57,7 @@ func _ready() -> void:
 	ui.add_child(root)
 	_build_shell(); _title()
 	pad = Pad.new(); pad.app = self; add_child(pad)
+	coach = Coach.new(); coach.app = self; add_child(coach)
 	b.changed.connect(_on_changed)
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s) else: _inspect(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
@@ -64,6 +68,7 @@ func _ready() -> void:
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
+	if OS.get_environment("GW_GUIDE") != "": get_tree().create_timer(0.6).timeout.connect(func(): guide.visible = true; guide.open())
 	if OS.get_environment("GW_INSPECT") != "": get_tree().create_timer(0.8).timeout.connect(func(): _inspect(int(OS.get_environment("GW_INSPECT"))))
 	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
 
@@ -85,7 +90,7 @@ func _build_shell() -> void:
 	hb.add_child(Kit.btn("Save", func(): var r := b.act("save"); toast("Game saved.", "good"), "", 14))
 	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
 		var bt := Kit.btn(s[0], func(): set_speed(s[1]), "", 15); bt.custom_minimum_size = Vector2(46, 0); lbl["sp%d" % s[1]] = bt; hb.add_child(bt)
-	hb.add_child(Kit.btn("NEXT MONTH ▶", next_month, "go", 17))
+	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
 	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
 	hb.add_child(Kit.btn("QUIT ✕", func(): _menu_do("quit"), "danger", 14))
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
@@ -94,6 +99,7 @@ func _build_shell() -> void:
 		var dk: Array = DOCK[i]
 		var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock.add_child(d); dock_btns[dk[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
+	keynote = KeynoteOverlay.new(); keynote.app = self; keynote.visible = false; root.add_child(keynote)
 	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1, 0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
 	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
 	hall.hover_changed.connect(_on_rack_hover)
@@ -149,6 +155,7 @@ func _load_scenario(id: String) -> void:
 
 func _new_game(mode: String) -> void:
 	b.act("newGame", [int(Time.get_unix_time_from_system()) % 100000, mode]); b.act("setMode", [mode]); _begin()
+	if (Settings.tutorial != "off" and not OS.has_environment("GW_SMOKE")) or OS.has_environment("GW_COACH"): coach.start()
 
 func _begin() -> void:
 	var tt := root.get_node_or_null("title")
@@ -170,6 +177,8 @@ func _on_changed() -> void:
 	_seen_log = g.log.size()
 	hall.rebuild()
 	_check_end()
+	check_keynote()
+	coach.tick()
 	if hall.get_meta("n", 0) == 0: pass
 	if screens.has(cur) and screens[cur].has_method("refresh"): screens[cur].refresh()
 
@@ -231,6 +240,7 @@ func modal() -> Control:
 	if menu_ui != null and is_instance_valid(menu_ui): return menu_ui
 	if settings_ui != null and is_instance_valid(settings_ui): return settings_ui
 	if end_ui != null and is_instance_valid(end_ui): return end_ui
+	if keynote != null and keynote.visible: return keynote
 	if guide != null and guide.visible: return guide
 	var tt := root.get_node_or_null("title")
 	if tt != null and not started: return tt
@@ -247,6 +257,7 @@ func _dock(key: String) -> void:
 func show_screen(id: String) -> void:
 	for sc in screens.values(): sc.visible = false
 	cur = id; last_tab[dock_key(id)] = id
+	if coach != null: coach.visited(dock_key(id))
 	Kit.accent = accent_of(id)
 	if top != null: top.add_theme_stylebox_override("panel", _top_sb(Kit.accent))
 	hall.visible = not FULL.has(id)
@@ -304,18 +315,30 @@ func next_month() -> void:
 	audio.play("month"); b.act("nextMonth"); b.act("stepEasy"); _claim()
 	if OS.get_environment("GW_NOAUTOSAVE") == "": pass
 
+## Launch keynotes queue up in the engine (g.news); show them one at a time and stop the clock while one is open.
+func check_keynote() -> void:
+	if not started or keynote == null or keynote.visible or end_ui != null or menu_ui != null: return
+	if Engine.get_frames_drawn() < 5: get_tree().create_timer(0.25).timeout.connect(check_keynote); return   # let the first layout pass finish
+	var news: Array = b.g.get("news", [])
+	if news.is_empty(): return
+	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE"): b.act("ackNews"); return
+	var l: Dictionary = b.q("launches")
+	if l.news.is_empty(): b.act("ackNews"); return
+	keynote.open(l.news[0], l.news.size() - 1); speed = 0; clock = 0.0; audio.play("good")
+	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == 0 else Color.WHITE
+
 func _claim() -> void:
 	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("good"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
 
 func _process(dt: float) -> void:
 	_process_tip()
-	if not started or speed == 0 or menu_ui != null: return
+	if not started or speed == 0 or menu_ui != null or keynote.visible: return
 	clock += dt / SECS[speed]; bar_month.value = clock
 	if clock >= 1.0: clock = 0.0; next_month()
 
 func _dbg() -> void:
 	for k in screens: print(k, " rect=", screens[k].get_global_rect(), " vis=", screens[k].visible)
-	print("holder=", holder.get_global_rect())
+	print("holder=", holder.get_global_rect(), " root=", root.get_global_rect(), " top=", top.get_global_rect())
 
 func _input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo:
@@ -384,6 +407,14 @@ func _smoke() -> void:
 	var fo := get_viewport().gui_get_focus_owner()
 	print("PAD OK focus=", fo.get_class() if fo != null else "none", " cur=", cur)
 	pad.set_active(false)
+	# tutorial: reading steps advance on "Got it", drawer steps on a visit; keynotes open and acknowledge cleanly
+	var gm: Dictionary = b.g; coach.start(); assert(coach.idx == 0); coach._next()
+	show_screen("contracts"); assert(coach.STEPS[coach.idx].id != "customers")
+	var before: int = coach.idx; show_screen("shop"); show_screen("facility"); show_screen("dash")
+	print("COACH OK step=", coach.STEPS[coach.idx].id, " (was ", before, ") card=", coach.card.visible)
+	coach.stop(false)
+	b.act("ackNews")
+	var lk: Dictionary = b.q("launches"); print("LAUNCHES ", lk.list.size(), " news=", lk.news.size())
 	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
 	b.stop(); get_tree().quit()
 
@@ -472,9 +503,9 @@ func _menu() -> void:
 	if menu_ui != null: menu_ui.queue_free(); menu_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); menu_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -190; vb.offset_bottom = 190; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -220; vb.offset_bottom = 220; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
-	for a in [["Resume", "resume"], ["Save game", "save"], ["Settings", "settings"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Settings", "settings"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Quit to title", "title"], ["Quit game", "quit"]]:
 		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
 
 func _menu_do(a: String) -> void:
@@ -482,6 +513,7 @@ func _menu_do(a: String) -> void:
 		"resume": _menu()
 		"save": _menu(); _slots("save")
 		"settings": _menu(); _settings()
+		"coach": _menu(); if started: coach.start()
 		"mute": audio.muted = not audio.muted
 		"title": b.act("save"); b.stop(); get_tree().reload_current_scene()
 		"quit":
