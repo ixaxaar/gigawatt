@@ -36,6 +36,8 @@ var _lheld := false
 var labels_on := true
 var _over: Node3D
 var _lamps: Array = []
+var _hall_ratio := 0.0
+var _max_rack_kw := 1.0
 var _ml: Dictionary = {}
 var _rack_boxes: Array = []
 var _hover := -1
@@ -147,6 +149,8 @@ func rebuild() -> void:
 	var heat := _heat(hall)
 	var cap := minf(hall.coolingKW, hall.itPowerKW)
 	var ratio := (heat / cap) if cap > 0.0 else (2.0 if heat > 0 else 0.0)
+	_hall_ratio = ratio; _max_rack_kw = 1.0
+	for d in _rs.values(): _max_rack_kw = maxf(_max_rack_kw, d.get("kW", 0.0))
 	_build_shell(hall, sz, cx, cz)
 	_build_aisles(sz, cx, ratio)
 	var occupied := {}
@@ -265,13 +269,28 @@ func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
 			var qm := SphereMesh.new(); qm.radius = 0.5; qm.height = 1.0; sm.mesh = qm
 			var smat := StandardMaterial3D.new(); smat.albedo_color = Color(0.3, 0.3, 0.32, 0.35); smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; sm.material_override = smat; parent.add_child(sm)
 			var fl := OmniLight3D.new(); fl.light_color = Color(1, 0.15, 0.1); fl.light_energy = 1.2; fl.omni_range = 3.0; fl.position = Vector3(0, 1.6, 0.9); parent.add_child(fl)
+	if st != "ordered": _thermal_dots(parent, r, st)
 	var ci := _cluster_of(r)
 	if not ci.is_empty() and st != "ordered":
 		var cc: Color = ci.color
-		_box(parent, Vector3(0, RH + 0.03, 0), Vector3(RW - 0.004, 0.04, RD - 0.03), _emit(cc, 1.6, false))        # cluster-coloured crown
+		for sx in [-1, 1]: _box(parent, Vector3(sx * (RW * 0.5 - 0.03), RH + 0.03, 0), Vector3(0.045, 0.035, RD - 0.04), _emit(cc, 1.3, false))   # cluster-coloured edge rails (the top stays dark for the label)
 		_box(parent, Vector3(0, 0.006, RD * 0.5 + 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false))    # floor tag, front
 		_box(parent, Vector3(0, 0.006, -RD * 0.5 - 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false))   # floor tag, rear
 	_rack_boxes.append({"slot": i, "aabb": AABB(p + Vector3(-RW * 0.5, 0, -RD * 0.5), Vector3(RW, RH, RD)), "rack": r})
+
+## Four dots on the front edge of the rack top: how hard this rack is running against what the hall can cool.
+## green = fine, amber = hall near its limit, red = overloaded or failed; unlit dots are headroom.
+func _thermal_dots(parent: Node3D, r: Dictionary, st: String) -> void:
+	var kw: float = _rs.get(r.designId, {}).get("kW", 0.0)
+	var lit := clampi(int(ceil(4.0 * kw / maxf(1.0, _max_rack_kw))), 1, 4) if st == "online" else (4 if st == "failed" else 0)
+	var col := Color(0.25, 1.0, 0.5)
+	if st == "failed": col = Color(1.0, 0.2, 0.15)
+	elif st == "installing" or st == "commissioning": col = Color(0.5, 0.6, 0.7)
+	elif _hall_ratio >= 1.0: col = Color(1.0, 0.2, 0.15)
+	elif _hall_ratio >= 0.8: col = Color(1.0, 0.75, 0.2)
+	for k in 4:
+		var on := k < lit
+		_box(parent, Vector3(-0.2 + k * 0.133, RH + 0.05, RD * 0.5 - 0.075), Vector3(0.085, 0.02, 0.085), _emit(col, 0.9, false) if on else _solid(Color(0.06, 0.07, 0.08), 0.8, 0.0))
 
 ## Cluster + customer that a placed rack belongs to ({} if unclustered). Colour is stable per cluster id.
 func _cluster_of(r: Dictionary) -> Dictionary:
