@@ -28,9 +28,9 @@ func _preview(col: Control, pv: Dictionary) -> void:
 	if pv.deliveries.size() > 0:
 		var n := 0; for d in pv.deliveries: n += int(d.qty)
 		bits.append("%d part%s arriving" % [n, "" if n == 1 else "s"])
-	if int(pv.racks.commissioning) > 0: bits.append("%d rack(s) start burn-in" % int(pv.racks.commissioning))
-	if int(pv.racks.online) > 0: bits.append("%d rack(s) go online" % int(pv.racks.online))
-	if int(pv.racks.repaired) > 0: bits.append("%d rack(s) repaired" % int(pv.racks.repaired))
+	if int(pv.racks.commissioning) > 0: bits.append(Kit.plural(pv.racks.commissioning, "rack") + " start burn-in")
+	if int(pv.racks.online) > 0: bits.append(Kit.plural(pv.racks.online, "rack") + " go online")
+	if int(pv.racks.repaired) > 0: bits.append(Kit.plural(pv.racks.repaired, "rack") + " repaired")
 	for f in pv.floor: bits.append("+%d slots in %s" % [int(f.slots), f.hall])
 	if pv.completing.size() > 0: bits.append("completing: " + ", ".join(pv.completing))
 	if pv.expiring.size() > 0: bits.append("offers expiring: " + ", ".join(pv.expiring))
@@ -73,7 +73,7 @@ func _rebuild() -> void:
 	var accels: float = 0.0; for c in g.clusters: accels += c.stats.accelerators if c.get("stats") != null else 0.0
 	var serving: int = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0).size()
 	var pl := HBoxContainer.new(); pl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE); pl.offset_top = -150; pl.offset_bottom = -6; pl.offset_left = 8; pl.offset_right = -520; pl.add_theme_constant_override("separation", 10); add_child(pl)
-	_plaque(pl, "REVENUE / MO", Kit.usd(p.revenue), Kit.GR, hist.map(func(h): return h.revenue), "%d contracts serving" % serving)
+	_plaque(pl, "REVENUE / MO", Kit.usd(p.revenue), Kit.GR, hist.map(func(h): return h.revenue), Kit.plural(serving, "contract") + " serving")
 	_plaque(pl, "BURN / MO", Kit.usd(p.opex), Color("#ff7a59"), hist.map(func(h): return h.opex), "power · staff · support · interest")
 	_plaque(pl, "NET / MO", Kit.usd(p.net), Kit.CY if p.net >= 0 else Kit.RD, hist.map(func(h): return h.revenue - h.opex), "after depreciation")
 	_plaque(pl, "NET WORTH", Kit.usd(float(b.q("netWorth"))), Color("#c792ea"), hist.map(func(h): return h.cash), "capex %s · %s GPUs clustered" % [Kit.usd(float(b.q("capexBasis"))), Kit.num(accels)])
@@ -86,7 +86,7 @@ func _rebuild() -> void:
 		var pp := _fold("Easy-path projects (%d)" % projs.size(), "easy", col, projs.filter(func(x): return x.stage != "done").is_empty())
 		pp[1].add_child(Kit.btn("Check now", func(): b.act("stepEasy"), "", 12))
 		for x in projs.slice(maxi(0, projs.size() - 3)):
-			var cust := "Contract"
+			var cust := "Spec build"
 			for c in g.availableContracts:
 				if c.id == x.contractId: cust = c.customer
 			for a in g.activeContracts:
@@ -94,7 +94,12 @@ func _rebuild() -> void:
 			pp[1].add_child(Kit.label("%s · %d× build" % [cust, int(x.racks)], 13))
 			var at: int = -1 if x.stage == "failed" else STAGES.find(x.stage)
 			var sr := HBoxContainer.new(); sr.add_theme_constant_override("separation", 4); pp[1].add_child(sr)
-			for i in STAGES.size(): sr.add_child(Kit.label(STAGE_LBL[STAGES[i]], 11, Kit.RD if x.stage == "failed" else (Kit.GR if i < at else (Kit.CY if i == at else Kit.DIM))))
+			for i in STAGES.size():
+				var failed: bool = x.stage == "failed"
+				if failed or i <= at:
+					var pc: Color = Kit.RD if failed else (Kit.GR if i < at or x.stage == "done" else Kit.CY)
+					sr.add_child(Kit.chip(STAGE_LBL[STAGES[i]], pc, 12))
+				else: sr.add_child(Kit.label(STAGE_LBL[STAGES[i]], 12, Kit.DIM))
 			pp[1].add_child(Kit.label(("✗ " if x.stage == "failed" else "") + str(x.notes[x.notes.size() - 1] if x.notes.size() > 0 else ""), 11, Kit.DIM, true))
 	var ms: Array = b.q("missions"); var nxt := ms.filter(func(m): return not m.done and not g.missionsDone.has(m.id)).slice(0, 3 if g.get("mode", "operator") == "learner" else 1)
 	var mp := _fold("Next mission · %d of %d done" % [g.missionsDone.size(), ms.size()], "missions", col, false)

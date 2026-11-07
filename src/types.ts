@@ -566,6 +566,8 @@ export interface Order { id: string; itemId: string; qty: number; unitPrice: num
 export interface RenewalTag { renewalOf?: string }
 export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number;   /** The customer already granted one build-delay extension. */
   extended?: boolean;
+  /** A renewal offer for this contract is already on the board (queued four months before the end). */
+  renewalQueued?: boolean;
   /** Net revenue this contract has paid so far. */
   revenueEarned?: number;
 }

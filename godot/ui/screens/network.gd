@@ -93,7 +93,7 @@ func _rebuild() -> void:
 		var cc0 := Kit.cluster_color(g, c.id)
 		p3[1].add_child(Kit.rich("[color=#%s]■[/color] [b]%s[/b]  [color=#8fb0c8]%s · %d rack%s[/color]" % [cc0.to_html(false), c.name, c.fabric.scaleOutTech, c.rackIds.size(), "" if c.rackIds.size() == 1 else "s"], 13))
 		p3[1].add_child(Kit.label(("serving: " + ", ".join(custs)) if custs.size() > 0 else "not serving any customer", 11, Kit.GR if custs.size() > 0 else Kit.DIM, true))
-		if c.get("stats") != null: p3[1].add_child(Kit.label("%s accels · domain %s · %s PF fp8 · %.0f GB/s/GPU" % [Kit.num(c.stats.accelerators), c.stats.scaleUpDomain, Kit.num(c.stats.peakPFLOPSFp8), c.stats.effScaleOutGBs], 11, Kit.DIM, true))
+		if c.get("stats") != null: p3[1].add_child(Kit.label("%s accels · domain %d · %s PF %s · %.0f GB/s/GPU" % [Kit.num(c.stats.accelerators), int(c.stats.scaleUpDomain), Kit.num(c.stats.peakPFLOPSFp8 if c.stats.peakPFLOPSFp8 > 0 else c.stats.peakPFLOPSBf16), "fp8" if c.stats.peakPFLOPSFp8 > 0 else "bf16", c.stats.effScaleOutGBs], 11, Kit.DIM, true))
 		var br := HFlowContainer.new(); br.add_theme_constant_override("h_separation", 6); p3[1].add_child(br)
 		br.add_child(Kit.btn("Uncluster", func(): msg = b.act("disbandCluster", [c.id]).message; app.sfx("click"); refresh(), "danger", 12))
 		br.add_child(Kit.btn("Re-cluster (edit racks)", func():

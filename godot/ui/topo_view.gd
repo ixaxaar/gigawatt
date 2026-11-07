@@ -13,7 +13,7 @@ func _s(p: Vector2) -> Vector2:
 	var k := minf(size.x / W, size.y / H); return Vector2((size.x - W * k) * 0.5, (size.y - H * k) * 0.5) + p * k
 func _k() -> float: return minf(size.x / W, size.y / H)
 func _txt(p: Vector2, t: String, sz: int, col: Color, center := false) -> void:
-	var fnt: Font = Fonts.regular; var px := int(sz * _k()); var w := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+	var fnt: Font = Fonts.regular; var px := maxi(12, int(sz * _k())); var w := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
 	draw_string(fnt, _s(p) + Vector2(-w * 0.5 if center else 0.0, 0), t, HORIZONTAL_ALIGNMENT_LEFT, -1, px, col)
 func _box(c: Vector2, w: float, h: float, col: Color, label := "") -> void:
 	var r := Rect2(_s(c - Vector2(w * 0.5, 0)), Vector2(w, h) * _k()); draw_rect(r, Color(0.04, 0.05, 0.07), true); draw_rect(r, col, false, 1.5)

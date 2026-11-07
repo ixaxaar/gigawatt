@@ -10,6 +10,7 @@ func _frame(accent: Color, width: float, height: float) -> VBoxContainer:
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.74); dim.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(dim)
 	var pc := PanelContainer.new(); pc.set_anchors_preset(Control.PRESET_CENTER)
 	pc.offset_left = -width / 2.0; pc.offset_right = width / 2.0; pc.offset_top = -height / 2.0; pc.offset_bottom = height / 2.0
+	pc.grow_vertical = Control.GROW_DIRECTION_BOTH
 	pc.add_theme_stylebox_override("panel", Kit.card_sb(accent, Kit.BG, 3, 28)); add_child(pc)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 14); pc.add_child(v)
 	return v
@@ -27,14 +28,13 @@ func _close_chapter() -> void:
 	visible = false; app.b.act("ackStory"); app.check_story()
 
 func open_dilemma(d: Dictionary) -> void:
-	var v := _frame(Color("#ff3d8b"), 820.0, 520.0)
+	var v := _frame(Color("#ff3d8b"), 820.0, 0.0)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); v.add_child(hd)
 	hd.add_child(Kit.chip("DECISION", Kit.AM, 13))
 	var spc := Control.new(); spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hd.add_child(spc)
 	hd.add_child(Kit.label("answer within %d month%s" % [int(d.monthsLeft), "" if int(d.monthsLeft) == 1 else "s"], 12, Kit.DIM))
 	v.add_child(Kit.label(str(d.title), 34, Kit.TX, true))
 	v.add_child(Kit.label(str(d.text), 18, Kit.DIM, true))
-	var sp := Control.new(); sp.size_flags_vertical = Control.SIZE_EXPAND_FILL; v.add_child(sp)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 14); v.add_child(row)
 	for ch in d.choices:
 		var hint := PackedStringArray()

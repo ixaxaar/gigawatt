@@ -17,10 +17,10 @@ const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 /** Queue a returning customer's next contract: same customer and model, size
  *  +50%, price +5%, a 6-month signing window. Deterministic — no RNG. */
-export function queueRenewal(s: GameState, k: Contract): void {
+export function queueRenewal(s: GameState, k: Contract, windowMonths = 6): void {
   const renewed = { ...k } as Contract & RenewalTag;
   renewed.id = `${k.id}-r${s.month}`;
-  renewed.deadlineMonth = s.month + 6;
+  renewed.deadlineMonth = s.month + windowMonths;
   renewed.renewalOf = k.customer;
   if (renewed.kind === 'training') {
     renewed.minAccelerators = Math.round(renewed.minAccelerators * 1.5);
@@ -116,6 +116,11 @@ export const serveContracts: System = {
         log('bad', `SLA miss for ${k.customer} (${k.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(k.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
       }
       ac.monthsServed += 1;
+      // a happy customer puts the renewal on the board four months early, so revenue does not fall off a cliff on the last day
+      if (!ac.renewalQueued && k.durationMonths >= 6 && ac.monthsServed === k.durationMonths - 4 && (ac.slaMisses === 0 || (ac.slaMisses <= 1 && s.reputation >= 20))) {
+        ac.renewalQueued = true; queueRenewal(s, k, 10);
+        log('good', `${k.customer} wants to renew ${k.model.name}: a larger contract is on the board. Sign it before this one ends and revenue keeps flowing.${voiceOf(k.customer) ? ` "${voiceOf(k.customer)!.renews}"` : ''}`);
+      }
       if (ac.monthsServed >= k.durationMonths) completed.push(ac);
     }
 
@@ -133,7 +138,7 @@ export const serveContracts: System = {
       s.reputation = clamp(s.reputation + gain, 0, 100);
       if (s.stats) { s.stats.contractsCompleted += 1; if ((ac.revenueEarned ?? 0) > (s.stats.bestDeal?.revenue ?? 0)) s.stats.bestDeal = { customer: k.customer, model: k.model.name, revenue: Math.round(ac.revenueEarned ?? 0) }; }
       log('good', `${k.customer} contract complete: ${k.model.name}, ${k.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? '+' : ''}${gain}.`);
-      if (ac.slaMisses === 0 || (ac.slaMisses <= 1 && s.reputation >= 20)) {
+      if (!ac.renewalQueued && (ac.slaMisses === 0 || (ac.slaMisses <= 1 && s.reputation >= 20))) {
         queueRenewal(s, k);
         log('good', `${k.customer} wants to renew — a larger contract is on the board for 6 months.${voiceOf(k.customer) ? ` "${voiceOf(k.customer)!.renews}"` : ''}`);
       }

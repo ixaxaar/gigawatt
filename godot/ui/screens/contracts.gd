@@ -95,7 +95,10 @@ func _offer(parent: Control, c: Dictionary) -> void:
 	var b: Bridge = app.b
 	var renew: bool = c.has("renewalOf")
 	var m: Dictionary = money.get(c.id, {})
-	var mline := ("+%s/mo · %s total · ~%s/mo after power" % [Kit.usd(float(m.monthly)), Kit.usd(float(m.total)), Kit.usd(float(m.profitMo))]) if not m.is_empty() else ""
+	var mline := ""
+	if not m.is_empty():
+		mline = "+%s/mo · %s total" % [Kit.usd(float(m.monthly)), Kit.usd(float(m.total))]
+		if absf(float(m.profitMo) - float(m.monthly)) > 0.05 * absf(float(m.monthly)): mline += " · ~%s/mo after power" % Kit.usd(float(m.profitMo))
 	var pn := Kit.fold_panel(("↻ " if renew else "") + "%s · %s%s" % [c.customer, c.model.name, ("  ·  " + mline) if mline != "" else ""], "o" + str(c.id), folds, refresh, true, parent, not renew); var v: VBoxContainer = pn[1]
 	if bool(folds.get("o" + str(c.id), not renew)): return   # collapsed: don't build the (expensive) body until it is opened
 	if renew: v.add_child(Kit.label("↻ %s liked your last contract and wants a bigger one — priced +5%%." % c.renewalOf, 13, Color("#ffd166"), true))

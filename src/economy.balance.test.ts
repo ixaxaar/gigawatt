@@ -5,6 +5,7 @@ const mem = new Map<string, string>();
 import { describe, it, expect } from 'vitest';
 import { useGame } from './store';
 import { buildOptions } from './contractfit';
+import { queueRenewal } from './sim/systems/contracts';
 import { generateContracts, gpuHourAnchor, refTokensPerGpu } from './sim/market';
 import { mulberry32 } from './sim/rng';
 import { BAL } from './sim/balance';
@@ -85,6 +86,27 @@ describe('the early game is not dead air', () => {
       return 99;
     });
     expect(median(months)).toBeLessThanOrEqual(12); expect(Math.max(...months)).toBeLessThanOrEqual(18);
+  });
+});
+
+describe('late-start scenarios cannot be won by doing nothing', () => {
+  it('gold rush: idle is fired and scores far below an operator', () => {
+    const idle = play('idle', 3, 108, 'gold-rush-2025'); const op = play('operator', 3, 108, 'gold-rush-2025');
+    expect(idle.status).toBe('fired');
+    expect(idle.score).toBeLessThan(op.score * 0.4);
+  }, 120000);
+});
+
+describe('renewals', () => {
+  it('an early renewal offer stays open past the end of the running contract', () => {
+    useGame.getState().newGame(5, 'operator');
+    const g = JSON.parse(JSON.stringify(useGame.getState().game)) as GameState;
+    g.month = 30; g.availableContracts = [];
+    const k = generateContracts(g, 30, mulberry32(4))[0];
+    queueRenewal(g, k, 10);
+    const r = g.availableContracts[0] as typeof k & { renewalOf?: string };
+    expect(r.renewalOf).toBe(k.customer);
+    expect(r.deadlineMonth).toBe(40);
   });
 });
 

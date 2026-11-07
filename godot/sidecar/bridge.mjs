@@ -10511,10 +10511,10 @@ const ARCH_BONUS = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const round2 = (x) => Math.round(x * 100) / 100;
 const round3 = (x) => Math.round(x * 1e3) / 1e3;
-function queueRenewal(s2, k2) {
+function queueRenewal(s2, k2, windowMonths = 6) {
   const renewed = { ...k2 };
   renewed.id = `${k2.id}-r${s2.month}`;
-  renewed.deadlineMonth = s2.month + 6;
+  renewed.deadlineMonth = s2.month + windowMonths;
   renewed.renewalOf = k2.customer;
   if (renewed.kind === "training") {
     renewed.minAccelerators = Math.round(renewed.minAccelerators * 1.5);
@@ -10603,6 +10603,11 @@ const serveContracts = {
         log("bad", `SLA miss for ${k2.customer} (${k2.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(k2.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
       }
       ac.monthsServed += 1;
+      if (!ac.renewalQueued && k2.durationMonths >= 6 && ac.monthsServed === k2.durationMonths - 4 && (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20)) {
+        ac.renewalQueued = true;
+        queueRenewal(s2, k2, 10);
+        log("good", `${k2.customer} wants to renew ${k2.model.name}: a larger contract is on the board. Sign it before this one ends and revenue keeps flowing.${voiceOf(k2.customer) ? ` "${voiceOf(k2.customer).renews}"` : ""}`);
+      }
       if (ac.monthsServed >= k2.durationMonths) completed.push(ac);
     }
     for (const ac of defaulted) {
@@ -10622,7 +10627,7 @@ const serveContracts = {
         if ((ac.revenueEarned ?? 0) > (s2.stats.bestDeal?.revenue ?? 0)) s2.stats.bestDeal = { customer: k2.customer, model: k2.model.name, revenue: Math.round(ac.revenueEarned ?? 0) };
       }
       log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
-      if (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20) {
+      if (!ac.renewalQueued && (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20)) {
         queueRenewal(s2, k2);
         log("good", `${k2.customer} wants to renew — a larger contract is on the board for 6 months.${voiceOf(k2.customer) ? ` "${voiceOf(k2.customer).renews}"` : ""}`);
       }
@@ -10928,7 +10933,8 @@ const endgame = {
 const BOARD_TARGETS = [1e-3, 4e-3, 8e-3, 0.011, 0.013, 0.015, 0.017];
 const BOARD_STRIKES = 3;
 const BOARD_LAST_FIRING_REVIEW = 6;
-const boardTarget = (baseNW, k2) => Math.round(baseNW * BOARD_TARGETS[Math.min(BOARD_TARGETS.length - 1, k2 - 2)]);
+const boardTarget = (baseNW, k2) => Math.round(baseNW * BOARD_TARGETS[Math.max(0, Math.min(BOARD_TARGETS.length - 1, k2 - 2))]);
+const firstReviewYear = (startMonth) => startMonth >= 36 ? 1 : 2;
 const board = {
   id: "board",
   run: (c) => {
@@ -10936,19 +10942,21 @@ const board = {
     if (!s2.board) s2.board = { baseNW: Math.max(1e6, netWorthOf(s2)), startMonth: s2.month, strikes: 0, reviews: [] };
     const b = s2.board;
     const k2 = Math.round((s2.month - b.startMonth) / 12);
-    if (k2 < 2 || (s2.month - b.startMonth) % 12 !== 0) return;
+    if (k2 < firstReviewYear(b.startMonth) || (s2.month - b.startMonth) % 12 !== 0) return;
     const hist = s2.history.slice(-3);
     const actual = hist.length ? hist.reduce((n, h) => n + h.revenue, 0) / hist.length : 0;
     const target = boardTarget(b.baseNW, k2);
-    const ok2 = actual >= target;
+    const prev = b.reviews.length ? b.reviews[b.reviews.length - 1].actual : 0;
+    const growing = s2.mode === "operator" && actual >= target * 0.4 && prev > 0 && actual >= prev * 1.25;
+    const ok2 = actual >= target || growing;
     b.reviews.push({ month: s2.month, target, actual: Math.round(actual), ok: ok2 });
     const usd2 = (x) => x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : `$${Math.round(x / 1e3)}k`;
     if (ok2) {
       b.strikes = 0;
-      log("good", `Board review: revenue run-rate ${usd2(actual)}/mo against a ${usd2(target)} target. Margaux Vance: "Keep going." Dev Okonkwo nods at the margins.`);
+      log("good", `Board review: revenue run-rate ${usd2(actual)}/mo against a ${usd2(target)} target${actual < target ? " (growing fast enough to pass)" : ""}. Margaux Vance: "Keep going." Dev Okonkwo nods at the margins. Next year's target: ${usd2(boardTarget(b.baseNW, k2 + 1))}/mo.`);
     } else {
       b.strikes += 1;
-      log("bad", `Board review: revenue run-rate ${usd2(actual)}/mo is under the ${usd2(target)} target (strike ${b.strikes} of ${BOARD_STRIKES}). Margaux Vance: "We funded a datacenter, not a savings account."${s2.mode === "learner" ? " (Learner mode: no consequences.)" : ""}`);
+      log("bad", `Board review: revenue run-rate ${usd2(actual)}/mo is under the ${usd2(target)} target (strike ${b.strikes} of ${BOARD_STRIKES}; next year's target is ${usd2(boardTarget(b.baseNW, k2 + 1))}/mo). Margaux Vance: "We funded a datacenter, not a savings account."${s2.mode === "learner" ? " (Learner mode: no consequences.)" : ""}`);
       if (b.strikes >= BOARD_STRIKES && s2.mode !== "learner" && k2 <= BOARD_LAST_FIRING_REVIEW) finish(c, "fired");
     }
   }
