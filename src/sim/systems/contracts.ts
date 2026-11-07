@@ -7,6 +7,7 @@ import { uplinkGbps, totalNeedGbps } from '../internet';
 import { rackAccels } from './helpers';
 import { BAL } from '../balance';
 import { staffNeeded } from '../staffing';
+import { voiceOf } from './story';
 import type { System } from './types';
 
 const ARCH_BONUS: Record<ActiveContract['contract']['archetype'], number> = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
@@ -108,6 +109,7 @@ export const serveContracts: System = {
         ? contractRevenue(ac, { accelerators, availability })
         : contractRevenue(ac, { tokensPerSec, availability });
       c.revenue += res.netUSD;
+      ac.revenueEarned = (ac.revenueEarned ?? 0) + res.netUSD;
       if (!res.slaMet) {
         ac.slaMisses += 1;
         if (s.stats) s.stats.slaMisses += 1;
@@ -119,7 +121,7 @@ export const serveContracts: System = {
 
     for (const ac of defaulted) {
       s.reputation = clamp(s.reputation - 8, 0, 100);
-      log('bad', `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.`);
+      log('bad', `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.${voiceOf(ac.contract.customer) ? ` "${voiceOf(ac.contract.customer)!.leaves}"` : ''}`);
     }
     s.activeContracts = s.activeContracts.filter((ac) => {
       if (defaulted.includes(ac)) return false;
@@ -129,11 +131,11 @@ export const serveContracts: System = {
       const sloppy = ac.slaMisses > Math.ceil(k.durationMonths / 3);
       const gain = 2 + ARCH_BONUS[k.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
       s.reputation = clamp(s.reputation + gain, 0, 100);
-      if (s.stats) s.stats.contractsCompleted += 1;
+      if (s.stats) { s.stats.contractsCompleted += 1; if ((ac.revenueEarned ?? 0) > (s.stats.bestDeal?.revenue ?? 0)) s.stats.bestDeal = { customer: k.customer, model: k.model.name, revenue: Math.round(ac.revenueEarned ?? 0) }; }
       log('good', `${k.customer} contract complete: ${k.model.name}, ${k.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? '+' : ''}${gain}.`);
       if (ac.slaMisses === 0 || (ac.slaMisses <= 1 && s.reputation >= 20)) {
         queueRenewal(s, k);
-        log('good', `${k.customer} wants to renew — a larger contract is on the board for 6 months.`);
+        log('good', `${k.customer} wants to renew — a larger contract is on the board for 6 months.${voiceOf(k.customer) ? ` "${voiceOf(k.customer)!.renews}"` : ''}`);
       }
       return false;
     });

@@ -10,6 +10,8 @@ import { mulberry32 } from './sim/rng';
 import { BAL } from './sim/balance';
 import { spotRevenue } from './sim/power';
 import { play } from './playtest/run';
+import { PERSONAS } from './playtest/personas';
+import * as E from './env/env';
 import type { GameState } from './types';
 
 const SEEDS = [21, 22, 23];
@@ -69,6 +71,20 @@ describe('spot market is filler, not a business plan', () => {
     const g = base(256, 52); g.clusters[0].stats!.acceleratorId = 'nv-a100-80-sxm';
     const old = spotRevenue(g, new Set()).revenue;
     expect(old).toBeLessThan(now);
+  });
+});
+
+describe('the early game is not dead air', () => {
+  it('a competent operator reaches $250k/month of revenue within 12 months (median) and 18 (worst)', () => {
+    const months = SEEDS.map((seed) => {
+      const agent = PERSONAS.operator(seed); let obs = E.reset({ seed }); const start = E.state().month;
+      for (let m = 0; m < 30; m++) {
+        for (const a of agent(obs, () => E.legalActions())) { const r = E.step(a); obs = r.obs; if (r.done) break; }
+        const h = E.state().history; if (h[h.length - 1].revenue >= 250_000) return E.state().month - start;
+      }
+      return 99;
+    });
+    expect(median(months)).toBeLessThanOrEqual(12); expect(Math.max(...months)).toBeLessThanOrEqual(18);
   });
 });
 

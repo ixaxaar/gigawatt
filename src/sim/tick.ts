@@ -17,6 +17,7 @@ import { finances, history } from './systems/finance';
 import { staffingCheck } from './systems/staffing';
 import { endgame } from './systems/endgame';
 import { board } from './systems/board';
+import { story } from './systems/story';
 import { rivalsSystem } from './systems/rivals';
 import { vendorsSystem } from './systems/vendors';
 import { launchesSystem } from './systems/launches';
@@ -44,8 +45,18 @@ export const rackFailureProb = (
 /** The month, in order. Add new dynamics by inserting a System here. */
 export const PIPELINE: readonly System[] = [
   deliveries, vendorsSystem, floorSpace, commissioning, clusterStats, staffingCheck, failures, pue,
-  serveContracts, rivalsSystem, contractMarket, worldEvents, launchesSystem, spotAndPower, finances, history, board, endgame,
+  serveContracts, rivalsSystem, contractMarket, worldEvents, launchesSystem, spotAndPower, finances, history, story, board, endgame,
 ];
+
+/** Remember the worst thing that happened to the player, for the end screen. */
+const INCIDENT_RANK: [string, number][] = [['🔥', 5], ['🔌', 4], ['❄', 3], ['💸', 3], ['🚢', 2], ['🧵', 2], ['🌡', 1]];
+function recordIncidents(s: GameState, logs: LogEntry[]): void {
+  s.stats ??= { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 };
+  for (const l of logs) {
+    const hit = INCIDENT_RANK.find(([e]) => l.text.startsWith(e));
+    if (hit && (!s.stats.worstIncident || hit[1] > s.stats.worstIncident.rank)) s.stats.worstIncident = { month: l.month, rank: hit[1], text: l.text.replace(/^\S+\s*/, '') };
+  }
+}
 
 export function advanceMonth(state: GameState, opts: TickOptions = {}): GameState {
   if (state.status && state.status !== 'playing') return state; // game over: the world stops
@@ -65,6 +76,7 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
     revenue: 0, served: new Set(), opexUSD: 0, depreciation: 0, interest: 0,
   };
   for (const system of PIPELINE) system.run(c);
+  recordIncidents(s, logs);
   s.log = [...s.log, ...logs].slice(-400);
   return s;
 }

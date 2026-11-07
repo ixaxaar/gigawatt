@@ -4,12 +4,23 @@ import { selectMonthlyPnL } from '../selectors';
 import { staffNeeded } from '../../sim/staffing';
 import { policyOf, maintenanceUSD } from '../../sim/policy';
 import { G } from './shared';
-import { fleetOf, needsOf } from '../needs';
+import { fleetOf, needsOf, offerMoney } from '../needs';
+import { CHAPTERS, DILEMMAS } from '../../sim/story-data';
 
 export const previewQueries: Record<string, (...a: any[]) => any> = {
   fleet: () => fleetOf(G()),
+  offerMoney: () => { const g = G(); return Object.fromEntries(g.availableContracts.map((c) => [c.id, offerMoney(g, c)])); },
   needs: () => needsOf(G()),
   board: () => { const g = G(); return g.board ?? null; },
+  story: () => {
+    const g = G(); const st = g.story;
+    const year = st?.cards[0]; const ch = year !== undefined ? CHAPTERS.find((c) => c.year === year) : undefined;
+    const open = st?.open; const d = open ? DILEMMAS.find((x) => x.id === open.id) : undefined;
+    return {
+      chapter: ch ? { year: ch.year, title: ch.title, text: ch.text } : null,
+      dilemma: d && open ? { id: d.id, title: d.title, text: d.text, monthsLeft: Math.max(0, 3 - (g.month - open.month)), choices: d.choices.map((c, i) => ({ index: i, label: c.label, cash: c.effect.cash ?? 0, rep: c.effect.rep ?? 0 })) } : null,
+    };
+  },
   preview: () => {
     const g = G(); const next = g.month + 1;
     const deliveries = g.orders.filter((o) => o.arriveMonth <= next).map((o) => ({ item: getItem(o.itemId)?.name ?? o.itemId, qty: o.qty, spare: !!o.spare }));

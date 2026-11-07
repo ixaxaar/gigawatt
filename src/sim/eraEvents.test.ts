@@ -1,3 +1,4 @@
+import { LESSONS } from './lessons';
 import { describe, it, expect } from 'vitest';
 import { useGame } from '../store';
 import { disasterPool, scriptedEvents } from './eraEvents';
@@ -117,7 +118,8 @@ describe('disasters firing', () => {
     expect(g.activeContracts).toHaveLength(0);
     expect(g.cash).toBe(cashBefore - Math.round(monthly));
     expect(g.reputation).toBe(9);
-    expect(entries[0].text).toMatch(/deposit|take-or-pay/i);
+    expect(entries[0].text).toMatch(/defaults/);
+    expect(LESSONS.find((l) => l.id === 'default')!.lesson).toMatch(/deposit|take-or-pay/i);
   });
 
   it('supply-chain shock slips every in-transit order by 2 months', () => {
@@ -145,6 +147,5 @@ describe('disasters firing', () => {
     expect(g.activeContracts[0].slaMisses).toBe(3);
     expect(g.activeContracts[1].slaMisses).toBe(0);
     expect(g.cash).toBe(10_000_000 - 40_000 * 2);
-    expect(entries.at(-1)!.text).toMatch(/N\+1 chillers/i);
-  });
+    expect(LESSONS.find((l) => l.id === 'chiller-trip')!.lesson).toMatch(/N\+1 chillers/i);  });
 });

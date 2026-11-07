@@ -52,6 +52,10 @@ export interface GameStore {
   setMode: (m: GameMode) => void;
   /** Dismiss the oldest launch keynote card. */
   ackNews: () => void;
+  /** Dismiss the oldest pending chapter card. */
+  ackStory: () => void;
+  /** Answer the open decision with choice 0 or 1. */
+  resolveDilemma: (choice: number) => ActionResult;
   /** Sell a placed rack (must be unclustered) for its residual value; frees the slot. */
   decommissionRack: (rackId: string) => ActionResult;
   /** Sell warehouse stock at a discount (clear obsolete parts). */

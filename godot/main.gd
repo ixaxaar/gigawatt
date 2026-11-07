@@ -42,6 +42,8 @@ var menu_ui: Control
 var banner: Label
 var guide: GuideOverlay
 var keynote: KeynoteOverlay
+var story_ui: StoryOverlay
+var dilemma_dismissed := ""
 var coach: Coach
 var next_btn: Button
 
@@ -80,6 +82,8 @@ func _ready() -> void:
 		hall.auto_orbit = true; hall.orbit_speed = float(OS.get_environment("GW_ORBIT")); hall._update_cam()
 	if OS.get_environment("GW_CLEAN") != "": get_tree().process_frame.connect(func(): _shell_visible(false); coach.stop(false); guide.visible = false, CONNECT_ONE_SHOT)   # website capture: bare hall
 	if OS.get_environment("GW_CLEAN") != "" and screens.has(cur): screens[cur].visible = false   # screenshots: just the 3D hall
+	if OS.get_environment("GW_SHOT") != "":   # docs/tests: save the window to a PNG after GW_SHOT_AT seconds (default 6) and quit
+		get_tree().create_timer(float(OS.get_environment("GW_SHOT_AT")) if OS.get_environment("GW_SHOT_AT") != "" else 6.0).timeout.connect(func(): get_viewport().get_texture().get_image().save_png(OS.get_environment("GW_SHOT")); get_tree().quit())
 
 func _fatal(msg: String) -> void:
 	var l := Label.new(); l.text = "GIGAWATT engine failed to start:\n" + msg; l.position = Vector2(60, 60); add_child(l)
@@ -93,15 +97,10 @@ func _build_shell() -> void:
 	for p in [["CASH", "cash"], ["DEBT", "debt"], ["NET WORTH", "nw"], ["REPUTATION", "rep"]]:
 		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 22); v.add_child(lbl[p[1]]); hb.add_child(v)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
-	lbl.mode = Kit.btn("", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); hb.add_child(lbl.mode)
-	hb.add_child(Kit.btn("How to play", func(): guide.visible = true; guide.open(), "", 14))
-	hb.add_child(Kit.btn("Sound", func(): audio.toggle_mute(), "", 14))
-	hb.add_child(Kit.btn("Save", func(): var r := b.act("save", [cur_slot]); toast("Game saved." if r.get("ok", false) else "Could not save: %s" % r.get("message", "?"), "good" if r.get("ok", false) else "bad"), "", 14))
-	for s in [["⏸", 0], ["▶", 1], ["▶▶", 2], ["▶▶▶", 3]]:
-		var bt := Kit.btn(s[0], func(): set_speed(s[1]), "", 15); bt.custom_minimum_size = Vector2(46, 0); lbl["sp%d" % s[1]] = bt; hb.add_child(bt)
+	lbl.mode = Kit.btn("Operator", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); lbl.mode.custom_minimum_size = Vector2(112, 0); lbl.mode.tooltip_text = "Game mode: Learner (explainers, no bankruptcy), Operator, Tycoon. Click to change."; hb.add_child(lbl.mode)
+	lbl.speed = Kit.btn("⏸ Paused", func(): set_speed((speed + 1) % 4), "", 15); lbl.speed.custom_minimum_size = Vector2(124, 0); lbl.speed.tooltip_text = "Auto-advance speed: click to cycle Paused, 1x, 2x, 3x. Space advances one month."; hb.add_child(lbl.speed)
 	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
 	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
-	hb.add_child(Kit.btn("SAVE & QUIT ✕", func(): _menu_do("quit"), "danger", 14))
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
 	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -600; dock.offset_right = 600; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
 	for i in DOCK.size():
@@ -109,6 +108,7 @@ func _build_shell() -> void:
 		var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock.add_child(d); dock_btns[dk[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
 	keynote = KeynoteOverlay.new(); keynote.app = self; keynote.visible = false; root.add_child(keynote)
+	story_ui = StoryOverlay.new(); story_ui.app = self; story_ui.visible = false; root.add_child(story_ui)
 	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1, 0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
 	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
 	hall.hover_changed.connect(_on_rack_hover)
@@ -185,12 +185,13 @@ func _on_changed() -> void:
 	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(22, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
 	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
-	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == speed else Color.WHITE
+	_speed_label()
 	for i in range(_seen_log, g.log.size()):
 		var e: Dictionary = g.log[i]
 		if e.level != "info": toast(e.text, e.level)
 	_seen_log = g.log.size()
 	hall.rebuild()
+	_apply_unlocks()
 	_check_end()
 	check_keynote()
 	coach.tick()
@@ -261,6 +262,7 @@ func modal() -> Control:
 	if settings_ui != null and is_instance_valid(settings_ui): return settings_ui
 	if end_ui != null and is_instance_valid(end_ui): return end_ui
 	if keynote != null and keynote.visible: return keynote
+	if story_ui != null and story_ui.visible: return story_ui
 	if guide != null and guide.visible: return guide
 	var tt := root.get_node_or_null("title")
 	if tt != null and not started: return tt
@@ -270,7 +272,30 @@ func _top_sb(acc: Color) -> StyleBoxFlat:
 	var t := Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Color(0.02, 0.03, 0.05), 0, 0, 14); t.border_width_bottom = 5; t.border_color = acc
 	t.shadow_color = Color(0, 0, 0, 0.5); t.shadow_size = 8; t.shadow_offset = Vector2(0, 4); return t
 
+## Progressive disclosure: a fresh game shows Overview, Customers and Supply; the rest appear as the player needs them.
+## Tycoon mode (no hand-holding) and loaded campaigns that already have a hall see everything.
+var _unlocked := {}
+const UNLOCK_HINT := {"facility": "Facility opens once you have ordered parts or placed a rack.", "ops": "Operations opens once you have ordered parts or placed a rack.",
+	"design": "The Design Lab opens after your first contract or a few missions.", "network": "The Supercomputer builder opens after your first contract or a few missions.", "codex": "The Codex opens after your first contract or a few missions."}
+func is_unlocked(key: String) -> bool:
+	var g: Dictionary = b.g
+	if not started or g.get("mode", "operator") == "tycoon" or key in ["dash", "contracts", "shop"]: return true
+	var racks := 0
+	for h in g.halls: racks += h.racks.size()
+	var done: int = g.missionsDone.size()
+	if key in ["facility", "ops"]: return racks > 0 or g.orders.size() > 0 or g.activeContracts.size() > 0 or done >= 1 or int(g.month) >= 14
+	var served: int = int(g.get("stats", {}).get("contractsCompleted", 0))
+	return g.activeContracts.size() > 0 or served > 0 or done >= 2 or int(g.month) >= 17
+
+func _apply_unlocks() -> void:
+	for d in DOCK:
+		var k: String = d[0]; var open := is_unlocked(k)
+		if dock_btns.has(k): dock_btns[k].visible = open
+		if open and not _unlocked.get(k, false) and not _unlocked.is_empty() and started: toast("Unlocked: %s" % str(d[1]).capitalize(), "good")
+		_unlocked[k] = open
+
 func _dock(key: String) -> void:
+	if not is_unlocked(key): toast(UNLOCK_HINT.get(key, "Not available yet."), "info"); return
 	if dock_key(cur) == key and key != "dash": show_screen("dash")   # clicking the open drawer closes it
 	else: show_screen(last_tab.get(key, key))
 
@@ -329,6 +354,9 @@ func _make_screen(id: String) -> Control:
 	return c
 
 func set_speed(v: int) -> void: speed = v; clock = 0.0; _on_changed()
+func _speed_label() -> void:
+	lbl.speed.text = ["⏸ Paused", "▶ 1x", "▶▶ 2x", "▶▶▶ 3x"][clampi(speed, 0, 3)]
+	lbl.speed.modulate = Color.WHITE if speed == 0 else Color(0.5, 1.0, 0.9)
 
 func next_month() -> void:
 	if not started: return
@@ -337,22 +365,39 @@ func next_month() -> void:
 
 ## Launch keynotes queue up in the engine (g.news); show them one at a time and stop the clock while one is open.
 func check_keynote() -> void:
-	if not started or keynote == null or keynote.visible or end_ui != null or menu_ui != null: return
+	if not started or keynote == null or keynote.visible or (story_ui != null and story_ui.visible) or end_ui != null or menu_ui != null: return
 	if Engine.get_frames_drawn() < 5: get_tree().create_timer(0.25).timeout.connect(check_keynote); return   # let the first layout pass finish
 	var news: Array = b.g.get("news", [])
-	if news.is_empty(): return
+	if news.is_empty(): check_story(); return
 	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE"): b.act("ackNews"); return
 	var l: Dictionary = b.q("launches")
 	if l.news.is_empty(): b.act("ackNews"); return
 	keynote.open(l.news[0], l.news.size() - 1); speed = 0; clock = 0.0; audio.play("keynote")
-	for i in 4: lbl["sp%d" % i].modulate = Color(0.5, 1.0, 0.9) if i == 0 else Color.WHITE
+	_speed_label()
+
+## Story cards queue up in the engine (g.story): a chapter every January, and now and then a two-way decision.
+func check_story() -> void:
+	if not started or story_ui == null or story_ui.visible or keynote.visible or end_ui != null or menu_ui != null: return
+	if Engine.get_frames_drawn() < 5: get_tree().create_timer(0.25).timeout.connect(check_story); return
+	var st: Dictionary = b.q("story")
+	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE"):
+		if st.chapter != null: b.act("ackStory")
+		return
+	if st.chapter != null:
+		story_ui.open_chapter(st.chapter); speed = 0; clock = 0.0; _speed_label(); audio.play("keynote"); return
+	if st.dilemma != null and str(st.dilemma.id) != dilemma_dismissed:
+		story_ui.open_dilemma(st.dilemma); speed = 0; clock = 0.0; _speed_label(); audio.play("notif")
+
+## The Overview "needs you" card opens a decision you chose to answer later.
+func open_decision() -> void:
+	dilemma_dismissed = ""; check_story()
 
 func _claim() -> void:
 	for m in b.claim_missions(): banner.text = "★ MISSION COMPLETE ★  %s" % m.title; audio.play("fanfare"); get_tree().create_timer(3.2).timeout.connect(func(): banner.text = "")
 
 func _process(dt: float) -> void:
 	_process_tip()
-	if not started or speed == 0 or menu_ui != null or keynote.visible: return
+	if not started or speed == 0 or menu_ui != null or keynote.visible or story_ui.visible: return
 	clock += dt / SECS[speed]; bar_month.value = clock
 	if clock >= 1.0: clock = 0.0; next_month()
 
@@ -488,18 +533,31 @@ func _check_end() -> void:
 	if rep.is_empty(): return
 	var won: bool = rep.reason == "horizon"; var col: Color = Kit.GR if won else Kit.RD
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); end_ui = h
-	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.72); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -400; pn.offset_right = 400; pn.offset_top = -215; pn.offset_bottom = 215
-	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), col, 14, 2, 26)); h.add_child(pn)
-	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 12); pn.add_child(vb)
-	vb.add_child(Kit.label("2028 COMPLETE" if won else "GAME OVER", 20, Kit.DIM))
-	vb.add_child(Kit.label(str(rep.rating).to_upper(), 54, col))
-	vb.add_child(Kit.label(rep.summary, 17, Kit.TX, true))
-	var grid := GridContainer.new(); grid.columns = 2; grid.add_theme_constant_override("h_separation", 60); grid.add_theme_constant_override("v_separation", 6); vb.add_child(grid)
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.78); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
+	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -560; pn.offset_right = 560; pn.offset_top = -330; pn.offset_bottom = 330
+	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), col, 14, 2, 28)); h.add_child(pn)
+	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
+	var head: String = {"horizon": "2028 COMPLETE", "bankrupt": "GAME OVER", "fired": "THE BOARD HAS SPOKEN"}.get(str(rep.reason), "GAME OVER")
+	vb.add_child(Kit.label(head, 18, Kit.DIM))
+	vb.add_child(Kit.label(str(rep.rating).to_upper(), 48, col))
+	if rep.get("epilogue") != null: vb.add_child(Kit.label(str(rep.epilogue), 17, Kit.TX, true))
+	else: vb.add_child(Kit.label(str(rep.summary), 17, Kit.TX, true))
+	vb.add_child(Kit.label(str(rep.summary), 13, Kit.DIM, true))
+	var tl: Array = rep.get("timeline", [])
+	if tl.size() > 3:
+		var gr := HBoxContainer.new(); gr.add_theme_constant_override("separation", 20); vb.add_child(gr)
+		for sp in [["REVENUE / MONTH", tl.map(func(x): return x.revenue), Kit.GR], ["CASH", tl.map(func(x): return x.cash), Kit.CY]]:
+			var c := VBoxContainer.new(); c.size_flags_horizontal = Control.SIZE_EXPAND_FILL; c.add_child(Kit.label(sp[0], 11, Kit.DIM))
+			var spk := Spark.new(); spk.values = sp[1]; spk.color = sp[2]; spk.custom_minimum_size = Vector2(0, 54); c.add_child(spk); gr.add_child(c)
+	var grid := GridContainer.new(); grid.columns = 3; grid.add_theme_constant_override("h_separation", 60); grid.add_theme_constant_override("v_separation", 6); vb.add_child(grid)
 	for kv in [["SCORE", Kit.num(rep.score)], ["NET WORTH", Kit.usd(rep.netWorth)], ["LIFETIME REVENUE", Kit.usd(rep.revenueTotal)], ["PEAK ACCELERATORS", Kit.num(rep.peakAccels)], ["CONTRACTS COMPLETED", str(int(rep.contractsCompleted))], ["REPUTATION", "★ %d" % int(rep.reputation)]]:
-		var c := VBoxContainer.new(); c.add_child(Kit.label(kv[0], 11, Kit.DIM)); c.add_child(Kit.label(str(kv[1]), 26, Kit.TX)); grid.add_child(c)
+		var c := VBoxContainer.new(); c.add_child(Kit.label(kv[0], 11, Kit.DIM)); c.add_child(Kit.label(str(kv[1]), 24, Kit.TX)); grid.add_child(c)
+	for k in [["BEST DEAL", "bestDeal", Kit.GR], ["WORST INCIDENT", "worstIncident", Kit.RD], ["VS THE RIVALS", "rivalLine", Kit.CY]]:
+		if rep.get(k[1]) != null and str(rep[k[1]]) != "": vb.add_child(Kit.rich("[color=#%s][b]%s[/b][/color]  %s" % [k[2].to_html(false), k[0], str(rep[k[1]])], 14))
+	var sp2 := Control.new(); sp2.size_flags_vertical = Control.SIZE_EXPAND_FILL; vb.add_child(sp2)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); vb.add_child(row)
 	row.add_child(Kit.btn("Look around the hall", func(): end_ui.queue_free(); end_ui = null; end_seen = true, "", 18))
+	if rep.get("shareText") != null: row.add_child(Kit.btn("Copy summary", func(): DisplayServer.clipboard_set(str(rep.shareText)); toast("Summary copied to the clipboard.", "good"), "", 18))
 	row.add_child(Kit.btn("Back to title", func(): _menu_do("title"), "pri", 18))
 var end_seen := false
 
@@ -545,7 +603,7 @@ func _menu() -> void:
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -220; vb.offset_bottom = 220; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
-	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["How to play", "guide"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
 		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
 
 func _menu_do(a: String) -> void:
@@ -555,6 +613,7 @@ func _menu_do(a: String) -> void:
 		"load": _menu(); _slots("load")
 		"settings": _menu(); _settings()
 		"coach": _menu(); if started: coach.start()
+		"guide": _menu(); guide.visible = true; guide.open()
 		"mute": audio.toggle_mute()
 		"title": _autosave(); b.stop(); get_tree().reload_current_scene()
 		"quit":

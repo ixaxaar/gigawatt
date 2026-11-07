@@ -203,20 +203,27 @@ func _build_aisles(sz: Vector2, cx: float, ratio: float) -> void:
 				var sp2 := SpotLight3D.new(); sp2.light_color = Color(1.0, 0.72, 0.5); sp2.light_energy = 1.6 + 2.0 * ratio; sp2.spot_range = 6.0; sp2.spot_angle = 50.0; sp2.light_volumetric_fog_energy = 0.8
 				sp2.position = Vector3(lx2 * PITCH + 0.6, 3.4, mid); sp2.rotation_degrees = Vector3(-90, 0, 0); _lamps.append(sp2); dyn.add_child(sp2)
 
-## Flat text on top of each rack: hardware type, and who is using it (or what it is doing).
+## Flat text on top of each rack: hardware type, and whether it is earning, idle, on spot, building or down.
+## Idle online racks also get an amber plate on top, so money-losing capacity stands out from a screenshot.
 func _rack_label(p: Vector3, r: Dictionary) -> void:
 	if not labels_on: return
 	var m: Dictionary = _ml.get(r.id, {})
 	if m.is_empty(): return
-	var nm: String = str(m.design).split(" · ")[0].replace("HGX ", "").replace("NVL", "NVL")
-	if nm.length() > 13: nm = nm.substr(0, 12) + "…"
-	var role: String = str(m.role)
-	var who: String = str(m.customer) if m.get("customer") != null else role
-	if who.length() > 14: who = who.substr(0, 13) + "…"
-	var col := Color(0.55, 1.0, 0.7) if m.get("customer") != null else (Color(1.0, 0.45, 0.4) if str(m.status) == "failed" else (Color(0.75, 0.8, 0.85) if role == "unassigned" else Color(1.0, 0.85, 0.4)))
-	var l := Label3D.new(); l.text = nm + "\n" + who; l.font_size = 40; l.pixel_size = 0.0034; l.modulate = col; l.outline_size = 10; l.outline_modulate = Color(0, 0, 0, 0.9)
+	var nm: String = str(m.design).split(" · ")[0].replace("HGX ", "").replace(" 8-GPU", "x8").replace("NVIDIA ", "")
+	if nm.length() > 11: nm = nm.substr(0, 10) + "…"
+	var role: String = str(m.role); var status: String = str(m.status)
+	var who := ""; var col := Color(0.75, 0.8, 0.85); var idle := false
+	if m.get("customer") != null:
+		who = str(m.customer); col = Color(0.55, 1.0, 0.7)
+		if who.length() > 11: who = who.substr(0, 10) + "…"
+	elif status == "failed": who = "DOWN"; col = Color(1.0, 0.45, 0.4)
+	elif status != "online": who = "BURN-IN" if status == "commissioning" else "BUILDING"; col = Color(0.6, 0.7, 0.8)
+	elif role == "spot market": who = "SPOT"; col = Color(0.4, 0.85, 1.0)
+	else: who = "IDLE"; col = Color(1.0, 0.7, 0.2); idle = true
+	var l := Label3D.new(); l.text = nm + "\n" + who; l.font_size = 44; l.pixel_size = 0.0034; l.modulate = col; l.outline_size = 12; l.outline_modulate = Color(0, 0, 0, 0.92)
 	l.rotation = Vector3(-PI / 2, PI / 2, 0); l.position = p + Vector3(0, RH + 0.25, 0); l.no_depth_test = true; l.shaded = false; l.double_sided = true; l.line_spacing = -4
 	dyn.add_child(l)
+	if idle: _box(dyn, p + Vector3(0, RH + 0.06, 0), Vector3(RW - 0.08, 0.012, RD - 0.08), _emit(Color(1.0, 0.55, 0.1, 0.4), 1.3, true))
 
 ## Controller camera: left stick pans, right stick orbits, triggers zoom.
 func pad_move(pan: Vector2, orbit: Vector2, zoom: float, dt: float) -> void:

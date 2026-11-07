@@ -1,3 +1,4 @@
+import { rivalHeadline } from './story';
 import { initialRivals, priceIndexOf, stepRivals } from '../rivals';
 import type { System } from './types';
 
@@ -19,6 +20,7 @@ export const rivalsSystem: System = {
       }
       const cut = (top.priceMult - top.r.priceMult) * 100;
       const move = cut >= 0.05 ? `cut prices ${cut.toFixed(0)}%` : cut <= -0.05 ? `raised prices ${(-cut).toFixed(0)}%` : 'held prices flat';
+      const hl = rivalHeadline(s, top.r.id, top.r.name); if (hl) log('info', `📰 ${hl}`);
       log('info', `${top.r.name} added ${Math.round(added).toLocaleString('en-US')} accelerators and ${move} — competition sets the market: your share of supply moves the price index.`);
     }
   },

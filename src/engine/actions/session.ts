@@ -3,6 +3,8 @@ import { stepAllProjects } from '../../autopilot';
 import type { GameStore } from '../api';
 import { advanceMonth } from '../../sim/tick';
 import { fail, ok } from './consts';
+import { DILEMMAS } from '../../sim/story-data';
+import { applyEffect, storyOf } from '../../sim/systems/story';
 import { DEFAULT_SLOT, readSlot, writeSlot } from '../persistence';
 import { newGameState } from '../state';
 import type { Ctx } from './ctx';
@@ -19,6 +21,18 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
     },
 
     ackNews: () => set(s => ({ game: { ...s.game, news: (s.game.news ?? []).slice(1) } })),
+
+    ackStory: () => set(s => (s.game.story ? { game: { ...s.game, story: { ...s.game.story, cards: s.game.story.cards.slice(1) } } } : s)),
+
+    resolveDilemma: (choice) => {
+      const g0 = get().game; const open = g0.story?.open;
+      if (!open) return fail('There is no decision waiting.');
+      const d = DILEMMAS.find((x) => x.id === open.id); const ch = d?.choices[choice];
+      if (!d || !ch) return fail('Pick one of the two options.');
+      if ((ch.effect.cash ?? 0) < 0 && g0.cash + (ch.effect.cash ?? 0) < 0) return fail('You cannot afford that option right now.');
+      set(s => { const g = JSON.parse(JSON.stringify(s.game)) as typeof s.game; applyEffect(g, ch.effect); const st = storyOf(g); st.seen.push(open.id); st.open = undefined; g.log.push({ month: g.month, level: 'info', text: `✔ ${d.title}: ${ch.label}. ${ch.outcome}` }); return { game: g }; });
+      return ok(ch.outcome);
+    },
 
     setMode: (m) => set(s => ({ game: { ...s.game, mode: m } })),
 

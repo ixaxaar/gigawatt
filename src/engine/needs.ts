@@ -4,7 +4,9 @@ import { inferenceCapacity } from '../sim/perf';
 import { staffNeeded } from '../sim/staffing';
 import { BOARD_STRIKES, boardTarget } from '../sim/systems/board';
 import { rackAccels } from '../sim/systems/helpers';
-import type { Accelerator, GameState } from '../types';
+import { DILEMMAS } from '../sim/story-data';
+import { buildOptions } from '../contractfit';
+import type { Accelerator, Contract, GameState } from '../types';
 
 export interface ClusterLoad { id: string; name: string; accels: number; contracts: number; loadPct: number; spot: boolean }
 export interface Fleet {
@@ -82,6 +84,11 @@ export function needsOf(g: GameState): Need[] {
   const b = g.board;
   if (b && b.strikes > 0) out.push({ id: 'board', level: 'warn', title: `Board strike ${b.strikes} of ${BOARD_STRIKES}`, detail: `Revenue is under target. The next review is in ${12 - ((month - b.startMonth) % 12)} months and wants about ${usd(boardTarget(b.baseNW, Math.round((month - b.startMonth) / 12) + 1))}/mo.`, go: 'contracts', button: 'Find contracts' });
 
+  if (g.story?.open) {
+    const d = DILEMMAS.find((x) => x.id === g.story!.open!.id);
+    if (d) out.push({ id: 'dilemma', level: 'warn', title: `Decision: ${d.title}`, detail: `Answer within ${Math.max(0, 3 - (g.month - g.story.open.month))} months or the offer lapses.`, go: 'story', button: 'Decide' });
+  }
+
   const need = staffNeeded(g);
   if (g.staff < need.needed) out.push({ id: 'staff', level: g.staff < need.needed * 0.6 ? 'crit' : 'warn', title: `Understaffed: ${g.staff} of ${need.needed} operators`, detail: 'A short crew means more failures, slower repairs and lost availability on every contract.', go: 'finance', button: 'Hire staff' });
 
@@ -96,4 +103,15 @@ export function needsOf(g: GameState): Need[] {
   out.sort((a, b2) => rank[a.level] - rank[b2.level]);
   if (!out.length) out.push({ id: 'ok', level: 'info', title: 'All quiet', detail: 'Nothing needs you right now. Advance the month, or scout the next hardware keynote.', go: 'dash', button: 'Next month' });
   return out;
+}
+
+export interface OfferMoney { monthly: number; total: number; powerMo: number; profitMo: number }
+
+/** What an offer pays at full size and roughly what it costs to power, so players can compare offers by profit. */
+export function offerMoney(g: GameState, c: Contract): OfferMoney {
+  const monthly = c.kind === 'training' ? c.minAccelerators * c.pricePerAccelHour * 730 : ((c.tokensPerSec * 730 * 3600) / 1e6) * c.pricePerMTok;
+  const opts = buildOptions({ ...g, availableContracts: [] } as GameState, c).filter((o) => o.powerMo > 0);
+  const cheapest = [...opts].sort((a, b) => a.cost - b.cost)[0];
+  const powerMo = cheapest ? cheapest.powerMo : c.kind === 'training' ? c.minAccelerators * 1.05 * 1.3 * 730 * g.utilityUSDPerKWh : monthly * 0.05;
+  return { monthly: Math.round(monthly), total: Math.round(monthly * c.durationMonths), powerMo: Math.round(powerMo), profitMo: Math.round(monthly - powerMo) };
 }

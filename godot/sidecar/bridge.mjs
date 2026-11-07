@@ -7170,6 +7170,181 @@ const ALL_ITEMS = [
 const BY_ID = new Map(ALL_ITEMS.map((i) => [i.id, i]));
 const getItem = (id) => BY_ID.get(id);
 const ITEMS_BY_KIND = (k2) => ALL_ITEMS.filter((i) => i.kind === k2);
+const BAL = {
+  /** Multiplier on contract $/accelerator-hour for training offers. */
+  trainPrice: 1,
+  /** Multiplier on inference offer sizes (tokens/s). Prices per Mtok stay calibrated to real API prices. */
+  inferDemand: 3,
+  /** A fully used GPU serving inference earns this multiple of the reserved GPU-hour price. */
+  inferPremium: 2.4,
+  /** Spot sells at this fraction of the reserved-contract anchor price. */
+  spotDiscount: 0.6,
+  /** Spot demand depth by year: how many GPUs the spot market can absorb at the quoted fill rate. */
+  spotDepth: [[2020, 40], [2022, 150], [2024, 450], [2026, 800], [2028, 1200]],
+  /** Spot price multiplier for an accelerator that is 0, 1, 2, 3 launch-years behind the current top part. */
+  spotGeneration: [1, 0.7, 0.5, 0.35],
+  /** Fraction of revenue lost per unit of staffing shortfall (0..1). */
+  understaffedAvail: 0.5
+};
+const lerpPoints = (pts, x) => {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+  }
+  return pts[pts.length - 1][1];
+};
+const TRAIN_CEILING = 0.62;
+const STRAGGLER = 1.15;
+const PREFILL_MFU = 0.5;
+const FP8_UTIL = 0.75;
+const GB = 1e9;
+const clamp$6 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const peakAt = (a, d) => {
+  if (d && a.tflops[d]) return a.tflops[d];
+  return a.tflops.bf16 ?? a.tflops.fp16 ?? a.tflops.tf32 ?? Math.max(0, ...Object.values(a.tflops));
+};
+const domainOf = (stats, n) => clamp$6(Math.round(stats.scaleUpDomain) || 1, 1, n);
+function trainingTokensPerSec(stats, accel, model, opts = {}) {
+  const issues = [];
+  const N = Math.max(1, Math.round(stats.accelerators));
+  const d = domainOf(stats, N);
+  const D = Math.max(1, Math.ceil(N / d));
+  const peak = peakAt(accel, opts.dtype);
+  const Pa = model.activeParamsB;
+  const B = Math.max(1, opts.localBatch ?? 32);
+  if (peak <= 0) {
+    issues.push({ severity: "error", code: "no-peak", message: `${accel.id} has no TFLOPS for the requested datatype.` });
+    return { mfu: 0, tokensPerSec: 0, stepMs: 0, zeroAcrossDomains: false, fitsTrainingState: false, issues };
+  }
+  const tC = 6 * Pa * GB * B / (peak * 1e12);
+  const G2 = 2 * Pa / N;
+  const tSu = d > 1 ? 2 * G2 * (d - 1) / d / Math.max(accel.scaleUpGBs * 0.5, 1e-6) : 0;
+  const Bso = Math.max(stats.effScaleOutGBs * 0.5, 1e-4);
+  let tSo = D > 1 ? 2 * G2 * (D - 1) / D / Bso : 0;
+  if (D > 1 && stats.effScaleOutGBs <= 0) {
+    issues.push({
+      severity: "error",
+      code: "no-scale-out",
+      message: `Training across ${D} domains needs scale-out bandwidth; the cluster has none.`
+    });
+    return { mfu: 0, tokensPerSec: 0, stepMs: 0, zeroAcrossDomains: false, fitsTrainingState: false, issues };
+  }
+  const stateGB = 16 * model.paramsB;
+  let zeroAcrossDomains = false;
+  let fitsTrainingState = true;
+  if (stateGB > N * accel.memGB) {
+    fitsTrainingState = false;
+    issues.push({
+      severity: "error",
+      code: "state-does-not-fit",
+      message: `Training state (~${stateGB} GB for ${model.name}) exceeds cluster memory ${N * accel.memGB} GB.`,
+      learn: accel.id
+    });
+    return { mfu: 0, tokensPerSec: 0, stepMs: 0, zeroAcrossDomains, fitsTrainingState, issues };
+  }
+  if (stateGB > d * accel.memGB) {
+    zeroAcrossDomains = true;
+    tSo *= 3;
+    issues.push({
+      severity: "warn",
+      code: "zero-across-domains",
+      message: `Training state (~${stateGB} GB) exceeds one ${d}-accelerator domain (${d * accel.memGB} GB): ZeRO sharding over scale-out triples gradient traffic.`,
+      learn: accel.id
+    });
+  }
+  const overlap = clamp$6(opts.commOverlap ?? 0.5, 0, 0.9);
+  const stepSec = tC + (tSu + tSo) * (1 - overlap) * STRAGGLER;
+  const mfu = clamp$6(tC / stepSec * TRAIN_CEILING * accel.softwareMaturity * accel.trainingAffinity, 5e-3, 0.65);
+  const tokensPerSec = N * peak * 1e12 * mfu / (6 * Pa * GB);
+  return {
+    mfu,
+    tokensPerSec,
+    stepMs: stepSec * 1e3,
+    zeroAcrossDomains,
+    fitsTrainingState,
+    issues
+  };
+}
+function inferenceCapacity(stats, accel, model, opts = {}) {
+  const issues = [];
+  const N = Math.max(1, Math.round(stats.accelerators));
+  const d = domainOf(stats, N);
+  const bpp = Math.max(0.125, opts.bytesPerParam ?? 1);
+  const ctxT = Math.max(1, opts.contextTokens ?? 4096);
+  const weightsGB = model.paramsB * bpp;
+  const activeGB = model.activeParamsB * bpp;
+  const kvPerSeqGB = model.kvBytesPerToken * ctxT / GB;
+  let tp = 1;
+  while (tp * 2 <= d && tp * accel.memGB < weightsGB * 1.1) tp *= 2;
+  let fitsWeights = tp * accel.memGB >= weightsGB * 1.1;
+  if (!fitsWeights && d * accel.memGB >= weightsGB * 1.02) {
+    tp = d;
+    fitsWeights = true;
+  } else if (!fitsWeights) {
+    tp = d;
+    issues.push({
+      severity: "error",
+      code: "weights-exceed-domain",
+      message: `Weights (${weightsGB} GB) plus overhead do not fit a ${d}-accelerator scale-up domain (${d * accel.memGB} GB); tensor parallelism cannot shard them.`,
+      learn: accel.id
+    });
+  }
+  const replicas = Math.floor(N / tp);
+  if (replicas < 1) {
+    issues.push({ severity: "error", code: "no-replica", message: "Fewer accelerators than one tensor-parallel replica." });
+  }
+  const kvAvailGB = tp * accel.memGB - weightsGB * 1.05;
+  const maxBatchKV = Math.max(0, Math.floor(kvAvailGB / Math.max(kvPerSeqGB, 1e-9)));
+  if (maxBatchKV < 1) {
+    issues.push({
+      severity: "error",
+      code: "kv-no-room",
+      message: `No memory left for KV cache: weights + runtime use ${weightsGB * 1.05} GB of ${tp * accel.memGB} GB per replica.`,
+      learn: accel.id
+    });
+  }
+  let tpEff = 1;
+  if (tp > 1) {
+    if (accel.scaleUp === "pcie" || accel.scaleUp === "none") tpEff = 0.35;
+    else if (accel.scaleUp === "wafer") tpEff = 0.9;
+    else tpEff = 0.85;
+  }
+  if (!fitsWeights) tpEff *= 0.3;
+  const readBW = Math.max(tp * accel.memBWTBs * 1e3 * tpEff, 1e-6);
+  let batch = Math.max(1, maxBatchKV);
+  if (opts.tpotMs !== void 0) {
+    const budgetBytes = opts.tpotMs / 1e3 * readBW * GB;
+    const batchTpot = Math.floor((budgetBytes - activeGB * GB) / (model.kvBytesPerToken * ctxT));
+    if (batchTpot < 1) {
+      issues.push({
+        severity: "error",
+        code: "tpot-infeasible",
+        message: `Cannot meet ${opts.tpotMs} ms per-token latency: even batch 1 decode exceeds it.`
+      });
+    } else {
+      batch = Math.min(batch, batchTpot);
+    }
+  }
+  const stepSec = (activeGB + batch * kvPerSeqGB) / readBW;
+  const perUserTokensPerSec = 1 / stepSec;
+  const tokensPerSec = replicas * batch * perUserTokensPerSec * accel.softwareMaturity * Math.min(accel.inferenceAffinity, 1.3);
+  const prefillFlops = 2 * model.activeParamsB * GB * ctxT;
+  const pfPeak = (accel.tflops.fp8 ?? peakAt(accel)) * 1e12 * FP8_UTIL;
+  const ttftMs = prefillFlops / (tp * pfPeak * PREFILL_MFU * accel.softwareMaturity) * 1e3;
+  return {
+    tpSize: tp,
+    replicas,
+    fitsWeights,
+    maxBatchKV,
+    batch,
+    stepMs: stepSec * 1e3,
+    perUserTokensPerSec,
+    tokensPerSec,
+    ttftMs,
+    issues
+  };
+}
 const MONTHS_PER_YEAR = 12;
 const BASE_YEAR$1 = 2020;
 const monthToYear = (m2) => BASE_YEAR$1 + m2 / MONTHS_PER_YEAR;
@@ -7242,14 +7417,36 @@ const GPU_HOUR_ANCHOR = [
   [2022, 1.6],
   [2023.2, 2.9],
   [2024, 2.6],
-  [2024.6, 3],
-  [2025, 3.6],
-  [2026, 4.4],
-  [2026.8, 5.6],
-  [2027, 5.6],
-  [2028, 5.2]
+  [2024.6, 2.7],
+  [2025, 2.7],
+  [2026, 3.7],
+  [2026.8, 3.8],
+  [2027, 3.6],
+  [2028, 3.3]
 ];
+const clampBand = (price, list) => Math.min(list * 1.25, Math.max(list * 0.5, price));
+const rampPad = (year) => Math.round(lerpCurve$1([[2020, 0], [2022.5, 0], [2023.5, 3], [2025, 4], [2026.5, 3], [2027.5, 1], [2028, 0]], year));
 const gpuHourAnchor = (year) => lerpCurve$1(GPU_HOUR_ANCHOR, year);
+const FLAGSHIPS = ALL_ITEMS.filter((i) => i.kind === "accelerator" && i.memGB >= 40);
+const refCache = /* @__PURE__ */ new Map();
+function refTokensPerGpu(year, model, contextTokens, tpotMs) {
+  const key = `${Math.floor(year * 2)}|${model.id}|${contextTokens}|${Math.round(tpotMs / 10)}`;
+  const hit = refCache.get(key);
+  if (hit !== void 0) return hit;
+  let accel;
+  for (const a of FLAGSHIPS) if (a.availableFrom <= year && (!accel || a.availableFrom > accel.availableFrom || a.availableFrom === accel.availableFrom && a.memGB > accel.memGB)) accel = a;
+  let out = 1e3;
+  if (accel) for (const n of [8, 16, 32, 64, 128]) {
+    const stats = { accelerators: n, acceleratorId: accel.id, scaleUpDomain: n, totalMemGB: n * accel.memGB };
+    const cap = inferenceCapacity(stats, accel, model, { contextTokens, tpotMs });
+    if (cap.fitsWeights && cap.tokensPerSec > 0) {
+      out = cap.tokensPerSec / n;
+      break;
+    }
+  }
+  refCache.set(key, out);
+  return out;
+}
 const MTOK_DECAY = [
   [2020, 1],
   [2021, 0.75],
@@ -7353,19 +7550,20 @@ function generateContracts(state2, month, rng) {
         minScaleOutGBsPerAccel: round2$2(model.paramsB < 15 ? tier * 0.75 : tier),
         minTotalMemGB: Math.ceil(stateGB),
         pricePerAccelHour: round2$2(
-          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * randRange(rng, 0.92, 1.15) * (state2.marketPriceIndex ?? 1)
-          // rival competition reprices fresh offers
+          gpuHourAnchor(year) * (model.paramsB >= 300 ? 1.15 : isMoe ? 0.95 : 1) * t.priceMult * BAL.trainPrice * randRange(rng, 0.92, 1.15) * (state2.marketPriceIndex ?? 1) * (state2.demandBoost ?? 1)
+          // rival competition and scenario demand reprice fresh offers
         )
       };
-      contract.rampMonths = Math.min(20, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0));
+      contract.rampMonths = Math.min(24, 6 + Math.round(Math.log2(minAccelerators / 32) * 1.6) + (year >= 2024 ? 1 : 0) + rampPad(year));
       out.push(contract);
     } else {
       const tps = Math.max(
         100,
-        Math.round(lerpCurve$1(ERA_TOKENS_PER_SEC, year) * t.tokenMult * randRange(rng, 0.6, 1.8))
+        Math.round(lerpCurve$1(ERA_TOKENS_PER_SEC, year) * t.tokenMult * BAL.inferDemand * randRange(rng, 0.6, 1.8))
       );
       const tpotMs = Math.round(randRange(rng, 20, 60) + (model.activeParamsB > 80 ? randRange(rng, 10, 40) : 0));
       const ctxOpts = CONTEXT_OPTIONS.find(([y]) => year < y)?.[1] ?? [262144];
+      const ctxTokens = pick(rng, ctxOpts);
       const contract = {
         kind: "inference",
         id: `inf-${month}-${i}-${suffix}`,
@@ -7374,16 +7572,20 @@ function generateContracts(state2, month, rng) {
         tokensPerSec: tps,
         tpotMs: Math.max(15, tpotMs),
         ttftMs: Math.round(randRange(rng, 150, 700) / 10) * 10,
-        contextTokens: pick(rng, ctxOpts),
+        contextTokens: ctxTokens,
+        // priced so a fully used GPU earns about `inferPremium` x the reserved GPU-hour price (latency SLAs and idle headroom justify the markup)
         pricePerMTok: Math.max(
           0.01,
           round3$1(
-            mtokPrice(model.activeParamsB, year) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2) * (state2.marketPriceIndex ?? 1)
-            // rival competition reprices fresh offers
+            clampBand(
+              gpuHourAnchor(year) * BAL.inferPremium / (refTokensPerGpu(year, model, ctxTokens, Math.max(15, tpotMs)) * 3600 / 1e6),
+              mtokPrice(model.activeParamsB, year)
+            ) * (tpotMs < 30 ? 1.25 : 1) * t.priceMult * randRange(rng, 0.9, 1.2) * (state2.marketPriceIndex ?? 1) * (state2.demandBoost ?? 1)
+            // rival competition and scenario demand reprice fresh offers
           )
         )
       };
-      contract.rampMonths = randInt(rng, 5, 8);
+      contract.rampMonths = randInt(rng, 5, 8) + rampPad(year);
       out.push(contract);
     }
   }
@@ -7498,6 +7700,53 @@ function contractRevenue(ac, opts) {
   return { grossUSD: gross, billableUSD: billable, penaltyUSD: penalty, netUSD: billable - penalty, slaMet };
 }
 const clamp$5 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const ACCELERATORS = ALL_ITEMS.filter((i) => i.kind === "accelerator");
+const rackAgeMonths = (rack, month) => Math.max(0, month - (rack.installedMonth ?? rack.readyMonth - 2));
+function rackAccelItem(g, designId) {
+  const design = g.racks.find((r) => r.id === designId);
+  if (!design) return void 0;
+  for (const item of design.items) {
+    if (item.type !== "tray") continue;
+    const tray = g.trays.find((t) => t.id === item.trayId);
+    if (!tray) continue;
+    for (const p of tray.parts) {
+      const it2 = getItem(p.itemId);
+      if (it2?.kind === "accelerator") return it2;
+    }
+  }
+  return void 0;
+}
+function generationsBehind(accel, month) {
+  const mine = Math.floor(accel.availableFrom);
+  const now = monthToYear(month);
+  const newer = /* @__PURE__ */ new Set();
+  for (const a of ACCELERATORS) {
+    if (a.availableFrom <= now && Math.floor(a.availableFrom) > mine) newer.add(Math.floor(a.availableFrom));
+  }
+  return Math.min(3, newer.size);
+}
+function residualFactor(g, rack) {
+  const ageYears = rackAgeMonths(rack, g.month) / 12;
+  const accel = rackAccelItem(g, rack.designId);
+  return accel ? clamp$5(1 - 0.12 * ageYears - 0.07 * generationsBehind(accel, g.month), 0.1, 1) : clamp$5(1 - 0.1 * ageYears, 0.25, 1);
+}
+const rackResidualUSD = (g, rack) => {
+  const design = g.racks.find((r) => r.id === rack.designId);
+  return design ? rackBomValue(g, design) * residualFactor(g, rack) : 0;
+};
+function assetValue(g) {
+  let v2 = 0;
+  for (const [id, n] of Object.entries(g.inventory)) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
+  for (const [id, n] of Object.entries(g.spareStock ?? {})) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
+  for (const o2 of g.orders) v2 += 0.9 * o2.unitPrice * o2.qty;
+  for (const hall of g.halls) {
+    for (const [id, n] of Object.entries(hall.powerEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
+    for (const [id, n] of Object.entries(hall.coolingEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
+    for (const rack of hall.racks) v2 += rackResidualUSD(g, rack);
+  }
+  return v2;
+}
+const clamp$4 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const r2 = (x) => Math.round(x * 100) / 100;
 const SOURCES = {
   grid: { names: ["Metro Utility", "Regional Grid Co-op", "StateWide Electric"], priceMWh: [58, 74], term: [12, 36], overdraw: [0.15, 0.3], overage: 1.4, firmness: [0.9, 0.97], lesson: "Utility firm service: reliable and flexible, priced near spot. Overdraw is tolerated until the interconnect trips." },
@@ -7569,41 +7818,53 @@ function powerMarketTick(s2, rng, log) {
   s2.powerContracts = (s2.powerContracts ?? []).filter((c) => s2.month <= c.endMonth);
   if (rng() < 0.45) s2.powerOffers = [...s2.powerOffers, ...generatePowerOffers(s2, rng, 1)].slice(-6);
 }
-const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * 0.85;
+const spotAnchor = (month) => gpuHourAnchor(2020 + month / 12) * BAL.spotDiscount;
 function spotUtilization(price, month) {
-  return clamp$5(1.45 - 1 * (price / gpuHourAnchor(2020 + month / 12)), 0.15, 0.95);
+  return clamp$4(1.45 - 1 * (price / gpuHourAnchor(2020 + month / 12)), 0.15, 0.95);
 }
 function stepSpotPrice(s2, rng) {
   const anchor = spotAnchor(s2.month);
   const cur = s2.spotPrice ?? anchor;
   const shock = (rng() - 0.5) * 0.22 + (rng() < 0.06 ? rng() < 0.5 ? 0.35 : -0.3 : 0);
-  const next = clamp$5(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
+  const next = clamp$4(cur + (anchor - cur) * 0.2 + cur * shock, anchor * 0.4, anchor * 2.2);
   s2.spotPrice = r2(next);
   s2.spotHistory = [...s2.spotHistory ?? [], s2.spotPrice].slice(-24);
 }
+const genFactor = (s2, accelId) => {
+  const a = accelId ? getItem(accelId) : void 0;
+  if (!a || a.kind !== "accelerator") return 1;
+  return BAL.spotGeneration[Math.min(3, generationsBehind(a, s2.month))] ?? 1;
+};
 function spotRevenue(s2, servedClusterIds, accelsOfDesign = () => 0) {
   const price = s2.spotPrice ?? spotAnchor(s2.month);
   if (price < (s2.spotReserve ?? 0)) return { revenue: 0, accels: 0, util: 0 };
   const util = spotUtilization(price, s2.month);
-  let accels = 0;
+  let accels = 0, weighted = 0;
+  const add = (n, accelId) => {
+    accels += n;
+    weighted += n * genFactor(s2, accelId);
+  };
   for (const id of s2.spotClusters ?? []) {
     if (servedClusterIds.has(id)) continue;
-    accels += s2.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0;
+    const st2 = s2.clusters.find((c) => c.id === id)?.stats;
+    add(st2?.accelerators ?? 0, st2?.acceleratorId);
   }
   const inClusterSpot = new Set(s2.spotClusters ?? []);
   for (const id of s2.spotRacks ?? []) {
     const pr = s2.halls.flatMap((h) => h.racks).find((r) => r.id === id);
     if (!pr || pr.status !== "online") continue;
     if (pr.clusterId && (servedClusterIds.has(pr.clusterId) || inClusterSpot.has(pr.clusterId))) continue;
-    accels += accelsOfDesign(pr.designId);
+    add(accelsOfDesign(pr.designId), rackAccelItem(s2, pr.designId)?.id);
   }
-  return { revenue: accels * util * price * HOURS_PER_MONTH, accels, util };
+  const depth = lerpPoints(BAL.spotDepth, 2020 + s2.month / 12);
+  const cleared = accels > 0 ? depth * (1 - Math.exp(-accels / depth)) / accels : 0;
+  return { revenue: weighted * cleared * util * price * HOURS_PER_MONTH, accels, util: util * cleared };
 }
 const POWER_LESSON = Object.fromEntries(Object.entries(POWER_SOURCES).map(([k2, v2]) => [k2, v2.lesson]));
 const SAVE_KEY = "gigawatt-save-v1";
 const ok = (message = "", issues) => ({ ok: true, message, issues });
 const fail = (message, issues) => ({ ok: false, message, issues });
-const usd = (n) => Math.round(n).toLocaleString("en-US");
+const usd$1 = (n) => Math.round(n).toLocaleString("en-US");
 const COOL_LEVEL$2 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 const POWER_FEED_TYPES = [
   "transformer",
@@ -7698,7 +7959,7 @@ const rackAccels = (state2, designId) => {
   }
   return n;
 };
-const clamp$4 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp$3 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const RIVAL_ARCHETYPES = [
   { id: "hyperion", name: "Hyperion Cloud", style: "hyperscaler", accels: 4e3, priceMult: 1, aggression: 0.5 },
   { id: "nimbus", name: "Nimbus Compute", style: "neocloud", accels: 800, priceMult: 0.85, aggression: 0.8 },
@@ -7718,7 +7979,7 @@ function stepRivals(s2, rng) {
   const mine = onlineAccels(s2);
   const rivalTotal = rivals.reduce((n, r) => n + r.accels, 0);
   const supplyShare = mine / Math.max(1, mine + rivalTotal);
-  const demandFactor = clamp$4(gpuHourAnchor(monthToYear(s2.month)) / 2.5, 0.5, 1.5);
+  const demandFactor = clamp$3(gpuHourAnchor(monthToYear(s2.month)) / 2.5, 0.5, 1.5);
   for (const r of rivals) {
     const growth = r.aggression * randRange(rng, 5e-3, 0.015) * demandFactor;
     r.accels = Math.round(r.accels * (1 + growth));
@@ -7733,7 +7994,7 @@ function priceIndexOf(s2, playerAccels = onlineAccels(s2)) {
   if (rivalAccels <= 0) return 1;
   const rivalMean = rivals.reduce((n, r) => n + r.accels * r.priceMult, 0) / rivalAccels;
   const playerShare = playerAccels / (playerAccels + rivalAccels);
-  return clamp$4(0.5 + 0.42 * rivalMean + 0.28 * playerShare, 0.7, 1.15);
+  return clamp$3(0.5 + 0.42 * rivalMean + 0.28 * playerShare, 0.7, 1.15);
 }
 const NVME_LANES_PER_DRIVE = 4;
 const GPUS_PER_SPINE_TRAY = 8;
@@ -8151,16 +8412,16 @@ const FRAMEWORK_EXPIRY_REL_BONUS = 5;
 const REL_DECAY_PER_MONTH = 0.5;
 const REL_GAIN_PER_ORDER_MAX = 8;
 const REL_GAIN_PER_USD = 1 / 1e6;
-const clamp$3 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-const logT = (x, lo, hi) => clamp$3((Math.log(x) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)), 0, 1);
-const relBonus = (rel) => clamp$3(rel, 0, REL_MAX) / REL_MAX;
-const capMultiplier = (g, vendorId) => Math.min(2, 1 + 0.5 * relBonus(g.vendorRel?.[vendorId] ?? 0) + 3e-3 * clamp$3(g.reputation, 0, 100));
+const clamp$2 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const logT = (x, lo, hi) => clamp$2((Math.log(x) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)), 0, 1);
+const relBonus = (rel) => clamp$2(rel, 0, REL_MAX) / REL_MAX;
+const capMultiplier = (g, vendorId) => Math.min(2, 1 + 0.5 * relBonus(g.vendorRel?.[vendorId] ?? 0) + 3e-3 * clamp$2(g.reputation, 0, 100));
 const relDiscount = (g, vendorId) => 0.06 * relBonus(g.vendorRel?.[vendorId] ?? 0);
 const frameworkFor = (g, vendorId) => (g.frameworks ?? []).find((f) => f.vendorId === vendorId && f.startMonth <= g.month && g.month <= f.endMonth && f.spentUSD < f.commitUSD);
 const frameworkDiscount = (fw) => fw.discountPct / 100;
 const discountPctFor = (commitUSD, months) => Math.round((3 + 9 * ((logT(Math.max(1, commitUSD), 2e6, 5e7) + logT(Math.max(1, months), 12, 36)) / 2)) * 10) / 10;
 const adjustRel = (g, vendorId, delta) => {
-  g.vendorRel = { ...g.vendorRel ?? {}, [vendorId]: clamp$3((g.vendorRel?.[vendorId] ?? 0) + delta, 0, REL_MAX) };
+  g.vendorRel = { ...g.vendorRel ?? {}, [vendorId]: clamp$2((g.vendorRel?.[vendorId] ?? 0) + delta, 0, REL_MAX) };
 };
 function recordSpend(g, vendorId, usd2) {
   const fw = frameworkFor(g, vendorId);
@@ -8922,7 +9183,7 @@ const procureActions = (c) => {
       const discount = volumeDiscount(item, n, offer.unitPrice);
       const cost = Math.round(offer.unitPrice * n * (1 - discount));
       if (cost > g.cash) {
-        return fail(`Insufficient funds: $${usd(cost)} needed, $${usd(g.cash)} in the bank.`);
+        return fail(`Insufficient funds: $${usd$1(cost)} needed, $${usd$1(g.cash)} in the bank.`);
       }
       const fw = frameworkFor(g, item.vendor);
       const rel = relDiscount(g, item.vendor);
@@ -8941,7 +9202,7 @@ const procureActions = (c) => {
       logln(
         g,
         "info",
-        `Ordered ${n} ${spare ? "spare " : ""}× ${item.name} for $${usd(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ""}${vendorNote}; arriving month ${g.month + offer.leadMonths}.${note}`
+        `Ordered ${n} ${spare ? "spare " : ""}× ${item.name} for $${usd$1(cost)}${discount > 0 ? ` (${(discount * 100).toFixed(0)}% volume discount)` : ""}${vendorNote}; arriving month ${g.month + offer.leadMonths}.${note}`
       );
       return ok(`Ordered ${n} × ${item.name}; arrives month ${g.month + offer.leadMonths}.${vendorNote}${note}`);
     }),
@@ -8994,15 +9255,15 @@ const procureActions = (c) => {
           lead = Math.max(lead, l);
           lines.push({ itemId, n, unit, lead: l, spare: isSpare });
         }
-        if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
+        if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd$1(cost)} but you have $${usd$1(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
         reserve(g, rackIdOf(t), nRacks);
         const batch = `bt-${g.month}-${g.orders.length + 1}-${t.id}`;
         for (const l of lines) g.orders.push({ id: `ord-${g.month}-${g.orders.length + 1}-${l.itemId}`, batch, templateId: t.id, racks: nRacks, placedMonth: g.month, itemId: l.itemId, qty: l.n, unitPrice: l.unit, arriveMonth: g.month + l.lead, ...l.spare ? { spare: true } : {} });
         for (const [vendorId, usdSpent] of vendorSpend) recordSpend(g, vendorId, usdSpent);
         const vendorNote = `${fwNote}${relNote}`;
-        logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium)${vendorNote}. Full bill of materials arrives by month ${g.month + lead}.`);
-        return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.${vendorNote}`);
+        logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd$1(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium)${vendorNote}. Full bill of materials arrives by month ${g.month + lead}.`);
+        return ok(`Ordered ${nRacks} racks: $${usd$1(cost)}, everything arrives by month ${g.month + lead}.${vendorNote}`);
       });
     },
     cancelOrder: (orderId) => commit((g) => {
@@ -9021,8 +9282,8 @@ const procureActions = (c) => {
         }
         failProjects(g, o2.templateId, `order cancelled in month ${g.month}`);
       }
-      logln(g, "info", `Cancelled ${what}; refunded $${usd(refund)} (${Math.round((1 - REFUND) * 100)}% restocking fee).`);
-      return ok(`Cancelled ${what}. Refunded $${usd(refund)}.`);
+      logln(g, "info", `Cancelled ${what}; refunded $${usd$1(refund)} (${Math.round((1 - REFUND) * 100)}% restocking fee).`);
+      return ok(`Cancelled ${what}. Refunded $${usd$1(refund)}.`);
     }),
     reduceOrder: (orderId, qty) => {
       const o2 = get().game.orders.find((x) => x.id === orderId);
@@ -9037,8 +9298,8 @@ const procureActions = (c) => {
           const refund2 = Math.round((cur.qty - n) * cur.unitPrice * REFUND);
           g.cash += refund2;
           cur.qty = n;
-          logln(g, "info", `Reduced ${getItem(cur.itemId)?.name ?? cur.itemId} order to ${n}; refunded $${usd(refund2)}.`);
-          return ok(`Reduced to ${n}. Refunded $${usd(refund2)}.`);
+          logln(g, "info", `Reduced ${getItem(cur.itemId)?.name ?? cur.itemId} order to ${n}; refunded $${usd$1(refund2)}.`);
+          return ok(`Reduced to ${n}. Refunded $${usd$1(refund2)}.`);
         }
         const t = getTemplate(cur.templateId);
         const old = cur.racks ?? 0;
@@ -9062,8 +9323,8 @@ const procureActions = (c) => {
           p.racks = n;
           p.notes.push(`order reduced to ${n} racks`);
         }
-        logln(g, "info", `Reduced ${t.name} order from ${old} to ${n} racks; refunded $${usd(refund)}.`);
-        return ok(`Reduced to ${n} racks. Refunded $${usd(refund)}.`);
+        logln(g, "info", `Reduced ${t.name} order from ${old} to ${n} racks; refunded $${usd$1(refund)}.`);
+        return ok(`Reduced to ${n} racks. Refunded $${usd$1(refund)}.`);
       });
     }
   };
@@ -9101,7 +9362,7 @@ const facilityActions = (c) => {
       const slots = Math.floor(rackSlots);
       if (slots < 4 || slots > 200) return fail("A new hall starts with 4–200 rack slots; buy more floor space later in units.");
       const cost = 2e6 + 25e4 * slots;
-      if (cost > g.cash) return fail(`This hall costs $${usd(cost)} — not enough cash.`);
+      if (cost > g.cash) return fail(`This hall costs $${usd$1(cost)} — not enough cash.`);
       g.cash -= cost;
       const id = `hall-${g.halls.length + 1}`;
       const hall = {
@@ -9131,11 +9392,11 @@ const facilityActions = (c) => {
       const n = Math.floor(units);
       if (!(n >= 1)) return fail("Buy at least one floor unit.");
       const cost = n * FLOOR_UNIT_COST;
-      if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd(cost)} — not enough cash.`);
+      if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd$1(cost)} — not enough cash.`);
       g.cash -= cost;
       const readyMonth = g.month + floorCommissionMonths(n);
       (hall.expansions ??= []).push({ units: n, readyMonth });
-      logln(g, "info", `Ordered ${n * FLOOR_UNIT_SLOTS} more rack positions for ${hall.name} ($${usd(cost)}). Slab, containment and fit-out finish in month ${readyMonth}.`);
+      logln(g, "info", `Ordered ${n * FLOOR_UNIT_SLOTS} more rack positions for ${hall.name} ($${usd$1(cost)}). Slab, containment and fit-out finish in month ${readyMonth}.`);
       return ok(`${n * FLOOR_UNIT_SLOTS} slots ordered for ${hall.name}; commissioned ${readyMonth - g.month} months from now.`);
     }),
     installPower: (hallId, itemId, qty) => commit((g) => {
@@ -9163,7 +9424,7 @@ const facilityActions = (c) => {
       logln(
         g,
         "good",
-        `Installed ${n} × ${item.name} in ${hall.name}${addedKW > 0 ? ` (+${usd(addedKW)} kW IT capacity)` : ""}.`
+        `Installed ${n} × ${item.name} in ${hall.name}${addedKW > 0 ? ` (+${usd$1(addedKW)} kW IT capacity)` : ""}.`
       );
       return ok(`Installed in ${hall.name}.`);
     }),
@@ -9199,18 +9460,18 @@ const facilityActions = (c) => {
       hall.coolingEquip[itemId] = (hall.coolingEquip[itemId] ?? 0) + n;
       hall.coolingKW += n * item.capacityKW;
       hall.pue = computePUE(hall, getItem);
-      logln(g, "good", `Installed ${n} × ${item.name} in ${hall.name} (+${usd(n * item.capacityKW)} kW heat rejection).`);
+      logln(g, "good", `Installed ${n} × ${item.name} in ${hall.name} (+${usd$1(n * item.capacityKW)} kW heat rejection).`);
       return ok(`Installed in ${hall.name}.`);
     }),
     buyUplink: (itemId) => commit((g) => {
       const item = getItem(itemId);
       if (!item || item.kind !== "uplink") return fail("Pick an internet circuit.");
       if (item.availableFrom * 12 - 2020 * 12 > g.month) return fail(`${item.name} is not offered yet.`);
-      if (g.cash < item.priceUSD) return fail(`Install fee is $${usd(item.priceUSD)}; you have $${usd(g.cash)}.`);
+      if (g.cash < item.priceUSD) return fail(`Install fee is $${usd$1(item.priceUSD)}; you have $${usd$1(g.cash)}.`);
       g.cash -= item.priceUSD;
       g.uplinks = { ...g.uplinks ?? {}, [itemId]: ((g.uplinks ?? {})[itemId] ?? 0) + 1 };
-      logln(g, "info", `Turned up ${item.name}: $${usd(item.priceUSD)} install, then $${usd(item.mrcUSD)}/month.`);
-      return ok(`${item.name} is live. Billing $${usd(item.mrcUSD)}/month.`);
+      logln(g, "info", `Turned up ${item.name}: $${usd$1(item.priceUSD)} install, then $${usd$1(item.mrcUSD)}/month.`);
+      return ok(`${item.name} is live. Billing $${usd$1(item.mrcUSD)}/month.`);
     }),
     dropUplink: (itemId) => commit((g) => {
       const c2 = g.uplinks?.[itemId] ?? 0;
@@ -9805,159 +10066,449 @@ const pue = {
     for (const hall of s2.halls) hall.pue = computePUE(hall, getItem);
   }
 };
-const TRAIN_CEILING = 0.62;
-const STRAGGLER = 1.15;
-const PREFILL_MFU = 0.5;
-const FP8_UTIL = 0.75;
-const GB = 1e9;
-const clamp$2 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-const peakAt = (a, d) => {
-  if (d && a.tflops[d]) return a.tflops[d];
-  return a.tflops.bf16 ?? a.tflops.fp16 ?? a.tflops.tf32 ?? Math.max(0, ...Object.values(a.tflops));
-};
-const domainOf = (stats, n) => clamp$2(Math.round(stats.scaleUpDomain) || 1, 1, n);
-function trainingTokensPerSec(stats, accel, model, opts = {}) {
-  const issues = [];
-  const N = Math.max(1, Math.round(stats.accelerators));
-  const d = domainOf(stats, N);
-  const D = Math.max(1, Math.ceil(N / d));
-  const peak = peakAt(accel, opts.dtype);
-  const Pa = model.activeParamsB;
-  const B = Math.max(1, opts.localBatch ?? 32);
-  if (peak <= 0) {
-    issues.push({ severity: "error", code: "no-peak", message: `${accel.id} has no TFLOPS for the requested datatype.` });
-    return { mfu: 0, tokensPerSec: 0, stepMs: 0, zeroAcrossDomains: false, fitsTrainingState: false, issues };
+const CHAPTERS = [
+  {
+    year: 2021,
+    title: "The Shortage Year",
+    text: "You open the year with a warehouse of air-cooled racks and a supply chain held together with purchase orders and optimism. Crypto miners and a pandemic chip shortage have bought up everything that resembles a GPU, and the accelerator vendor quotes delivery dates in quarters. The big cloud signs capacity you cannot afford; you build anyway, one rack at a time."
+  },
+  {
+    year: 2022,
+    title: "The Long Queue",
+    text: "The chip vendor announces its flagship successor, and every roadmap in the industry rearranges itself around a delivery queue measured in years. Interest rates climb, the big cloud slows its spending, and your customers start asking about commitment windows instead of capacity. You learn that patience is a line item."
+  },
+  {
+    year: 2023,
+    title: "The Gold Rush",
+    text: "A chatbot goes viral, and every board deck on the continent grows a slide with the words AI strategy on it. Demand arrives faster than transformers and interconnects; the fabric vendor cables are backordered like concert tickets. You are no longer selling compute; you are selling the queue for compute."
+  },
+  {
+    year: 2024,
+    title: "Liquid or Die",
+    text: "Racks cross the hundred-kilowatt line and air cooling formally resigns. Every serious design this year carries direct-to-chip loops, coolant distribution units, and a facilities team having quiet arguments about plumbing. Vendors who ignored liquid cooling last year are selling retrofit kits; vendors who ignored it earlier are selling whatever they can."
+  },
+  {
+    year: 2025,
+    title: "The Gigawatt Era",
+    text: "Campuses are measured in gigawatts, and the binding constraint is not silicon but the wire from the substation. Sovereign funds arrive with terminals full of requests and suitcases full of patience. An efficiency paper from a modest research lab halves the industry assumptions about token margins overnight; demand re-inflates by autumn anyway."
+  },
+  {
+    year: 2026,
+    title: "Waiting on Wires",
+    text: "The chip vendor ships its next flagship while the interconnect queue at your favorite substation grows its own waitlist. Interconnection studies run for years, power purchase agreements change hands like heirlooms, and lawyers learn to say behind-the-meter without flinching. Whoever holds electrons writes the terms."
+  },
+  {
+    year: 2027,
+    title: "The Price Question",
+    text: "Price per token falls faster than the cost of producing it, and resale markets fill with two-year-old accelerators priced like used sedans. Your board asks whether this is a bubble; your customers ask whether prices will keep falling; both want an answer by lunch. You keep the lights on and the answers vague."
+  },
+  {
+    year: 2028,
+    title: "The Last January",
+    text: "The final January of the plan opens with the industry trimming itself: mergers, quiet shutdowns, and acquisition teams circling anyone holding working capacity. The big cloud buys what it cannot build; the sovereigns buy what the big cloud will not sell. You have one year to make the ledger say what you want carved on it."
   }
-  const tC = 6 * Pa * GB * B / (peak * 1e12);
-  const G2 = 2 * Pa / N;
-  const tSu = d > 1 ? 2 * G2 * (d - 1) / d / Math.max(accel.scaleUpGBs * 0.5, 1e-6) : 0;
-  const Bso = Math.max(stats.effScaleOutGBs * 0.5, 1e-4);
-  let tSo = D > 1 ? 2 * G2 * (D - 1) / D / Bso : 0;
-  if (D > 1 && stats.effScaleOutGBs <= 0) {
-    issues.push({
-      severity: "error",
-      code: "no-scale-out",
-      message: `Training across ${D} domains needs scale-out bandwidth; the cluster has none.`
-    });
-    return { mfu: 0, tokensPerSec: 0, stepMs: 0, zeroAcrossDomains: false, fitsTrainingState: false, issues };
+];
+const DILEMMAS = [
+  {
+    id: "prepaid-exclusivity",
+    fromYear: 2021,
+    toYear: 2023,
+    title: "The Prepayment",
+    text: "A fast-growing model lab offers to prepay a full year of capacity, in cash, this week, if you promise those racks to nobody else. The wire would refill your tank; the lock would thin your other bids for twelve months. Your CFO has already sketched the hiring plan the deposit would cover.",
+    choices: [
+      {
+        label: "Take the prepay",
+        outcome: "You banked the wire the same afternoon and turned their logo into a welcome mat. Three prospects walked when word of the lock spread, but payroll stopped being a weather forecast.",
+        effect: { cash: 42e5, rep: -2 }
+      },
+      {
+        label: "Stay open to all",
+        outcome: "You declined and spread the same racks across six smaller contracts at better blended rates. The lab signed elsewhere, and one of the small tenants grew into the account everyone else wanted.",
+        effect: { rep: 3 }
+      }
+    ]
+  },
+  {
+    id: "supplier-early-allocation",
+    fromYear: 2021,
+    toYear: 2024,
+    title: "Allocation, Off the Books",
+    text: "A distributor regional lead calls with a whisper: several container-loads of the accelerator everyone wants, ahead of the public queue, for a priority partnership fee. The paperwork would call it a services retainer. Your ops team has been scavenging boards from returned units to keep builds moving.",
+    choices: [
+      {
+        label: "Pay the fee",
+        outcome: "The containers landed two quarters early and your build schedule unknotted at last. The fee stung, and an auditor later flagged the retainer as recurring and difficult to explain.",
+        effect: { cash: -25e5, rep: -1 }
+      },
+      {
+        label: "Queue like everyone",
+        outcome: "You joined the public queue and told the distributor you preferred receipts to favors. The build slipped two quarters; the following year the same distributor sent an unsolicited discount, apparently impressed.",
+        effect: { rep: 2 }
+      }
+    ]
+  },
+  {
+    id: "hydro-ppa",
+    fromYear: 2023,
+    toYear: 2026,
+    title: "Power for Twenty Years",
+    text: "A hydropower authority offers a twenty-year purchase agreement at a rate that would make your accountants weep with relief, if you anchor a campus in their valley. The transmission line takes two years to energize; the rate holds for twenty. Your current utility renews each winter with a smile and an escalator.",
+    choices: [
+      {
+        label: "Sign the long deal",
+        outcome: "You signed, and the valley campus became the steady-rate story in every fundraising deck thereafter. For two years you paid for power that arrived late; after that, you never thought about a utility bill again.",
+        effect: { cash: -1e6, rep: 1, utility: 0.9 }
+      },
+      {
+        label: "Keep flexibility",
+        outcome: "You passed and negotiated a shorter utility extension instead, keeping the balance sheet loose for an acquisition rumor. The escalator bit a little harder each winter, but the cash and the options stayed yours.",
+        effect: { utility: 1.05 }
+      }
+    ]
+  },
+  {
+    id: "viral-spike",
+    fromYear: 2022,
+    toYear: 2025,
+    title: "The Viral Tuesday",
+    text: "A model your tenants share goes viral on a Tuesday, and inference demand triples before the weekend. Your spot inventory could cover it, but only if you reprice hard, and three tenants are already complaining about latency. A rival sales team is cold-calling your overheated customers with polite discounts.",
+    choices: [
+      {
+        label: "Reprice hard",
+        outcome: "You multiplied rates while the spike lasted and retired a construction loan with a single billing cycle. Two tenants left for the rival and told the trade press their side of it.",
+        effect: { cash: 35e5, rep: -4 }
+      },
+      {
+        label: "Hold rates",
+        outcome: "You held prices, let the queues grow, and your tenants rode the spike on your hardware with their names in the press. The rival discounters found fewer doors open than expected, and churn that quarter was zero.",
+        effect: { cash: -5e5, rep: 4 }
+      }
+    ]
+  },
+  {
+    id: "fire-marshal",
+    fromYear: 2021,
+    toYear: 2022,
+    title: "The Fire Marshal",
+    text: "The fire marshal arrives unannounced with a clipboard and a low opinion of cable trays. He points at your hot aisle, the sprinkler headroom, and a battery cabinet he describes as enthusiastic. Full remediation costs real money; a temporary variance costs a favor and a signature.",
+    choices: [
+      {
+        label: "Fix it properly",
+        outcome: "You spent the money, rerouted the trays, and painted clearance lines where the marshal wanted them. The inspection file closed clean, and his office later sent your other sites a courtesy checklist you actually used.",
+        effect: { cash: -22e5, rep: 2 }
+      },
+      {
+        label: "Sign the variance",
+        outcome: "You signed the variance and the site ran untouched through the busy season. A smoldering cable event in October proved his point, though the suppression system earned its keep.",
+        effect: { cash: -2e5, rep: -2 }
+      }
+    ]
+  },
+  {
+    id: "poaching-offer",
+    fromYear: 2022,
+    toYear: 2025,
+    title: "The Counteroffer",
+    text: "Your senior reliability engineer, the one who knows which UPS phase carries which load, mentions over coffee that a rival offered a forty percent raise and a title with Principal in it. He likes it here; he also likes eating regularly. His side project is the only reason your failover works.",
+    choices: [
+      {
+        label: "Match most of it",
+        outcome: "You matched most of the raise and made the failover project his own line item. He stayed, rewrote the runbook, and trained two juniors who later rescued a Saturday night.",
+        effect: { cash: -9e5, rep: 1, staff: 1 }
+      },
+      {
+        label: "Wish him well",
+        outcome: "You shook his hand and told him titles age better than burnout. He left, the failover broke once during a firmware push, and the junior who fixed it earned the principal title herself.",
+        effect: { rep: 1, staff: -1 }
+      }
+    ]
+  },
+  {
+    id: "data-residency",
+    fromYear: 2023,
+    toYear: 2026,
+    title: "The Residency Letter",
+    text: "A regulator writes to ask, in the tone of a person who already knows the answer, whether tenant data ever leaves the region during failover. Your replication was designed by someone who has since moved to Patagonia. Compliant architecture is a quarter of rebuild work; a persuasive lawyer is cheaper and slower to bet on.",
+    choices: [
+      {
+        label: "Rebuild in-region",
+        outcome: "You rebuilt replication inside the border and handed the regulator a diagram that survived her follow-up. Two cross-region tenants renegotiated, and the sales team started calling the compliance a feature.",
+        effect: { cash: -18e5, rep: 3 }
+      },
+      {
+        label: "Argue the wording",
+        outcome: "Your counsel argued that ephemeral failover copies are not storage, and the regulator issued a guidance note instead of a fine. The argument held, and the wording quietly made your next cross-border expansion cheaper.",
+        effect: { cash: -3e5, rep: -1 }
+      }
+    ]
+  },
+  {
+    id: "crypto-miner-lease",
+    fromYear: 2021,
+    toYear: 2023,
+    title: "The Miner Offer",
+    text: "A mining outfit offers to lease your idle containers through the demand trough, cash monthly, with no questions about utilization graphs. Their gear is loud, their insurance is creative, and they pay in a way that clears instantly. The trough is long and your creditors are not sentimental.",
+    choices: [
+      {
+        label: "Lease the racks",
+        outcome: "The miners hummed through the trough and covered two quarters of fixed costs. When AI demand returned early, buying the containers back took a month and a lawyer who owed you one.",
+        effect: { cash: 24e5, rep: -2 }
+      },
+      {
+        label: "Keep them staged",
+        outcome: "You left the containers dark and kept the cold aisles staged for tenant builds. The trough ran thinner than feared, and when a surprise contract landed you were the only vendor who could sign that week.",
+        effect: { cash: -8e5, rep: 2 }
+      }
+    ]
+  },
+  {
+    id: "heatwave-curtailment",
+    fromYear: 2024,
+    toYear: 2027,
+    title: "Four Hours of Dark",
+    text: "A heat wave parks over the region and the grid operator calls with a request dressed as a suggestion: shed a third of your load for four hours, and the brownout misses your county. Your tenants training jobs are at hour sixty of an eighty-hour run. The operator mentions the emergency-rate program for neighbors who cooperated last summer.",
+    choices: [
+      {
+        label: "Curtail willingly",
+        outcome: "You checkpointed the jobs and shed the load; the county lights stayed on and the evening broadcast filmed your dark roof like a monument. The operator remembered in December, when your tariff review came due.",
+        effect: { cash: 6e5, rep: 3, utility: 0.96 }
+      },
+      {
+        label: "Run through it",
+        outcome: "You ran through, the jobs finished on schedule, and the county dimmed its streetlights instead. The operator filed your name in a category of documents you never saw, and the following summer rate letter was educational.",
+        effect: { cash: 18e5, rep: -2, utility: 1.07 }
+      }
+    ]
+  },
+  {
+    id: "sketchy-cash-buyer",
+    fromYear: 2022,
+    toYear: 2024,
+    title: "The Cash Buyer",
+    text: "A holding company with a mailbox address and a flawless wire transfer wants two full pods on a two-year term, prepaid, no site visit, no references. Their industry, when pressed, is described as logistics. Your collections team has spent the quarter chasing three honest customers for smaller sums.",
+    choices: [
+      {
+        label: "Take the money",
+        outcome: "The wire cleared and the pods filled; for six months they were your quietest, best-paying tenants. When their funding source vanished, the machines came back spotless and the story you told the auditors stayed boring.",
+        effect: { cash: 38e5, rep: -2 }
+      },
+      {
+        label: "Demand references",
+        outcome: "You asked for references and the holding company evaporated by Friday. Two weeks later a rival outage made the papers with a familiar mailbox in the filings, and your deal desk framed the rejection.",
+        effect: { rep: 3 }
+      }
+    ]
+  },
+  {
+    id: "pilot-rack",
+    fromYear: 2021,
+    toYear: 2024,
+    title: "The Pilot Rack",
+    text: "An equipment vendor sends a sales engineer with a pilot rack, free for six months, and a heavy accent on the word free. The hardware is genuinely good and the firmware phones home about everything except the weather. Your facilities lead wants it; your security lead has questions shaped like contracts.",
+    choices: [
+      {
+        label: "Accept the pilot",
+        outcome: "The pilot rack outperformed your installed base, and the sales engineer fixed two issues the vendor did not know they had. The conversion discount was real, and so was the telemetry clause you never quite negotiated out.",
+        effect: { cash: 5e5, rep: 1 }
+      },
+      {
+        label: "Send it back",
+        outcome: "You returned the rack and bought the same model through a competitive bid instead. The discount was smaller than free, the telemetry contract was yours, and your security lead wrote a post your customers quoted for years.",
+        effect: { rep: 2 }
+      }
+    ]
+  },
+  {
+    id: "chiller-noise",
+    fromYear: 2023,
+    toYear: 2026,
+    title: "The Noise Complaint",
+    text: "The town council has collected forty signatures about your chillers, which sing a low B all night above a residential street. A council member suggests barriers and curfews; a neighbor suggests, at an open meeting, something less polite. Your expansion permit needs their rezoning vote in the spring.",
+    choices: [
+      {
+        label: "Fund the barriers",
+        outcome: "You funded the barriers and trimmed setpoints after dark; at the rezoning hearing the council president called you a neighbor. The permit passed with one dissent and a pizza order for the planning office.",
+        effect: { cash: -16e5, rep: 3 }
+      },
+      {
+        label: "Contest the complaint",
+        outcome: "Your lawyers argued industrial zoning precedence and the complaint died in committee. The permit passed too, but the local paper ran your chillers under the headline Sound of Money, and two hires declined offers over the drive.",
+        effect: { cash: -2e5, rep: -2 }
+      }
+    ]
+  },
+  {
+    id: "price-fixing",
+    fromYear: 2025,
+    toYear: 2028,
+    title: "The Understanding",
+    text: "Over a long lunch, a rival vice president proposes an understanding: list prices move together, capacity stays off the market in soft quarters, and everyones margins heal. He calls it coordination; your counsel will call it a felony. The cash projections on his napkin are, regrettably, beautiful.",
+    choices: [
+      {
+        label: "Shake on it",
+        outcome: "Prices moved in lockstep for two quarters and the margin chart looked like a miracle. A subpoena arrived in the third, and the discovery archive read like his napkin with footnotes.",
+        effect: { cash: 45e5, rep: -8 }
+      },
+      {
+        label: "Walk out",
+        outcome: "You excused yourself, briefed your counsel, and self-disclosed the lunch to the competition authority. The interview was unpleasant and the immunity was not; a thank-you note later arrived from a whistleblower inside his firm.",
+        effect: { rep: 5 }
+      }
+    ]
+  },
+  {
+    id: "acquihire-ops",
+    fromYear: 2025,
+    toYear: 2028,
+    title: "The Ops Sale",
+    text: "A rival wants your operations lead and offers to buy her team the honest way: an acquisition of the whole ops unit, staff, runbooks, spares and all. The number would retire your debt; the catch is that your campus runs on her checklist and her memory of every breaker. The term sheet carries a non-hire clause for the region, two years long.",
+    choices: [
+      {
+        label: "Sell the unit",
+        outcome: "The deal closed and the balance sheet exhaled; her team left with the runbooks and a framed photo of the loading dock. The rebuilt operations desk ran at ninety-eight percent of the old reliability, on twice the invoices.",
+        effect: { cash: 55e5, rep: -1, staff: -2 }
+      },
+      {
+        label: "Refuse and retain",
+        outcome: "You declined, promoted from within, and granted retention packages before the rival could counter. The team held through a firmware storm that would have sunk a contractor crew, and the refusal became part of your hiring pitch.",
+        effect: { cash: -4e5, rep: 4, staff: 1 }
+      }
+    ]
   }
-  const stateGB = 16 * model.paramsB;
-  let zeroAcrossDomains = false;
-  let fitsTrainingState = true;
-  if (stateGB > N * accel.memGB) {
-    fitsTrainingState = false;
-    issues.push({
-      severity: "error",
-      code: "state-does-not-fit",
-      message: `Training state (~${stateGB} GB for ${model.name}) exceeds cluster memory ${N * accel.memGB} GB.`,
-      learn: accel.id
-    });
-    return { mfu: 0, tokensPerSec: 0, stepMs: 0, zeroAcrossDomains, fitsTrainingState, issues };
+];
+const RIVALS = [
+  {
+    id: "hyperion",
+    name: "Hyperion Cloud",
+    bio: "A hyperscaler the size of a weather system: slow to move, impossible to stop, quietly ruthless about both.",
+    moves: [
+      "{rival} committed another dozen campuses, most destined to open two years late and dominate for ten.",
+      "{rival} posted a region-wide price cut so deep that analysts assumed it was a typo, then a strategy.",
+      "{rival} hired forty capacity planners in a single week, which their blog described as routine headcount hygiene.",
+      "{rival} signed a multi-gigawatt supply deal, and the supplier other customers received polite letters about their queues.",
+      "{rival} suffered a four-hour regional outage and apologized in a post-mortem longer than most novels.",
+      "{rival} pivoted a datacenter project toward in-house silicon, canceling enough orders to bend a supplier earnings call."
+    ],
+    reactsToYou: [
+      "{rival} added your company to a competitive deck, where you appeared as a small but increasingly bold square.",
+      "{rival} quietly matched your headline rates in two regions, without announcing it.",
+      "{rival} sent a partnership inquiry written in the tone of a museum acquiring a promising artist.",
+      "{rival} told a journalist the market rewards scale, then quoted an uptime figure suspiciously close to yours."
+    ]
+  },
+  {
+    id: "nimbus",
+    name: "Nimbus Compute",
+    bio: "A neocloud that launches discounts the way other companies launch products: loud, loved, and one refinancing away from a cautionary tale.",
+    moves: [
+      "{rival} announced three regions in one post, along with a pricing table that made an accountant somewhere lie down.",
+      "{rival} undercut the market again and called it a mission to democratize compute.",
+      "{rival} hired a whole cluster team from a competitor, promising equity, nap pods, and unlimited cold aisle time.",
+      "{rival} signed a capacity deal with a chip reseller whose warehouse, rumor says, smells like sea air.",
+      "{rival} went down for a day after a cooling failure and streamed the whole incident, which viewers somehow respected.",
+      "{rival} pivoted to inference hosting, then fine-tuning, then back to bare GPUs, all within a quarter."
+    ],
+    reactsToYou: [
+      "{rival} quoted your pricing on their homepage, undercut it by a dollar, and tagged you in the announcement.",
+      "{rival} copied your liquid-cooling floor plan with the confidence of a company that has never melted a rack.",
+      "{rival} courted your engineers openly, posting offer letters as content.",
+      "{rival} called your margins unsustainable in an interview, recorded at a datacenter they lease by the month."
+    ]
+  },
+  {
+    id: "atlas",
+    name: "Atlas Sovereign AI",
+    bio: "A sovereign cloud funded by a national treasury: patient, political, and allergic to any ranking it does not top.",
+    moves: [
+      "{rival} opened a campus with a ribbon, a choir, and a footnote about capacity figures nobody may audit.",
+      "{rival} underbid every commercial operator in a national tender and described the result as a market decision.",
+      "{rival} hired returned diaspora engineers with salaries, fast-tracked citizenship, and what witnesses call genuine gratitude.",
+      "{rival} signed a model-training pact with a neighboring state; the press release carried four flags.",
+      "{rival} suffered an outage they described as scheduled maintenance, nine hours after it began.",
+      "{rival} pivoted toward hosting the state entire digital bureaucracy, which at their scale counts as diversification."
+    ],
+    reactsToYou: [
+      "{rival} cited your uptime in a policy white paper as evidence the market needs guiding.",
+      "{rival} copied your pricing structure down to the surcharge names, translated them, and denied both.",
+      "{rival} offered your executives advisory seats at a summit where the coffee, like everything else, was state-funded.",
+      "{rival} remarked that foreign operators lack accountability, in a speech delivered within sight of your cooling towers."
+    ]
   }
-  if (stateGB > d * accel.memGB) {
-    zeroAcrossDomains = true;
-    tSo *= 3;
-    issues.push({
-      severity: "warn",
-      code: "zero-across-domains",
-      message: `Training state (~${stateGB} GB) exceeds one ${d}-accelerator domain (${d * accel.memGB} GB): ZeRO sharding over scale-out triples gradient traffic.`,
-      learn: accel.id
-    });
-  }
-  const overlap = clamp$2(opts.commOverlap ?? 0.5, 0, 0.9);
-  const stepSec = tC + (tSu + tSo) * (1 - overlap) * STRAGGLER;
-  const mfu = clamp$2(tC / stepSec * TRAIN_CEILING * accel.softwareMaturity * accel.trainingAffinity, 5e-3, 0.65);
-  const tokensPerSec = N * peak * 1e12 * mfu / (6 * Pa * GB);
-  return {
-    mfu,
-    tokensPerSec,
-    stepMs: stepSec * 1e3,
-    zeroAcrossDomains,
-    fitsTrainingState,
-    issues
-  };
+];
+const VOICES = [
+  { customer: "Stealth Labs", renews: "Renewing. Also, nobody look at our dashboards until Friday. It is fine. Mostly fine.", leaves: "We are pivoting to a platform play. The platform is a spreadsheet. Bye." },
+  { customer: "Glyph AI", renews: "Renewed! Our GPU bill finally fits on one slide. A dense slide.", leaves: "We got acquired. Nobody told the GPU budget. Cancel everything, sorry, love you." },
+  { customer: "Peregrine Models", renews: "Renewing. Our last run took nine days here versus a month anywhere else.", leaves: "Investors say diversified cloud. We say goodbye. The migration is already on fire." },
+  { customer: "Otter Systems", renews: "Renewal in. Your staff fixed our config at 2am. That is the whole testimonial.", leaves: "Finance moved us in-house. The in-house rack is on a loading dock somewhere." },
+  { customer: "VectorForge", renews: "Renewed. Billing finally matches our forecast, which terrifies everyone here.", leaves: "Moving to reserved capacity elsewhere. Cheaper by four percent. We will miss the uptime." },
+  { customer: "MIT LIDS", renews: "Renewed. The grant committee approved the extension; the results section writes itself.", leaves: "The funding cycle ended. We return to a departmental cluster and, frankly, suffering." },
+  { customer: "Flatiron Institute", renews: "Renewed per standard procurement. The simulation throughput has been exemplary.", leaves: "Our allocation moved to a national facility. Please archive everything correctly." },
+  { customer: "CERN OpenLab", renews: "Renewed. The data challenges ran on schedule, which nobody here believes.", leaves: "Budget consolidation. The open-source stack moves to a member institute cluster." },
+  { customer: "RIKEN AICS", renews: "Renewal approved. Performance per watt has met the committee expectations.", leaves: "The fiscal year closed our external allocations. With respect, sayonara." },
+  { customer: "Turing Institute", renews: "Renewed. The reproducibility report cited your stability data twice.", leaves: "A partner institute offered matching capacity. Academic loyalty loses to matching." },
+  { customer: "Acme Retail Media", renews: "Renewed via PO 88231. Uptime met SLA; invoices matched contract. Ideal.", leaves: "Per the Q3 vendor review we consolidated suppliers. Expect a records request." },
+  { customer: "Helios Bank", renews: "Renewed after risk committee sign-off. Your audit responses were, unusually, complete.", leaves: "The regulator prefers in-region processing. Contract terminated per clause 14.2." },
+  { customer: "Nordwind Auto", renews: "Renewal executed. Crash-simulation queue latency finally met engineering requirements.", leaves: "Procurement selected a bundled provider. The decision tested well with focus groups." },
+  { customer: "MedSyn Pharma", renews: "Renewed. The trial workload completed ahead of schedule; compliance signed off.", leaves: "Following an internal review we are consolidating with a GxP-certified provider." },
+  { customer: "Skyline Telecom", renews: "Renewed. The interconnect bills arrived accurate, a first in our professional lives.", leaves: "A network reorganization ends this contract. Goodbye, and please retain the access logs." },
+  { customer: "EU Sovereign Cloud", renews: "The framework agreement is extended. Compliance documentation was found satisfactory.", leaves: "The data-residency review concluded. The framework will not be renewed." },
+  { customer: "Emirates AI Council", renews: "Renewal is approved. His excellency notes the latency improvements with pleasure.", leaves: "A national capacity directive requires consolidation. Closure is regretted but ordered." },
+  { customer: "Nippon AI Grid", renews: "Renewal confirmed. The consortium thanks you for the disaster-recovery drill results.", leaves: "The consortium has selected a domestic operator. Cooperation concludes with respect." },
+  { customer: "Sovereign Tech Fund", renews: "Renewed. The portfolio companies report acceptable utilization and fewer escalations.", leaves: "The fund is redirecting capacity to a strategic partner. Goodbye." }
+];
+const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const storyRng = (s2, salt) => mulberry32((s2.seed ^ Math.imul(s2.month + 1, 2246822507)) + salt >>> 0);
+const storyOf = (s2) => s2.story ??= { shown: [], seen: [], cards: [] };
+const yearOf = (month) => 2020 + Math.floor(month / 12);
+const voiceOf = (customer) => VOICES.find((v2) => v2.customer === customer);
+const DILEMMA_WINDOW_MONTHS = 3;
+function applyEffect(g, e) {
+  if (e.cash) g.cash = Math.round(g.cash + e.cash);
+  if (e.rep) g.reputation = clamp$1(g.reputation + e.rep, 0, 100);
+  if (e.staff) g.staff = Math.max(0, g.staff + e.staff);
+  if (e.utility) g.utilityUSDPerKWh = Math.round(g.utilityUSDPerKWh * e.utility * 1e4) / 1e4;
 }
-function inferenceCapacity(stats, accel, model, opts = {}) {
-  const issues = [];
-  const N = Math.max(1, Math.round(stats.accelerators));
-  const d = domainOf(stats, N);
-  const bpp = Math.max(0.125, opts.bytesPerParam ?? 1);
-  const ctxT = Math.max(1, opts.contextTokens ?? 4096);
-  const weightsGB = model.paramsB * bpp;
-  const activeGB = model.activeParamsB * bpp;
-  const kvPerSeqGB = model.kvBytesPerToken * ctxT / GB;
-  let tp = 1;
-  while (tp * 2 <= d && tp * accel.memGB < weightsGB * 1.1) tp *= 2;
-  let fitsWeights = tp * accel.memGB >= weightsGB * 1.1;
-  if (!fitsWeights && d * accel.memGB >= weightsGB * 1.02) {
-    tp = d;
-    fitsWeights = true;
-  } else if (!fitsWeights) {
-    tp = d;
-    issues.push({
-      severity: "error",
-      code: "weights-exceed-domain",
-      message: `Weights (${weightsGB} GB) plus overhead do not fit a ${d}-accelerator scale-up domain (${d * accel.memGB} GB); tensor parallelism cannot shard them.`,
-      learn: accel.id
-    });
-  }
-  const replicas = Math.floor(N / tp);
-  if (replicas < 1) {
-    issues.push({ severity: "error", code: "no-replica", message: "Fewer accelerators than one tensor-parallel replica." });
-  }
-  const kvAvailGB = tp * accel.memGB - weightsGB * 1.05;
-  const maxBatchKV = Math.max(0, Math.floor(kvAvailGB / Math.max(kvPerSeqGB, 1e-9)));
-  if (maxBatchKV < 1) {
-    issues.push({
-      severity: "error",
-      code: "kv-no-room",
-      message: `No memory left for KV cache: weights + runtime use ${weightsGB * 1.05} GB of ${tp * accel.memGB} GB per replica.`,
-      learn: accel.id
-    });
-  }
-  let tpEff = 1;
-  if (tp > 1) {
-    if (accel.scaleUp === "pcie" || accel.scaleUp === "none") tpEff = 0.35;
-    else if (accel.scaleUp === "wafer") tpEff = 0.9;
-    else tpEff = 0.85;
-  }
-  if (!fitsWeights) tpEff *= 0.3;
-  const readBW = Math.max(tp * accel.memBWTBs * 1e3 * tpEff, 1e-6);
-  let batch = Math.max(1, maxBatchKV);
-  if (opts.tpotMs !== void 0) {
-    const budgetBytes = opts.tpotMs / 1e3 * readBW * GB;
-    const batchTpot = Math.floor((budgetBytes - activeGB * GB) / (model.kvBytesPerToken * ctxT));
-    if (batchTpot < 1) {
-      issues.push({
-        severity: "error",
-        code: "tpot-infeasible",
-        message: `Cannot meet ${opts.tpotMs} ms per-token latency: even batch 1 decode exceeds it.`
-      });
-    } else {
-      batch = Math.min(batch, batchTpot);
+function rivalHeadline(s2, rivalId, name) {
+  const p = RIVALS.find((r) => r.id === rivalId);
+  if (!p) return null;
+  const rng = storyRng(s2, 7);
+  const pool = s2.reputation >= 60 && rng() < 0.5 ? p.reactsToYou : p.moves;
+  return pool[Math.floor(rng() * pool.length)].split("{rival}").join(name);
+}
+const story = {
+  id: "story",
+  run: ({ s: s2, log }) => {
+    const st2 = storyOf(s2);
+    const year = yearOf(s2.month);
+    if (s2.month % 12 === 0) {
+      const ch = CHAPTERS.find((c) => c.year === year);
+      if (ch && !st2.shown.includes(year)) {
+        st2.shown.push(year);
+        st2.cards.push(year);
+        log("info", `📖 ${year}: ${ch.title}. ${ch.text}`);
+      }
+    }
+    if (st2.open && s2.month - st2.open.month >= DILEMMA_WINDOW_MONTHS) {
+      const d = DILEMMAS.find((x) => x.id === st2.open.id);
+      log("info", `The moment passed: you never answered "${d?.title ?? "the offer"}", and the offer went elsewhere.`);
+      st2.seen.push(st2.open.id);
+      st2.open = void 0;
+    }
+    if (!st2.open && s2.month >= 14 && s2.month < 106 && s2.mode !== void 0) {
+      const rng = storyRng(s2, 13);
+      if (rng() < 0.15) {
+        const pool = DILEMMAS.filter((d) => !st2.seen.includes(d.id) && year >= d.fromYear && year <= d.toYear);
+        if (pool.length) {
+          const d = pool[Math.floor(rng() * pool.length)];
+          st2.open = { id: d.id, month: s2.month };
+          log("info", `❓ Decision — ${d.title}: ${d.text}`);
+        }
+      }
     }
   }
-  const stepSec = (activeGB + batch * kvPerSeqGB) / readBW;
-  const perUserTokensPerSec = 1 / stepSec;
-  const tokensPerSec = replicas * batch * perUserTokensPerSec * accel.softwareMaturity * Math.min(accel.inferenceAffinity, 1.3);
-  const prefillFlops = 2 * model.activeParamsB * GB * ctxT;
-  const pfPeak = (accel.tflops.fp8 ?? peakAt(accel)) * 1e12 * FP8_UTIL;
-  const ttftMs = prefillFlops / (tp * pfPeak * PREFILL_MFU * accel.softwareMaturity) * 1e3;
-  return {
-    tpSize: tp,
-    replicas,
-    fitsWeights,
-    maxBatchKV,
-    batch,
-    stepMs: stepSec * 1e3,
-    perUserTokensPerSec,
-    tokensPerSec,
-    ttftMs,
-    issues
-  };
-}
+};
 const ARCH_BONUS = { startup: 1, lab: 2, enterprise: 3, sovereign: 5 };
-const clamp$1 = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const round2 = (x) => Math.round(x * 100) / 100;
 const round3 = (x) => Math.round(x * 1e3) / 1e3;
 function queueRenewal(s2, k2) {
@@ -9981,6 +10532,9 @@ const serveContracts = {
     const completed = [];
     const defaulted = [];
     const usedFrac = {};
+    const { needed: staffNeed } = staffNeeded(s2);
+    const staffShort = Math.max(0, staffNeed - s2.staff) / staffNeed;
+    const staffFactor = 1 - BAL.understaffedAvail * staffShort;
     const needGbps = totalNeedGbps(s2);
     const netFactor = needGbps > 0 ? Math.min(1, uplinkGbps(s2) / needGbps) : 1;
     if (netFactor < 1) log("bad", `Internet uplink is saturated: customers need ~${needGbps.toFixed(1)} Gb/s but you only have ${uplinkGbps(s2).toFixed(0)} Gb/s, so every contract runs at ${(netFactor * 100).toFixed(0)}% availability. Buy transit on Build → Internet.`);
@@ -9988,8 +10542,14 @@ const serveContracts = {
       const k2 = ac.contract;
       if (ac.clusterIds.length === 0) {
         const by = ac.deployBy ?? ac.startMonth + 4;
-        if (s2.month > by) defaulted.push(ac);
-        else if (s2.month === by) log("bad", `Last month to bring capacity online for ${k2.customer} (${k2.model.name}) — assign a qualifying cluster now or they walk.`);
+        if (s2.month > by) {
+          const underway = (s2.projects ?? []).some((p) => p.contractId === k2.id && p.stage !== "done" && p.stage !== "failed");
+          if (underway && !ac.extended) {
+            ac.extended = true;
+            ac.deployBy = by + 3;
+            log("info", `${k2.customer} grants a 3-month extension on ${k2.model.name}: they can see your build is under way.`);
+          } else defaulted.push(ac);
+        } else if (s2.month === by) log("bad", `Last month to bring capacity online for ${k2.customer} (${k2.model.name}) — assign a qualifying cluster now or they walk.`);
         continue;
       }
       for (const id of ac.clusterIds) c.served.add(id);
@@ -10033,9 +10593,10 @@ const serveContracts = {
         availability = Math.min(1, frac) * (worstTtftMs <= k2.ttftMs ? 1 : 0.8);
         tokensPerSec = Math.min(capacity, k2.tokensPerSec);
       }
-      availability *= netFactor;
+      availability *= netFactor * staffFactor;
       const res = k2.kind === "training" ? contractRevenue(ac, { accelerators, availability }) : contractRevenue(ac, { tokensPerSec, availability });
       c.revenue += res.netUSD;
+      ac.revenueEarned = (ac.revenueEarned ?? 0) + res.netUSD;
       if (!res.slaMet) {
         ac.slaMisses += 1;
         if (s2.stats) s2.stats.slaMisses += 1;
@@ -10045,8 +10606,8 @@ const serveContracts = {
       if (ac.monthsServed >= k2.durationMonths) completed.push(ac);
     }
     for (const ac of defaulted) {
-      s2.reputation = clamp$1(s2.reputation - 8, 0, 100);
-      log("bad", `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.`);
+      s2.reputation = clamp(s2.reputation - 8, 0, 100);
+      log("bad", `${ac.contract.customer} cancelled: you never brought a qualifying cluster online for ${ac.contract.model.name} in time. Reputation −8.${voiceOf(ac.contract.customer) ? ` "${voiceOf(ac.contract.customer).leaves}"` : ""}`);
     }
     s2.activeContracts = s2.activeContracts.filter((ac) => {
       if (defaulted.includes(ac)) return false;
@@ -10055,12 +10616,15 @@ const serveContracts = {
       const clean = ac.slaMisses === 0;
       const sloppy = ac.slaMisses > Math.ceil(k2.durationMonths / 3);
       const gain = 2 + ARCH_BONUS[k2.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
-      s2.reputation = clamp$1(s2.reputation + gain, 0, 100);
-      if (s2.stats) s2.stats.contractsCompleted += 1;
+      s2.reputation = clamp(s2.reputation + gain, 0, 100);
+      if (s2.stats) {
+        s2.stats.contractsCompleted += 1;
+        if ((ac.revenueEarned ?? 0) > (s2.stats.bestDeal?.revenue ?? 0)) s2.stats.bestDeal = { customer: k2.customer, model: k2.model.name, revenue: Math.round(ac.revenueEarned ?? 0) };
+      }
       log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
       if (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20) {
         queueRenewal(s2, k2);
-        log("good", `${k2.customer} wants to renew — a larger contract is on the board for 6 months.`);
+        log("good", `${k2.customer} wants to renew — a larger contract is on the board for 6 months.${voiceOf(k2.customer) ? ` "${voiceOf(k2.customer).renews}"` : ""}`);
       }
       return false;
     });
@@ -10073,6 +10637,8 @@ const contractMarket = {
     const expired = s2.availableContracts.filter((k2) => k2.deadlineMonth < s2.month);
     const alive = s2.availableContracts.filter((k2) => k2.deadlineMonth >= s2.month);
     const renewals = alive.filter(isRenewal);
+    if (s2.demandBoost && s2.demandBoost > 1.001) s2.demandBoost = 1 + (s2.demandBoost - 1) * 0.97;
+    else if (s2.demandBoost) s2.demandBoost = void 0;
     const fresh = generateContracts(s2, s2.month, rng);
     const regular = [...alive.filter((k2) => !isRenewal(k2)), ...fresh];
     const room = Math.max(0, o2.maxAvailableContracts - renewals.length);
@@ -10126,11 +10692,11 @@ function scriptedEvents(s2, log) {
         units += o2.qty;
       }
     }
-    log("bad", `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator(s) already in the pipeline slip 2 months. Lesson: lead times quoted in a soft market are fiction in a hot one — order ahead and hold spares.`);
+    log("bad", `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator(s) already in the pipeline slip 2 months.`);
   } else if (s2.month === 52) {
-    log("info", "💧 Apr 2024 — the Blackwell generation makes liquid cooling mainstream: GB200 NVL72 racks (~120 kW) cannot be air-cooled at all. Lesson: plan the DLC transition early — CDUs, coolant quality and floor plumbing have lead times of their own.");
+    log("info", "💧 Apr 2024 — the Blackwell generation makes liquid cooling mainstream: GB200 NVL72 racks (~120 kW) cannot be air-cooled at all.");
   } else if (s2.month === 74) {
-    log("info", "🧲 Feb 2026 — NVIDIA opens Rubin allocation and existing AI-factory operators get first call. Lesson: vendors reward demonstrated deployments — a campus that ships on schedule is your ticket to the next generation.");
+    log("info", "🧲 Feb 2026 — NVIDIA opens Rubin allocation and existing AI-factory operators get first call.");
   }
 }
 function disasterPool(s2, rng, log) {
@@ -10146,7 +10712,7 @@ function disasterPool(s2, rng, log) {
     rack.readyMonth = s2.month + down;
     rack.failedPart = void 0;
     if (!contained) s2.reputation = Math.max(0, s2.reputation - 3);
-    log(contained ? "info" : "bad", `🔥 Fire in ${hall.name}: rack ${rack.id} ${contained ? "saved by early smoke detection and clean-agent suppression" : "destroyed"} — ${down} months to rebuild${contained ? "." : " and −3 reputation."} Lesson: ${contained ? "detection plus suppression turns a total loss into a bad weekend." : "smoke detection and clean-agent suppression cost pennies next to a hall of GPUs."}`);
+    log(contained ? "info" : "bad", `🔥 Fire in ${hall.name}: rack ${rack.id} ${contained ? "saved by early smoke detection and clean-agent suppression" : "destroyed"} — ${down} months to rebuild${contained ? "." : " and −3 reputation."}`);
   });
   const assigned = s2.activeContracts.filter((a) => a.clusterIds.length > 0);
   if (assigned.length) pool.push(() => {
@@ -10156,12 +10722,12 @@ function disasterPool(s2, rng, log) {
     s2.activeContracts = s2.activeContracts.filter((x) => x !== a);
     s2.cash -= Math.round(monthly);
     s2.reputation = Math.max(0, s2.reputation - 1);
-    log("bad", `💸 ${c.customer} defaults on its ${c.kind} contract: the cluster goes idle and ~$${Math.round(monthly).toLocaleString("en-US")} of a month's expected revenue never lands (−1 reputation). Lesson: deposits, take-or-pay minimums and credit checks exist because customers go bankrupt mid-deal.`);
+    log("bad", `💸 ${c.customer} defaults on its ${c.kind} contract: the cluster goes idle and ~$${Math.round(monthly).toLocaleString("en-US")} of a month's expected revenue never lands (−1 reputation).`);
   });
   if (s2.orders.length) pool.push(() => {
     const n = s2.orders.length;
     for (const o2 of s2.orders) o2.arriveMonth += 2;
-    log("bad", `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: all ${n} in-transit order(s) slip 2 months. Lesson: dual-sourcing and safety stock are insurance, not waste.`);
+    log("bad", `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: all ${n} in-transit order(s) slip 2 months.`);
   });
   if (live.length) pool.push(() => {
     const hall = live[Math.floor(rng() * live.length)];
@@ -10170,7 +10736,7 @@ function disasterPool(s2, rng, log) {
       if (a.clusterIds.length) a.slaMisses += 1;
     });
     s2.cash -= 4e4 * racks;
-    log("bad", `❄ Chiller trip in ${hall.name}: a compressor fault drops the loop for hours and every serving contract takes an SLA miss; emergency pumping and overtime cost $${(4e4 * racks / 1e3).toFixed(0)}k. Lesson: N+1 chillers with automatic switchover keep the water cold while one unit is repaired.`);
+    log("bad", `❄ Chiller trip in ${hall.name}: a compressor fault drops the loop for hours and every serving contract takes an SLA miss; emergency pumping and overtime cost $${(4e4 * racks / 1e3).toFixed(0)}k.`);
   });
   return pool;
 }
@@ -10186,7 +10752,7 @@ function rollEvents(s2, rng, log, graceMonths = 4) {
   const pool = [];
   pool.push(() => {
     s2.utilityUSDPerKWh = Math.min(0.2, Math.round(s2.utilityUSDPerKWh * 1.3 * 1e4) / 1e4);
-    log("bad", `⚡ Energy crisis: utility rate jumps to $${s2.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
+    log("bad", `⚡ Energy crisis: utility rate jumps to $${s2.utilityUSDPerKWh.toFixed(3)}/kWh.`);
   });
   if (racks > 0) pool.push(() => {
     const cut = Math.round(1e6 + rng() * 2e6);
@@ -10204,7 +10770,7 @@ function rollEvents(s2, rng, log, graceMonths = 4) {
   if (year >= 2021) pool.push(() => {
     const bill = Math.round(25e3 * Math.max(1, racks));
     s2.cash -= bill;
-    log("bad", `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1e3).toFixed(0)}k. Lesson: warm-water DLC tolerates hot days — air-cooled halls suffer first.`);
+    log("bad", `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1e3).toFixed(0)}k.`);
   });
   if (racks > 0 && s2.uplinks) {
     pool.push(() => {
@@ -10216,7 +10782,7 @@ function rollEvents(s2, rng, log, graceMonths = 4) {
         a.slaMisses += 1;
       });
       s2.reputation = Math.max(0, s2.reputation - 2);
-      log("bad", "🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit. Lesson: buy a second circuit from a different carrier on a diverse path.");
+      log("bad", "🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit.");
     });
   }
   if (racks > 0) {
@@ -10233,7 +10799,7 @@ function rollEvents(s2, rng, log, graceMonths = 4) {
       });
       s2.reputation = Math.max(0, s2.reputation - 2);
       const why = weakest?.gaps[0] ?? "no backup power installed";
-      log("bad", `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + battery + generator + transfer switch, sized N+1, keep training alive.`);
+      log("bad", `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit.`);
     });
     pool.push(() => {
       const bonus = Math.round(racks * 4e4);
@@ -10296,74 +10862,49 @@ const staffingCheck = {
     }
   }
 };
-const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
-const ACCELERATORS = ALL_ITEMS.filter((i) => i.kind === "accelerator");
-const rackAgeMonths = (rack, month) => Math.max(0, month - (rack.installedMonth ?? rack.readyMonth - 2));
-function rackAccelItem(g, designId) {
-  const design = g.racks.find((r) => r.id === designId);
-  if (!design) return void 0;
-  for (const item of design.items) {
-    if (item.type !== "tray") continue;
-    const tray = g.trays.find((t) => t.id === item.trayId);
-    if (!tray) continue;
-    for (const p of tray.parts) {
-      const it2 = getItem(p.itemId);
-      if (it2?.kind === "accelerator") return it2;
-    }
-  }
-  return void 0;
-}
-function generationsBehind(accel, month) {
-  const mine = Math.floor(accel.availableFrom);
-  const now = monthToYear(month);
-  const newer = /* @__PURE__ */ new Set();
-  for (const a of ACCELERATORS) {
-    if (a.availableFrom <= now && Math.floor(a.availableFrom) > mine) newer.add(Math.floor(a.availableFrom));
-  }
-  return Math.min(3, newer.size);
-}
-function residualFactor(g, rack) {
-  const ageYears = rackAgeMonths(rack, g.month) / 12;
-  const accel = rackAccelItem(g, rack.designId);
-  return accel ? clamp(1 - 0.12 * ageYears - 0.07 * generationsBehind(accel, g.month), 0.1, 1) : clamp(1 - 0.1 * ageYears, 0.25, 1);
-}
-const rackResidualUSD = (g, rack) => {
-  const design = g.racks.find((r) => r.id === rack.designId);
-  return design ? rackBomValue(g, design) * residualFactor(g, rack) : 0;
-};
-function assetValue(g) {
-  let v2 = 0;
-  for (const [id, n] of Object.entries(g.inventory)) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
-  for (const [id, n] of Object.entries(g.spareStock ?? {})) v2 += 0.8 * (getItem(id)?.priceUSD ?? 0) * n;
-  for (const o2 of g.orders) v2 += 0.9 * o2.unitPrice * o2.qty;
-  for (const hall of g.halls) {
-    for (const [id, n] of Object.entries(hall.powerEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
-    for (const [id, n] of Object.entries(hall.coolingEquip)) v2 += 0.6 * (getItem(id)?.priceUSD ?? 0) * n;
-    for (const rack of hall.racks) v2 += rackResidualUSD(g, rack);
-  }
-  return v2;
-}
 const HORIZON_MONTH = 108;
 const BANKRUPT_AFTER_MONTHS = 3;
 const netWorthOf = (g) => g.cash - g.debt + assetValue(g);
 const RATINGS = [
-  [1e9, "AI Datacenter Tycoon"],
-  [3e8, "Hyperscale contender"],
+  [6e8, "AI Datacenter Tycoon"],
+  [25e7, "Hyperscale contender"],
   [1e8, "Solid operator"],
-  [5e7, "Steady operator"],
+  [6e7, "Steady operator"],
   [0, "Struggling operator"]
 ];
 const ratingFor = (netWorth) => (RATINGS.find(([min]) => netWorth >= min) ?? [0, "Bankrupt"])[1];
 const scoreOf = (g, netWorth) => Math.round(netWorth / 1e5 + (g.reputation ?? 0) * 5 + (g.stats?.contractsCompleted ?? 0) * 20 + (g.stats?.peakAccels ?? 0) / 50);
+function endingFor(g, reason, nw) {
+  if (reason === "bankrupt") return { ending: "bankrupt", rating: "Bankrupt", epilogue: "The receivers auction the racks by the pallet. A hyperscaler buys the lot for cents on the dollar, and a rival hires your night shift." };
+  if (reason === "fired") return { ending: "fired", rating: "Fired by the board", epilogue: "Margaux Vance thanks you for your service. Security carries your box to the car. The board brings in an operator who has actually read the plan." };
+  const rating = ratingFor(nw);
+  const rep = g.reputation ?? 0;
+  if (nw >= 25e7 && rep >= 60) return { ending: "ipo", rating, epilogue: "You ring the opening bell. The ticker is GIGW, the float is oversubscribed twelve times, and Dev Okonkwo cries on live television. Your hall is now a line item in every index fund." };
+  if (nw >= 1e8) return { ending: "acquired", rating, epilogue: "A hyperscaler buys the company for its power contracts and its crew. You get a seat on a very large board and a retention bonus that is mostly stock." };
+  if (nw >= 6e7) return { ending: "steady", rating, epilogue: "You never became a legend, but the halls hum, the customers renew and the lights stay on. Ilse Brandt calls it the best-run small operator she audited." };
+  return { ending: "fire-sale", rating, epilogue: "You sell the racks to a competitor, honour the last contracts and keep the name. It was a long eight years, and the GPUs were never cheap." };
+}
 function finish(c, reason) {
   const { s: s2, log } = c;
   const nw = netWorthOf(s2);
   const stats = s2.stats;
-  const rating = reason === "bankrupt" ? "Bankrupt" : ratingFor(nw);
-  const summary = reason === "bankrupt" ? `Creditors closed you down in month ${s2.month}: cash stayed negative for ${BANKRUPT_AFTER_MONTHS} months.` : `You reached the end of 2028 with net worth $${Math.round(nw / 1e6)}M, ${stats.contractsCompleted} contracts completed and a peak of ${stats.peakAccels} accelerators.`;
-  s2.status = reason === "bankrupt" ? "bankrupt" : "finished";
-  s2.endReport = { reason, month: s2.month, score: scoreOf(s2, nw), netWorth: Math.round(nw), rating, revenueTotal: Math.round(stats.revenueTotal), peakAccels: stats.peakAccels, contractsCompleted: stats.contractsCompleted, reputation: s2.reputation, summary };
-  log(reason === "bankrupt" ? "bad" : "good", `${reason === "bankrupt" ? "GAME OVER" : "2028 COMPLETE"} - ${rating}. ${summary}`);
+  const end = endingFor(s2, reason, nw);
+  const rating = end.rating;
+  const summary = reason === "bankrupt" ? `Creditors closed you down in month ${s2.month}: cash stayed negative for ${BANKRUPT_AFTER_MONTHS} months.` : reason === "fired" ? `The board removed you in month ${s2.month} after three missed yearly reviews in a row.` : `You reached the end of 2028 with net worth $${Math.round(nw / 1e6)}M, ${stats.contractsCompleted} contracts completed and a peak of ${stats.peakAccels} accelerators.`;
+  s2.status = reason === "bankrupt" ? "bankrupt" : reason === "fired" ? "fired" : "finished";
+  s2.endReport = { reason, ending: end.ending, epilogue: end.epilogue, month: s2.month, score: Math.round(scoreOf(s2, nw) * (reason === "fired" ? 0.3 : reason === "bankrupt" ? 0.5 : 1)), netWorth: Math.round(nw), rating, revenueTotal: Math.round(stats.revenueTotal), peakAccels: stats.peakAccels, contractsCompleted: stats.contractsCompleted, reputation: s2.reputation, summary };
+  const usdM = (x) => `$${(x / 1e6).toFixed(1)}M`;
+  const hist = s2.history;
+  const step2 = Math.max(1, Math.floor(hist.length / 40));
+  s2.endReport.timeline = hist.filter((_, i) => i % step2 === 0 || i === hist.length - 1).map((h) => ({ month: h.month, revenue: Math.round(h.revenue), cash: Math.round(h.cash) }));
+  if (stats.bestDeal) s2.endReport.bestDeal = `${stats.bestDeal.customer} (${stats.bestDeal.model}) paid ${usdM(stats.bestDeal.revenue)} over its term.`;
+  if (stats.worstIncident) s2.endReport.worstIncident = stats.worstIncident.text;
+  const rivals = s2.rivals ?? [];
+  const mine = onlineAccels(s2);
+  const top = [...rivals].sort((a, b) => b.accels - a.accels)[0];
+  if (top) s2.endReport.rivalLine = mine >= top.accels ? `You finished with ${mine.toLocaleString("en-US")} accelerators online, ahead of ${top.name} (${Math.round(top.accels).toLocaleString("en-US")}).` : `You finished with ${mine.toLocaleString("en-US")} accelerators online; ${top.name} ran ${Math.round(top.accels).toLocaleString("en-US")}.`;
+  s2.endReport.shareText = `GIGAWATT 2020-2028: ${rating}. Net worth ${usdM(nw)}, ${stats.contractsCompleted} contracts, score ${s2.endReport.score}. ${end.epilogue.split(". ")[0]}.`;
+  log(reason === "horizon" ? "good" : "bad", `${reason === "bankrupt" ? "GAME OVER" : reason === "fired" ? "FIRED" : "2028 COMPLETE"} - ${rating}. ${summary}`);
 }
 const endgame = {
   id: "endgame",
@@ -10373,6 +10914,7 @@ const endgame = {
     s2.stats.revenueTotal += c.revenue;
     const accels = s2.clusters.reduce((n, cl) => n + (cl.stats?.accelerators ?? 0), 0);
     s2.stats.peakAccels = Math.max(s2.stats.peakAccels, accels);
+    if (s2.status && s2.status !== "playing") return;
     if (s2.cash < 0) {
       s2.negCashMonths = (s2.negCashMonths ?? 0) + 1;
       if (s2.mode !== "learner") {
@@ -10381,6 +10923,34 @@ const endgame = {
       }
     } else s2.negCashMonths = 0;
     if (s2.month >= HORIZON_MONTH) finish(c, "horizon");
+  }
+};
+const BOARD_TARGETS = [1e-3, 4e-3, 8e-3, 0.011, 0.013, 0.015, 0.017];
+const BOARD_STRIKES = 3;
+const BOARD_LAST_FIRING_REVIEW = 6;
+const boardTarget = (baseNW, k2) => Math.round(baseNW * BOARD_TARGETS[Math.min(BOARD_TARGETS.length - 1, k2 - 2)]);
+const board = {
+  id: "board",
+  run: (c) => {
+    const { s: s2, log } = c;
+    if (!s2.board) s2.board = { baseNW: Math.max(1e6, netWorthOf(s2)), startMonth: s2.month, strikes: 0, reviews: [] };
+    const b = s2.board;
+    const k2 = Math.round((s2.month - b.startMonth) / 12);
+    if (k2 < 2 || (s2.month - b.startMonth) % 12 !== 0) return;
+    const hist = s2.history.slice(-3);
+    const actual = hist.length ? hist.reduce((n, h) => n + h.revenue, 0) / hist.length : 0;
+    const target = boardTarget(b.baseNW, k2);
+    const ok2 = actual >= target;
+    b.reviews.push({ month: s2.month, target, actual: Math.round(actual), ok: ok2 });
+    const usd2 = (x) => x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : `$${Math.round(x / 1e3)}k`;
+    if (ok2) {
+      b.strikes = 0;
+      log("good", `Board review: revenue run-rate ${usd2(actual)}/mo against a ${usd2(target)} target. Margaux Vance: "Keep going." Dev Okonkwo nods at the margins.`);
+    } else {
+      b.strikes += 1;
+      log("bad", `Board review: revenue run-rate ${usd2(actual)}/mo is under the ${usd2(target)} target (strike ${b.strikes} of ${BOARD_STRIKES}). Margaux Vance: "We funded a datacenter, not a savings account."${s2.mode === "learner" ? " (Learner mode: no consequences.)" : ""}`);
+      if (b.strikes >= BOARD_STRIKES && s2.mode !== "learner" && k2 <= BOARD_LAST_FIRING_REVIEW) finish(c, "fired");
+    }
   }
 };
 const rivalsSystem = {
@@ -10402,6 +10972,8 @@ const rivalsSystem = {
       }
       const cut = (top.priceMult - top.r.priceMult) * 100;
       const move = cut >= 0.05 ? `cut prices ${cut.toFixed(0)}%` : cut <= -0.05 ? `raised prices ${(-cut).toFixed(0)}%` : "held prices flat";
+      const hl = rivalHeadline(s2, top.r.id, top.r.name);
+      if (hl) log("info", `📰 ${hl}`);
       log("info", `${top.r.name} added ${Math.round(added).toLocaleString("en-US")} accelerators and ${move} — competition sets the market: your share of supply moves the price index.`);
     }
   }
@@ -10468,8 +11040,18 @@ const PIPELINE = [
   spotAndPower,
   finances,
   history,
+  story,
+  board,
   endgame
 ];
+const INCIDENT_RANK = [["🔥", 5], ["🔌", 4], ["❄", 3], ["💸", 3], ["🚢", 2], ["🧵", 2], ["🌡", 1]];
+function recordIncidents(s2, logs) {
+  s2.stats ??= { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 };
+  for (const l of logs) {
+    const hit = INCIDENT_RANK.find(([e]) => l.text.startsWith(e));
+    if (hit && (!s2.stats.worstIncident || hit[1] > s2.stats.worstIncident.rank)) s2.stats.worstIncident = { month: l.month, rank: hit[1], text: l.text.replace(/^\S+\s*/, "") };
+  }
+}
 function advanceMonth(state2, opts = {}) {
   if (state2.status && state2.status !== "playing") return state2;
   const s2 = JSON.parse(JSON.stringify(state2));
@@ -10496,6 +11078,7 @@ function advanceMonth(state2, opts = {}) {
     interest: 0
   };
   for (const system of PIPELINE) system.run(c);
+  recordIncidents(s2, logs);
   s2.log = [...s2.log, ...logs].slice(-400);
   return s2;
 }
@@ -10579,14 +11162,14 @@ const deployActions = (c) => {
         warns.push({
           severity: "warn",
           code: "power-overcommit",
-          message: `${hall.name} IT load ~${usd(liveKW)} kW exceeds provisioned ${usd(hall.itPowerKW)} kW — racks will throttle or trip.`
+          message: `${hall.name} IT load ~${usd$1(liveKW)} kW exceeds provisioned ${usd$1(hall.itPowerKW)} kW — racks will throttle or trip.`
         });
       }
       if (liveKW > hall.coolingKW) {
         warns.push({
           severity: "warn",
           code: "cooling-overcommit",
-          message: `${hall.name} heat load ~${usd(liveKW)} kW exceeds heat rejection ${usd(hall.coolingKW)} kW — expect thermal failures (3x MTBF stress).`
+          message: `${hall.name} heat load ~${usd$1(liveKW)} kW exceeds heat rejection ${usd$1(hall.coolingKW)} kW — expect thermal failures (3x MTBF stress).`
         });
       }
       logln(
@@ -10899,7 +11482,8 @@ function autoFabric(g, rackIds, targetGBs = 0) {
 }
 const COOL_LEVEL = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 function plantChoice(g, hallClass, kind) {
-  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === hallClass).map((i) => offerAt(i, g.month)).filter((o2) => o2.available);
+  const plantClass = (c) => c === "rdhx" ? "air" : c;
+  const cand = ALL_ITEMS.filter((i) => kind === "power" ? i.kind === "power" && i.powerType === "transformer" : i.kind === "cooling" && i.serves === plantClass(hallClass)).map((i) => offerAt(i, g.month)).filter((o2) => o2.available);
   cand.sort((a, b) => a.unitPrice / (a.item.capacityKW || 1) - b.unitPrice / (b.item.capacityKW || 1));
   return cand[0];
 }
@@ -10949,15 +11533,38 @@ function stepProject(st2, pid) {
       }
     }
     if (placed2 > p.rackIds.length) {
+      st2.patchProject(pid, { stalledSince: void 0, alertedMonth: void 0 });
       const ids = [...p.rackIds, ...useStoreHall(st2, hall.id).racks.filter((r) => !before.has(r.id)).map((r) => r.id)];
       note(`deployed ${placed2}/${p.racks} racks`);
       st2.patchProject(pid, { rackIds: ids, ...placed2 >= p.racks ? { stage: "commissioning" } : {} });
     } else {
+      const topUp = (kind, deficit) => {
+        const ch = plantChoice(G$3(), h2.coolingClass, kind);
+        if (!ch) return;
+        const id = ch.item.id, cap = ch.item.capacityKW || 1;
+        const coming = (G$3().inventory[id] ?? 0) + G$3().orders.filter((o2) => o2.itemId === id).reduce((n, o2) => n + o2.qty, 0);
+        const units = Math.ceil(deficit / cap) - coming;
+        if (units <= 0) return;
+        const b = st2.buy(id, units);
+        if (!b.ok) return;
+        const inst = (kind === "power" ? h2.powerEquip : h2.coolingEquip)[id] ?? 0;
+        const cur2 = G$3().projects.find((x) => x.id === pid);
+        st2.patchProject(pid, { plant: [...cur2.plant.filter((x) => x.id !== id), { id, n: inst + coming + units }] });
+        note(`ordered ${units} × ${ch.item.name} to cover the hall's ${kind === "power" ? "power" : "heat"} load`);
+      };
+      if (load > h2.itPowerKW) topUp("power", load - h2.itPowerKW);
+      if (load > h2.coolingKW) topUp("cooling", load - h2.coolingKW);
       const why = load > h2.itPowerKW ? `waiting for power: need ${load.toFixed(0)} kW IT, hall has ${h2.itPowerKW.toFixed(0)} kW (order a transformer on Build)` : load > h2.coolingKW ? `waiting for cooling: need ${load.toFixed(0)} kW, hall rejects ${h2.coolingKW.toFixed(0)} kW (add cooling on Build)` : free <= 0 ? `${hall.name} is full — buy floor space on Build` : !have(1) ? "waiting for parts to arrive (lead time)" : "waiting";
       const last = (G$3().projects ?? []).find((x) => x.id === pid)?.notes.slice(-1)[0] ?? "";
       if (!last.endsWith(why)) note(why);
-      if (G$3().month - p.startMonth > 16) {
-        st2.patchProject(pid, { stage: "failed", notes: [...(G$3().projects ?? []).find((x) => x.id === pid).notes, "Gave up after 16 months stuck — the parts are in your warehouse; finish the build by hand."].slice(-12) });
+      const cur = (G$3().projects ?? []).find((x) => x.id === pid);
+      const since = cur.stalledSince ?? G$3().month;
+      if (cur.stalledSince === void 0 || G$3().month - (cur.alertedMonth ?? since) >= 3 && why !== "waiting for parts to arrive (lead time)") {
+        st2.patchProject(pid, { stalledSince: since, alertedMonth: G$3().month });
+        if (why !== "waiting for parts to arrive (lead time)" || G$3().month - since >= 3) useGame.setState((s0) => ({ game: { ...s0.game, log: [...s0.game.log, { month: G$3().month, level: "bad", text: `Easy path is stuck on "${t.name}" for ${G$3().activeContracts.find((a) => a.contract.id === p.contractId)?.contract.customer ?? "a contract"}: ${why}.` }].slice(-400) } }));
+      }
+      if (G$3().month - p.startMonth > 10) {
+        st2.patchProject(pid, { stage: "failed", notes: [...(G$3().projects ?? []).find((x) => x.id === pid).notes, "Gave up after 10 months stuck — the parts are in your warehouse; finish the build by hand."].slice(-12) });
       }
     }
   } else if (p.stage === "commissioning") {
@@ -11210,7 +11817,7 @@ const contractsActions = (c) => {
           worstTtft = Math.max(worstTtft, cap.ttftMs);
           if (cap.ttftMs > contract.ttftMs) issues.push({ severity: "error", code: "ttft-sla", message: `[${cl.name}] p95 TTFT ${Math.round(cap.ttftMs)} ms exceeds the ${contract.ttftMs} ms SLA.`, learn: item.id });
         }
-        if (total < contract.tokensPerSec) issues.push({ severity: "error", code: "tokens-under-capacity", message: `The assigned clusters have ~${usd(total)} tok/s free (after other contracts) of the required ${usd(contract.tokensPerSec)} tok/s at p95 ${contract.tpotMs} ms/TPOT.` });
+        if (total < contract.tokensPerSec) issues.push({ severity: "error", code: "tokens-under-capacity", message: `The assigned clusters have ~${usd$1(total)} tok/s free (after other contracts) of the required ${usd$1(contract.tokensPerSec)} tok/s at p95 ${contract.tpotMs} ms/TPOT.` });
       }
       if (contract.kind === "training") {
         for (const cl of clusters) if (g.activeContracts.some((o2) => o2.contract.id !== contractId && o2.clusterIds.includes(cl.id))) issues.push({ severity: "error", code: "cluster-busy", message: `Cluster '${cl.name}' is already serving another contract; a training job needs it exclusively.` });
@@ -11250,23 +11857,23 @@ const financeActions = (c) => {
       const limit = creditLimit(g);
       if (g.debt + amt > limit) {
         return fail(
-          `Credit limit is $${usd(limit)} (fixed line + collateral against installed assets). Borrow less or build more first.`
+          `Credit limit is $${usd$1(limit)} (fixed line + collateral against installed assets). Borrow less or build more first.`
         );
       }
       g.debt += amt;
       g.cash += amt;
-      logln(g, "info", `Drew a $${usd(amt)} loan at 7% APR — interest hits monthly. Principal due on refinancing.`);
-      return ok(`$${usd(amt)} borrowed.`);
+      logln(g, "info", `Drew a $${usd$1(amt)} loan at 7% APR — interest hits monthly. Principal due on refinancing.`);
+      return ok(`$${usd$1(amt)} borrowed.`);
     }),
     repayLoan: (amountUSD) => commit((g) => {
       const amt = Math.floor(amountUSD);
       if (!Number.isFinite(amt) || amt <= 0) return fail("Repayment amount must be positive.");
-      if (amt > g.debt) return fail(`You only owe $${usd(g.debt)} — repay less.`);
-      if (amt > g.cash) return fail(`Repaying $${usd(amt)} needs cash — you only have $${usd(g.cash)}.`);
+      if (amt > g.debt) return fail(`You only owe $${usd$1(g.debt)} — repay less.`);
+      if (amt > g.cash) return fail(`Repaying $${usd$1(amt)} needs cash — you only have $${usd$1(g.cash)}.`);
       g.debt -= amt;
       g.cash -= amt;
-      logln(g, "good", `Repaid $${usd(amt)} of principal; $${usd(g.debt)} of debt remains.`);
-      return ok(`$${usd(amt)} repaid.`);
+      logln(g, "good", `Repaid $${usd$1(amt)} of principal; $${usd$1(g.debt)} of debt remains.`);
+      return ok(`$${usd$1(amt)} repaid.`);
     })
   };
 };
@@ -11322,6 +11929,26 @@ const sessionActions = (c) => {
       set({ game: g });
     },
     ackNews: () => set((s2) => ({ game: { ...s2.game, news: (s2.game.news ?? []).slice(1) } })),
+    ackStory: () => set((s2) => s2.game.story ? { game: { ...s2.game, story: { ...s2.game.story, cards: s2.game.story.cards.slice(1) } } } : s2),
+    resolveDilemma: (choice) => {
+      const g0 = get().game;
+      const open = g0.story?.open;
+      if (!open) return fail("There is no decision waiting.");
+      const d = DILEMMAS.find((x) => x.id === open.id);
+      const ch = d?.choices[choice];
+      if (!d || !ch) return fail("Pick one of the two options.");
+      if ((ch.effect.cash ?? 0) < 0 && g0.cash + (ch.effect.cash ?? 0) < 0) return fail("You cannot afford that option right now.");
+      set((s2) => {
+        const g = JSON.parse(JSON.stringify(s2.game));
+        applyEffect(g, ch.effect);
+        const st2 = storyOf(g);
+        st2.seen.push(open.id);
+        st2.open = void 0;
+        g.log.push({ month: g.month, level: "info", text: `✔ ${d.title}: ${ch.label}. ${ch.outcome}` });
+        return { game: g };
+      });
+      return ok(ch.outcome);
+    },
     setMode: (m2) => set((s2) => ({ game: { ...s2.game, mode: m2 } })),
     patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
     addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
@@ -11364,8 +11991,8 @@ const lifecycleActions = (c) => {
       g.spotRacks = (g.spotRacks ?? []).filter((id) => id !== rackId);
       g.stats ??= { contractsCompleted: 0, peakAccels: 0, slaMisses: 0, revenueTotal: 0, decommissioned: 0 };
       g.stats.decommissioned++;
-      logln(g, "info", `Decommissioned ${rack.id} at age ${age} months: sold for $${usd(sale)} at ${pct}% residual.`);
-      return ok(`Rack sold for $${usd(sale)} (age ${age} months, ${pct}% residual).`);
+      logln(g, "info", `Decommissioned ${rack.id} at age ${age} months: sold for $${usd$1(sale)} at ${pct}% residual.`);
+      return ok(`Rack sold for $${usd$1(sale)} (age ${age} months, ${pct}% residual).`);
     }),
     sellInventory: (itemId, qty) => commit((g) => {
       const item = getItem(itemId);
@@ -11378,8 +12005,8 @@ const lifecycleActions = (c) => {
       g.inventory[itemId] = have - n;
       if (g.inventory[itemId] <= 0) delete g.inventory[itemId];
       g.cash += sale;
-      logln(g, "info", `Sold ${n} × ${item.name} from the warehouse for $${usd(sale)} (60% of catalog price).`);
-      return ok(`Sold ${n} × ${item.name} for $${usd(sale)}.`);
+      logln(g, "info", `Sold ${n} × ${item.name} from the warehouse for $${usd$1(sale)} (60% of catalog price).`);
+      return ok(`Sold ${n} × ${item.name} for $${usd$1(sale)}.`);
     })
   };
 };
@@ -11390,10 +12017,10 @@ const staffActions = (c) => {
       const count = Math.floor(n);
       if (!Number.isFinite(count) || count < 1 || count > 50) return fail("Hire between 1 and 50 staff at a time.");
       const cost = RECRUIT_COST_USD * count;
-      if (g.cash < cost) return fail(`Recruiting ${count} costs $${usd(cost)} — you only have $${usd(g.cash)}.`);
+      if (g.cash < cost) return fail(`Recruiting ${count} costs $${usd$1(cost)} — you only have $${usd$1(g.cash)}.`);
       g.cash -= cost;
       g.staff += count;
-      logln(g, "good", `Hired ${count} at $${usd(RECRUIT_COST_USD)} recruiting each; payroll is now $${usd(g.staff * STAFF_COST_PER_MONTH)}/month.`);
+      logln(g, "good", `Hired ${count} at $${usd$1(RECRUIT_COST_USD)} recruiting each; payroll is now $${usd$1(g.staff * STAFF_COST_PER_MONTH)}/month.`);
       return ok(`Hired ${count}.`);
     }),
     fireStaff: (n) => commit((g) => {
@@ -11401,10 +12028,10 @@ const staffActions = (c) => {
       if (!Number.isFinite(count) || count < 1) return fail("Fire at least 1 staff member.");
       if (g.staff - count < 1) return fail(`Cannot go below 1 staff member (you have ${g.staff}).`);
       const severance = SEVERANCE_USD * count;
-      if (g.cash < severance) return fail(`Severance for ${count} is $${usd(severance)} (2 months each) — you only have $${usd(g.cash)}.`);
+      if (g.cash < severance) return fail(`Severance for ${count} is $${usd$1(severance)} (2 months each) — you only have $${usd$1(g.cash)}.`);
       g.cash -= severance;
       g.staff -= count;
-      logln(g, "info", `Let ${count} go with $${usd(severance)} severance; payroll is now $${usd(g.staff * STAFF_COST_PER_MONTH)}/month.`);
+      logln(g, "info", `Let ${count} go with $${usd$1(severance)} severance; payroll is now $${usd$1(g.staff * STAFF_COST_PER_MONTH)}/month.`);
       return ok(`Fired ${count}.`);
     })
   };
@@ -11416,12 +12043,12 @@ const vendorsActions = (c) => {
       const vendor = VENDORS.find((v2) => v2.id === vendorId);
       if (!vendor) return fail(`Unknown vendor '${vendorId}'.`);
       if (!Number.isFinite(commitUSD) || commitUSD < FRAMEWORK_MIN_COMMIT_USD)
-        return fail(`Commit at least $${usd(FRAMEWORK_MIN_COMMIT_USD)} of spend (you asked for $${usd(Number.isFinite(commitUSD) ? commitUSD : 0)}).`);
+        return fail(`Commit at least $${usd$1(FRAMEWORK_MIN_COMMIT_USD)} of spend (you asked for $${usd$1(Number.isFinite(commitUSD) ? commitUSD : 0)}).`);
       if (!Number.isInteger(months) || months < FRAMEWORK_MIN_MONTHS || months > FRAMEWORK_MAX_MONTHS)
         return fail(`Term must be ${FRAMEWORK_MIN_MONTHS}-${FRAMEWORK_MAX_MONTHS} whole months.`);
       if (frameworkFor(g, vendorId)) return fail(`${vendor.name} already has an active framework — one at a time per vendor.`);
       const deposit = Math.round(commitUSD * FRAMEWORK_DEPOSIT_PCT);
-      if (g.cash < deposit) return fail(`The signing deposit is $${usd(deposit)} (5% of commit); you have $${usd(g.cash)}.`);
+      if (g.cash < deposit) return fail(`The signing deposit is $${usd$1(deposit)} (5% of commit); you have $${usd$1(g.cash)}.`);
       g.cash -= deposit;
       const fw = {
         id: `fw-${g.month}-${(g.frameworks?.length ?? 0) + 1}`,
@@ -11434,8 +12061,8 @@ const vendorsActions = (c) => {
         endMonth: g.month + months
       };
       (g.frameworks ??= []).push(fw);
-      logln(g, "good", `Signed a ${months}-mo framework with ${vendor.name}: $${usd(fw.commitUSD)} committed for ${fw.discountPct}% off their parts (deposit $${usd(deposit)} credited toward the commit, runs to month ${fw.endMonth}).`);
-      return ok(`Framework with ${vendor.name} signed: ${fw.discountPct}% off, $${usd(fw.commitUSD)} over ${months} months.`);
+      logln(g, "good", `Signed a ${months}-mo framework with ${vendor.name}: $${usd$1(fw.commitUSD)} committed for ${fw.discountPct}% off their parts (deposit $${usd$1(deposit)} credited toward the commit, runs to month ${fw.endMonth}).`);
+      return ok(`Framework with ${vendor.name} signed: ${fw.discountPct}% off, $${usd$1(fw.commitUSD)} over ${months} months.`);
     }),
     cancelFramework: (frameworkId) => commit((g) => {
       const fws = g.frameworks ?? [];
@@ -11446,12 +12073,12 @@ const vendorsActions = (c) => {
       const unmet = fw.commitUSD - fw.spentUSD;
       if (unmet > 0) {
         const penalty = Math.round(unmet * FRAMEWORK_CANCEL_PENALTY_PCT);
-        if (g.cash < penalty) return fail(`Walking away costs $${usd(penalty)} (20% of the $${usd(unmet)} unmet commitment) but you only have $${usd(g.cash)}.`);
+        if (g.cash < penalty) return fail(`Walking away costs $${usd$1(penalty)} (20% of the $${usd$1(unmet)} unmet commitment) but you only have $${usd$1(g.cash)}.`);
         g.cash -= penalty;
         adjustRel(g, fw.vendorId, FRAMEWORK_CANCEL_REL_HIT);
         fws.splice(i, 1);
-        logln(g, "bad", `Cancelled the ${name} framework with $${usd(unmet)} of the commitment unmet: $${usd(penalty)} penalty paid and the relationship soured.`);
-        return ok(`Cancelled ${name} framework for a $${usd(penalty)} penalty.`);
+        logln(g, "bad", `Cancelled the ${name} framework with $${usd$1(unmet)} of the commitment unmet: $${usd$1(penalty)} penalty paid and the relationship soured.`);
+        return ok(`Cancelled ${name} framework for a $${usd$1(penalty)} penalty.`);
       }
       fws.splice(i, 1);
       logln(g, "info", `Closed out the ${name} framework — commitment fully spent, no penalty.`);
@@ -11742,6 +12369,8 @@ const SCENARIOS = [
   { id: "gold-rush-2025", title: "GPU gold rush (Jan 2025)", seed: 3, horizonMonths: 60, description: "Start in 2025 with $250M into Blackwell-era scarcity, high demand and allocation caps.", setup: () => patch((g) => {
     g.month = 60;
     g.cash = 25e7;
+    g.reputation = 60;
+    g.demandBoost = 1.7;
   }) },
   { id: "stress-all-racks", title: "Stress: every rack type deployed", seed: 4, horizonMonths: 24, description: "Sep-2026 start, effectively unlimited cash; four 200-slot halls (air/RDHx/DLC/immersion) pre-filled with every system template to test extremes of power, cooling, failures and fabric.", setup: () => {
     patch((g) => {
@@ -11790,6 +12419,19 @@ const MISSIONS = [
   { id: "carriers2", title: "Diversify to two carriers", go: "network", reward: 2e6, hint: "Buy a second uplink from a different carrier on a diverse path.", lesson: "Two carriers on physically diverse routes turn a backhoe into a non-event; one circuit is an outage waiting for a shovel.", done: (g) => carrierCount(g) >= 2 },
   { id: "staffed", title: "Fully staff your operations", go: "finance", reward: 2e6, hint: "With racks online, hire until staffing meets the site need.", lesson: "Racks do not run themselves: understaffed sites fail more and repair slower — hire ahead of the fleet, not after it.", done: (g) => onlineRackCount(g) >= 1 && g.staff >= staffNeeded(g).needed },
   { id: "sellrack", title: "Sell your first obsolete rack", go: "stock", reward: 2e6, hint: "Decommission an aging, unclustered rack for its residual value.", lesson: "GPUs lose value to new generations faster than to wear — refresh on a cadence and sell while residual value is real.", done: (g) => (g.stats?.decommissioned ?? 0) >= 1 }
+];
+const LESSONS = [
+  { id: "energy-crisis", icon: "⚡", title: "Energy crisis", what: "The utility rate jumps for a while; every kilowatt-hour costs more.", lesson: "Power is the biggest opex line: long-term PPAs, on-site solar or gas and a lower PUE are how real operators hedge." },
+  { id: "heatwave", icon: "🌡", title: "Heatwave", what: "Dry coolers derate in hot ambient air and halls that depend on them run short of heat rejection.", lesson: "Warm-water DLC tolerates hot days; air-cooled halls suffer first." },
+  { id: "fiber-cut", icon: "🧵", title: "Fiber cut", what: "A backhoe cuts your only fiber route and customers lose connectivity.", lesson: "Buy a second circuit from a different carrier on a diverse path." },
+  { id: "utility-outage", icon: "🔌", title: "Utility outage", what: "The grid drops; protection decides whether training keeps running.", lesson: "UPS plus battery plus generator plus transfer switch, sized N+1, keep training alive." },
+  { id: "gpu-rush", icon: "📦", title: "The GPU gold rush (Mar 2023)", what: "A chatbot goes viral and allocation is slashed; orders already in the pipeline slip.", lesson: "Lead times quoted in a soft market are fiction in a hot one: order ahead and hold spares." },
+  { id: "liquid-era", icon: "💧", title: "Liquid cooling goes mainstream (Apr 2024)", what: "The Blackwell generation arrives with racks that cannot be air-cooled at all.", lesson: "Plan the DLC transition early: CDUs, coolant quality and floor plumbing have lead times of their own." },
+  { id: "allocation", icon: "🧲", title: "Allocation for proven operators (Feb 2026)", what: "The chip vendor opens next-generation allocation and existing operators get first call.", lesson: "Vendors reward demonstrated deployments: a campus that ships on schedule is your ticket to the next generation." },
+  { id: "fire", icon: "🔥", title: "Hall fire", what: "A rack catches fire; early detection decides whether it is a bad weekend or a total loss.", lesson: "Detection and suppression turn a total loss into a bad weekend, and they cost little next to a hall of GPUs." },
+  { id: "default", icon: "💸", title: "Customer default", what: "A customer goes bankrupt mid-contract and the cluster goes idle.", lesson: "Deposits, take-or-pay minimums and credit checks exist because customers go bankrupt mid-deal." },
+  { id: "supply-shock", icon: "🚢", title: "Supply-chain shock", what: "A fab closes and a port strikes; everything in transit slips.", lesson: "Dual-sourcing and safety stock are insurance, not waste." },
+  { id: "chiller-trip", icon: "❄", title: "Chiller trip", what: "A compressor fault drops the chilled-water loop and serving contracts take SLA misses.", lesson: "N+1 chillers with automatic switchover keep the water cold while one unit is repaired." }
 ];
 const hallLoad = (g) => g.halls.reduce((n, h) => n + h.racks.reduce((a, p) => {
   const d = g.racks.find((r) => r.id === p.designId);
@@ -11934,6 +12576,15 @@ const CONCEPTS = [
     }
   }
 ];
+const INCIDENT_CONCEPTS = LESSONS.map((l) => ({
+  id: `incident-${l.id}`,
+  icon: l.icon,
+  name: `Incident: ${l.title}`,
+  what: l.what,
+  why: l.lesson,
+  when: "Shows up in the log as a random incident or a dated event. Read it now, before it happens to you.",
+  status: () => ({ level: "na", text: "Handbook entry: learn it before it happens." })
+}));
 const randomAgent = (rng) => (_o, legal) => {
   const acts = legal().filter((a) => a.name !== "nextMonth");
   return acts.length ? [acts[Math.floor(rng() * acts.length)], { name: "nextMonth" }] : [{ name: "nextMonth" }];
@@ -11943,22 +12594,57 @@ function qualifyingBuilds(contractId) {
   const g = state();
   const c = g.availableContracts.find((x) => x.id === contractId) ?? g.activeContracts.find((a) => a.contract.id === contractId)?.contract;
   if (!c) return [];
-  return buildOptions(g, c).filter((o2) => o2.fitsRamp && o2.hallGaps.every((x) => !x.startsWith("Cooling type"))).map((o2) => ({ templateId: o2.t.id, racks: o2.racks, cost: o2.cost })).sort((a, b) => a.cost - b.cost);
+  return buildOptions(g, c).filter((o2) => o2.fitsRamp).map((o2) => ({ templateId: o2.t.id, racks: o2.racks, cost: o2.cost, paybackMo: o2.paybackMo })).sort((a, b) => a.cost - b.cost);
+}
+function serveFromExisting(live, maxLive) {
+  const out = [];
+  const g = state();
+  const claimed = /* @__PURE__ */ new Map();
+  for (const a of g.activeContracts) for (const id of a.clusterIds) {
+    const c = claimed.get(id) ?? { exclusive: false, tok: 0 };
+    if (a.contract.kind === "training") c.exclusive = true;
+    else c.tok += a.contract.tokensPerSec;
+    claimed.set(id, c);
+  }
+  for (const c of g.availableContracts) {
+    if (live.size >= maxLive) break;
+    if (live.has(c.id) || !probe({ name: "acceptContract", args: [c.id] })) continue;
+    const fit = contractFit(g, c);
+    const pick2 = fit.all.find((f) => {
+      if (!f.ok) return false;
+      const cl2 = claimed.get(f.cluster.id);
+      if (!cl2) return true;
+      if (cl2.exclusive || c.kind === "training") return false;
+      return cl2.tok + c.tokensPerSec <= (f.checks.cap ?? 0) * 0.9;
+    });
+    if (!pick2) continue;
+    out.push({ name: "acceptContract", args: [c.id] }, { name: "assignContract", args: [c.id, [pick2.cluster.id]] });
+    live.add(c.id);
+    const cl = claimed.get(pick2.cluster.id) ?? { exclusive: false, tok: 0 };
+    if (c.kind === "training") cl.exclusive = true;
+    else cl.tok += c.tokensPerSec;
+    claimed.set(pick2.cluster.id, cl);
+  }
+  return out;
 }
 const operatorAgent = (o2) => {
   const out = [];
   const live = /* @__PURE__ */ new Set([...o2.active.map((a) => a.id), ...o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").map((p) => p.contractId)]);
-  if (live.size < 2 && o2.cash > 12e6) {
-    for (const c of o2.offers) {
-      for (const b of qualifyingBuilds(c.id).slice(0, 4)) {
-        const a = { name: "startEasy", args: [c.id, b.templateId, b.racks] };
-        if (b.cost < o2.cash * 0.6 && probe(a)) {
-          out.push(a);
-          live.add(c.id);
-          break;
-        }
+  const building = o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").length;
+  out.push(...serveFromExisting(live, 10));
+  if (building < 1 + Math.floor(o2.cash / 6e7) && o2.cash > 4e6) {
+    const cands = [];
+    for (const c of o2.offers) if (!live.has(c.id)) {
+      for (const b of qualifyingBuilds(c.id).slice(0, 4)) if (b.cost < o2.cash * 0.6 && b.paybackMo <= 40) cands.push({ c, b });
+    }
+    cands.sort((x, y) => x.b.paybackMo - y.b.paybackMo);
+    for (const { c, b } of cands) {
+      const a = { name: "startEasy", args: [c.id, b.templateId, b.racks] };
+      if (probe(a)) {
+        out.push(a);
+        live.add(c.id);
+        break;
       }
-      if (live.size >= 2) break;
     }
   }
   const g = state();
@@ -11986,17 +12672,18 @@ function housekeeping(out, opts) {
 const tycoonAgent = (o2) => {
   const out = [];
   const g = state();
-  if (o2.month % 3 === 0 && g.debt < 2e7) {
-    const a = { name: "takeLoan", args: [2e7] };
+  if (o2.month % 3 === 0 && g.debt < 1e7 && g.cash < 25e6) {
+    const a = { name: "takeLoan", args: [1e7] };
     if (probe(a)) out.push(a);
   }
   const live = /* @__PURE__ */ new Set([...o2.active.map((a) => a.id), ...o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").map((p) => p.contractId)]);
-  if (live.size < 6 && o2.cash > 8e6) {
+  out.push(...serveFromExisting(live, 8));
+  if (live.size < 4 && o2.cash > 8e6) {
     for (const c of o2.offers) {
-      if (live.size >= 6) break;
+      if (live.size >= 4) break;
       for (const b of qualifyingBuilds(c.id).slice(0, 6)) {
         const a = { name: "startEasy", args: [c.id, b.templateId, b.racks] };
-        if (probe(a)) {
+        if (b.cost < o2.cash * 0.7 && probe(a)) {
           out.push(a);
           live.add(c.id);
           break;
@@ -12059,11 +12746,66 @@ const spotterAgent = (o2) => {
   out.push({ name: "nextMonth" });
   return out;
 };
+const builderAgent = (o2) => {
+  const out = [];
+  const g = state();
+  const live = /* @__PURE__ */ new Set([...o2.active.map((a) => a.id), ...o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").map((p) => p.contractId)]);
+  out.push(...serveFromExisting(live, 40));
+  const building = o2.projects.filter((p) => p.stage !== "done" && p.stage !== "failed").length;
+  g.clusters.reduce((n, c) => n + (c.stats?.accelerators ?? 0), 0);
+  g.clusters.filter((c) => g.activeContracts.some((a) => a.clusterIds.includes(c.id))).length;
+  const needMore = true;
+  if (building < 2 && needMore && o2.cash > 3e6) {
+    const cands = [];
+    for (const c of o2.offers) if (!live.has(c.id)) {
+      for (const b of qualifyingBuilds(c.id).slice(0, 4)) if (b.cost < o2.cash * 0.6 && b.paybackMo <= 36) cands.push({ c, b });
+    }
+    cands.sort((x, y) => x.b.paybackMo - y.b.paybackMo);
+    for (const { c, b } of cands) {
+      const big = b.cost * 2 < o2.cash * 0.5 ? b.racks * 2 : b.racks;
+      const a = { name: "startEasy", args: [c.id, b.templateId, big] };
+      if (probe(a)) {
+        out.push(a);
+        break;
+      }
+    }
+  }
+  for (const h of g.halls) for (const r of h.racks) if (r.status === "online" && !r.clusterId && !(g.spotRacks ?? []).includes(r.id)) out.push({ name: "setSpotRack", args: [r.id, true] });
+  for (const cl of g.clusters) if (!g.activeContracts.some((a) => a.clusterIds.includes(cl.id)) && !(g.spotClusters ?? []).includes(cl.id)) out.push({ name: "setSpot", args: [cl.id, true] });
+  housekeeping(out, { repay: true, sell: true });
+  out.push({ name: "nextMonth" });
+  return out;
+};
+const plannerAgent = (o2, l) => {
+  const base2 = operatorAgent(o2);
+  const extra = [];
+  const g = state();
+  if (o2.cash > 15e6 && !(g.powerContracts ?? []).some((c) => g.month <= c.endMonth) && g.halls.some((h) => h.racks.length >= 12)) {
+    const offer = [...g.powerOffers ?? []].sort((a, b) => a.priceUSDPerMWh - b.priceUSDPerMWh)[0];
+    if (offer) {
+      const a = { name: "signPower", args: [offer.id, Math.max(1, Math.round(offer.mw * 0.6))] };
+      if (probe(a)) extra.push(a);
+    }
+  }
+  if (g.cash > 7e7 && !(g.frameworks ?? []).length) {
+    const a = { name: "signFramework", args: ["nvidia", 8e6, 24] };
+    if (probe(a)) extra.push(a);
+  }
+  housekeeping(extra, { repay: true, sell: true });
+  return [...base2.slice(0, -1), ...extra, base2[base2.length - 1]];
+};
 const PERSONAS = {
   idle: () => idleAgent,
   random: (seed) => randomAgent(mulberry32(seed)),
-  operator: () => operatorAgent,
+  operator: () => (o2, l) => {
+    const a = operatorAgent(o2);
+    const hk = [];
+    housekeeping(hk, { repay: true, sell: false });
+    return [...a.slice(0, -1), ...hk, a[a.length - 1]];
+  },
   tycoon: () => tycoonAgent,
+  builder: () => builderAgent,
+  planner: () => plannerAgent,
   cautious: () => cautiousAgent,
   spotter: () => spotterAgent
 };
@@ -12360,7 +13102,7 @@ const knowledgeQueries = {
     const y = 2020 + G$1().month / 12;
     return { all: MODELS, tier: scaleOutTier(y), anchor: gpuHourAnchor(y) };
   },
-  concepts: () => CONCEPTS.map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G$1()) })),
+  concepts: () => [...CONCEPTS, ...INCIDENT_CONCEPTS].map((c) => ({ id: c.id, icon: c.icon, name: c.name, what: c.what, why: c.why, when: c.when, go: c.go, status: c.status(G$1()) })),
   missions: () => MISSIONS.map((m2) => ({ id: m2.id, title: m2.title, hint: m2.hint, lesson: m2.lesson, reward: m2.reward, go: m2.go, done: m2.done(G$1()) }))
 };
 const lifecycleQueries = {
@@ -12474,7 +13216,106 @@ const vendorsQueries = {
     return { discountPct: discountPctFor(commitUSD, months), depositUSD, valid: true, reason: "" };
   }
 };
+function fleetOf(g) {
+  const clusters = [];
+  let clustered = 0, busy = 0, idleClusters = 0;
+  for (const cl of g.clusters) {
+    const st2 = cl.stats;
+    if (!st2 || st2.accelerators <= 0) continue;
+    const on = g.activeContracts.filter((a) => a.clusterIds.includes(cl.id));
+    let load = 0;
+    if (on.some((a) => a.contract.kind === "training")) load = 1;
+    else if (on.length) {
+      const accel = getItem(st2.acceleratorId);
+      if (accel?.kind === "accelerator") for (const a of on) {
+        const k2 = a.contract;
+        if (k2.kind !== "inference") continue;
+        const cap = inferenceCapacity(st2, accel, k2.model, { contextTokens: k2.contextTokens, tpotMs: k2.tpotMs }).tokensPerSec;
+        load += cap > 0 ? k2.tokensPerSec / cap / Math.max(1, a.clusterIds.length) : 0;
+      }
+      load = Math.min(1, load);
+    }
+    clustered += st2.accelerators;
+    busy += st2.accelerators * load;
+    if (!on.length) idleClusters += 1;
+    clusters.push({ id: cl.id, name: cl.name, accels: st2.accelerators, contracts: on.length, loadPct: Math.round(load * 100), spot: (g.spotClusters ?? []).includes(cl.id) });
+  }
+  const inCluster = new Set(g.clusters.flatMap((c) => c.rackIds));
+  let loose = 0;
+  for (const h of g.halls) for (const r of h.racks) if (r.status === "online" && !inCluster.has(r.id)) loose += rackAccels(g, r.designId);
+  return { clustered, loose, busy: Math.round(busy), utilization: clustered > 0 ? busy / clustered : 0, idleClusters, clusters };
+}
+const usd = (x) => x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : `$${Math.round(x / 1e3)}k`;
+function needsOf(g) {
+  const out = [];
+  const month = g.month;
+  const serving = g.activeContracts.filter((a) => a.clusterIds.length > 0);
+  const revenue = serving.reduce((n, a) => {
+    const k2 = a.contract;
+    if (k2.kind === "training") return n + a.clusterIds.reduce((m2, id) => m2 + (g.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0), 0) * k2.pricePerAccelHour * 730;
+    return n + k2.tokensPerSec * 730 * 3600 / 1e6 * k2.pricePerMTok;
+  }, 0);
+  const walk = g.activeContracts.filter((a) => a.clusterIds.length === 0 && (a.deployBy ?? a.startMonth + 4) <= month + 1);
+  if (walk.length) out.push({ id: "walk", level: "crit", title: "A customer is about to walk", detail: `${walk.map((a) => a.contract.customer).join(", ")}: bring a qualifying cluster online and assign it this month.`, go: "contracts", button: "Open Customers" });
+  revenue - g.activeContracts.length * 0;
+  if (g.cash < 0) out.push({ id: "cash-neg", level: "crit", title: "Cash is negative", detail: "Creditors close you down after three months. Take a loan, land a contract or sell idle hardware.", go: "finance", button: "Open Operations" });
+  if (revenue > 0) {
+    const ending = serving.filter((a) => a.contract.durationMonths - a.monthsServed <= 3);
+    const endingRev = ending.reduce((n, a) => {
+      const k2 = a.contract;
+      return n + (k2.kind === "training" ? a.clusterIds.reduce((m2, id) => m2 + (g.clusters.find((c) => c.id === id)?.stats?.accelerators ?? 0), 0) * k2.pricePerAccelHour * 730 : k2.tokensPerSec * 730 * 3600 / 1e6 * k2.pricePerMTok);
+    }, 0);
+    const hasRenewals = g.availableContracts.some((c) => c.renewalOf !== void 0);
+    if (endingRev / revenue >= 0.5) out.push({ id: "cliff", level: "warn", title: `${Math.round(endingRev / revenue * 100)}% of your revenue ends within 3 months`, detail: hasRenewals ? "Renewal offers are on the board: sign them before they expire." : "Line up replacement contracts now, or put the idle capacity on the spot market.", go: "contracts", button: "Open Customers" });
+  }
+  const b = g.board;
+  if (b && b.strikes > 0) out.push({ id: "board", level: "warn", title: `Board strike ${b.strikes} of ${BOARD_STRIKES}`, detail: `Revenue is under target. The next review is in ${12 - (month - b.startMonth) % 12} months and wants about ${usd(boardTarget(b.baseNW, Math.round((month - b.startMonth) / 12) + 1))}/mo.`, go: "contracts", button: "Find contracts" });
+  if (g.story?.open) {
+    const d = DILEMMAS.find((x) => x.id === g.story.open.id);
+    if (d) out.push({ id: "dilemma", level: "warn", title: `Decision: ${d.title}`, detail: `Answer within ${Math.max(0, 3 - (g.month - g.story.open.month))} months or the offer lapses.`, go: "story", button: "Decide" });
+  }
+  const need = staffNeeded(g);
+  if (g.staff < need.needed) out.push({ id: "staff", level: g.staff < need.needed * 0.6 ? "crit" : "warn", title: `Understaffed: ${g.staff} of ${need.needed} operators`, detail: "A short crew means more failures, slower repairs and lost availability on every contract.", go: "finance", button: "Hire staff" });
+  const f = fleetOf(g);
+  const idle = f.clustered - f.busy;
+  if (f.clustered >= 16 && idle / f.clustered > 0.4) out.push({ id: "idle", level: "info", title: `${Math.round(idle)} GPUs are sitting idle`, detail: "Sign contracts they can serve, or sell the spare capacity on the spot market.", go: "contracts", button: "Open Customers" });
+  if (f.loose >= 8) out.push({ id: "loose", level: "info", title: `${f.loose} GPUs are not in a cluster`, detail: "Racks outside a cluster cannot serve contracts. Group them on the Supercomputer screen.", go: "network", button: "Open Supercomputer" });
+  if (g.stats && g.stats.contractsCompleted === 0 && g.activeContracts.length === 0 && g.orders.length === 0 && g.halls.every((h) => h.racks.length === 0)) out.push({ id: "start", level: "info", title: "Land your first customer", detail: "Open Customers, pick an offer you can serve, and hit Easy Path: the game orders, installs and assigns for you.", go: "contracts", button: "Open Customers" });
+  const rank = { crit: 0, warn: 1, info: 2 };
+  out.sort((a, b2) => rank[a.level] - rank[b2.level]);
+  if (!out.length) out.push({ id: "ok", level: "info", title: "All quiet", detail: "Nothing needs you right now. Advance the month, or scout the next hardware keynote.", go: "dash", button: "Next month" });
+  return out;
+}
+function offerMoney(g, c) {
+  const monthly = c.kind === "training" ? c.minAccelerators * c.pricePerAccelHour * 730 : c.tokensPerSec * 730 * 3600 / 1e6 * c.pricePerMTok;
+  const opts = buildOptions({ ...g }, c).filter((o2) => o2.powerMo > 0);
+  const cheapest = [...opts].sort((a, b) => a.cost - b.cost)[0];
+  const powerMo = cheapest ? cheapest.powerMo : c.kind === "training" ? c.minAccelerators * 1.05 * 1.3 * 730 * g.utilityUSDPerKWh : monthly * 0.05;
+  return { monthly: Math.round(monthly), total: Math.round(monthly * c.durationMonths), powerMo: Math.round(powerMo), profitMo: Math.round(monthly - powerMo) };
+}
 const previewQueries = {
+  fleet: () => fleetOf(G$1()),
+  offerMoney: () => {
+    const g = G$1();
+    return Object.fromEntries(g.availableContracts.map((c) => [c.id, offerMoney(g, c)]));
+  },
+  needs: () => needsOf(G$1()),
+  board: () => {
+    const g = G$1();
+    return g.board ?? null;
+  },
+  story: () => {
+    const g = G$1();
+    const st2 = g.story;
+    const year = st2?.cards[0];
+    const ch = year !== void 0 ? CHAPTERS.find((c) => c.year === year) : void 0;
+    const open = st2?.open;
+    const d = open ? DILEMMAS.find((x) => x.id === open.id) : void 0;
+    return {
+      chapter: ch ? { year: ch.year, title: ch.title, text: ch.text } : null,
+      dilemma: d && open ? { id: d.id, title: d.title, text: d.text, monthsLeft: Math.max(0, 3 - (g.month - open.month)), choices: d.choices.map((c, i) => ({ index: i, label: c.label, cash: c.effect.cash ?? 0, rep: c.effect.rep ?? 0 })) } : null
+    };
+  },
   preview: () => {
     const g = G$1();
     const next = g.month + 1;

@@ -504,6 +504,7 @@ export interface GameState {
   endReport?: EndReport;
   /** Investor board: yearly revenue targets, three missed years in a row and you are out. */
   board?: BoardState;
+  story?: StoryState;
   /** Consecutive months with negative cash (bankruptcy at 3). */
   negCashMonths?: number;
   /** Save schema version, bumped by engine/persistence migrations. */
@@ -526,11 +527,22 @@ export interface Rival { id: string; name: string; style: 'hyperscaler' | 'neocl
 export interface Framework { id: string; vendorId: string; commitUSD: number; spentUSD: number; discountPct: number; startMonth: number; endMonth: number }
 export interface OpsPolicy { /** months of burn-in before a rack goes online (0..3, default 1) */ burnInMonths: number; /** 0 reactive, 1 preventive, 2 premium */ maintenance: 0 | 1 | 2 }
 export type GameStatus = 'playing' | 'bankrupt' | 'finished' | 'fired';
-export interface GameStats { contractsCompleted: number; peakAccels: number; slaMisses: number; revenueTotal: number; decommissioned: number }
+export interface GameStats { contractsCompleted: number; peakAccels: number; slaMisses: number; revenueTotal: number; decommissioned: number; bestDeal?: { customer: string; model: string; revenue: number }; worstIncident?: { month: number; rank: number; text: string } }
+export interface StoryState {
+  /** Chapter years already announced. */
+  shown: number[];
+  /** Decision ids already resolved or lapsed. */
+  seen: string[];
+  /** The decision waiting for an answer, if any. */
+  open?: { id: string; month: number };
+  /** Chapter years whose card the player has not dismissed yet. */
+  cards: number[];
+}
 export type EndingId = 'ipo' | 'acquired' | 'steady' | 'fire-sale' | 'bankrupt' | 'fired';
 export interface BoardReview { month: number; target: number; actual: number; ok: boolean }
 export interface BoardState { baseNW: number; startMonth: number; strikes: number; reviews: BoardReview[] }
-export interface EndReport { reason: 'bankrupt' | 'horizon' | 'fired'; ending?: EndingId; epilogue?: string; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
+export interface EndTimelinePoint { month: number; revenue: number; cash: number }
+export interface EndReport { timeline?: EndTimelinePoint[]; bestDeal?: string; worstIncident?: string; rivalLine?: string; shareText?: string; reason: 'bankrupt' | 'horizon' | 'fired'; ending?: EndingId; epilogue?: string; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
 export type GameMode = 'learner' | 'operator' | 'tycoon';
 export interface Project {
   id: string; contractId: string; templateId: string; racks: number; hallId: string; name: string;
@@ -554,6 +566,8 @@ export interface Order { id: string; itemId: string; qty: number; unitPrice: num
 export interface RenewalTag { renewalOf?: string }
 export interface ActiveContract { contract: Contract; clusterIds: string[]; startMonth: number; monthsServed: number; slaMisses: number; /** Month by which a cluster must be serving, else the contract defaults. */ deployBy?: number;   /** The customer already granted one build-delay extension. */
   extended?: boolean;
+  /** Net revenue this contract has paid so far. */
+  revenueEarned?: number;
 }
 export interface LogEntry { month: number; level: 'info' | 'good' | 'bad'; text: string; }
 

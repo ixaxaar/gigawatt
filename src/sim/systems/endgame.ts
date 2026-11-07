@@ -1,5 +1,6 @@
 import type { EndReport, EndingId, GameState } from '../../types';
 import { assetValue } from '../lifecycle';
+import { onlineAccels } from '../rivals';
 import type { System, TickCtx } from './types';
 
 /** The campaign runs Dec 2020 -> Dec 2028 (month 107 is the last played month). */
@@ -41,6 +42,14 @@ export function finish(c: TickCtx, reason: EndReport['reason']): void {
       : `You reached the end of 2028 with net worth $${Math.round(nw / 1e6)}M, ${stats.contractsCompleted} contracts completed and a peak of ${stats.peakAccels} accelerators.`;
   s.status = reason === 'bankrupt' ? 'bankrupt' : reason === 'fired' ? 'fired' : 'finished';
   s.endReport = { reason, ending: end.ending, epilogue: end.epilogue, month: s.month, score: Math.round(scoreOf(s, nw) * (reason === 'fired' ? 0.3 : reason === 'bankrupt' ? 0.5 : 1)), netWorth: Math.round(nw), rating, revenueTotal: Math.round(stats.revenueTotal), peakAccels: stats.peakAccels, contractsCompleted: stats.contractsCompleted, reputation: s.reputation, summary };
+  const usdM = (x: number) => `$${(x / 1e6).toFixed(1)}M`;
+  const hist = s.history; const step = Math.max(1, Math.floor(hist.length / 40));
+  s.endReport.timeline = hist.filter((_, i) => i % step === 0 || i === hist.length - 1).map((h) => ({ month: h.month, revenue: Math.round(h.revenue), cash: Math.round(h.cash) }));
+  if (stats.bestDeal) s.endReport.bestDeal = `${stats.bestDeal.customer} (${stats.bestDeal.model}) paid ${usdM(stats.bestDeal.revenue)} over its term.`;
+  if (stats.worstIncident) s.endReport.worstIncident = stats.worstIncident.text;
+  const rivals = s.rivals ?? []; const mine = onlineAccels(s); const top = [...rivals].sort((a, b) => b.accels - a.accels)[0];
+  if (top) s.endReport.rivalLine = mine >= top.accels ? `You finished with ${mine.toLocaleString('en-US')} accelerators online, ahead of ${top.name} (${Math.round(top.accels).toLocaleString('en-US')}).` : `You finished with ${mine.toLocaleString('en-US')} accelerators online; ${top.name} ran ${Math.round(top.accels).toLocaleString('en-US')}.`;
+  s.endReport.shareText = `GIGAWATT 2020-2028: ${rating}. Net worth ${usdM(nw)}, ${stats.contractsCompleted} contracts, score ${s.endReport.score}. ${end.epilogue.split('. ')[0]}.`;
   log(reason === 'horizon' ? 'good' : 'bad', `${reason === 'bankrupt' ? 'GAME OVER' : reason === 'fired' ? 'FIRED' : '2028 COMPLETE'} - ${rating}. ${summary}`);
 }
 

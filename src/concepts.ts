@@ -1,6 +1,7 @@
 import { getItem } from './data';
 import { validateRack } from './sim/validate';
 import type { GameState } from './types';
+import { LESSONS } from './sim/lessons';
 import { hallResilience } from './sim/resilience';
 import { uplinkGbps, totalNeedGbps, carrierCount } from './sim/internet';
 import { recommendedSpares } from './sim/failures';
@@ -37,3 +38,11 @@ export const CONCEPTS: Concept[] = [
   { id: 'spares', icon: '🧰', name: 'Spare parts & RMA', what: 'Parts fail at a steady rate. A spare on your shelf swaps in at once; otherwise the vendor RMA takes months.', why: 'A rack down for 4 months misses SLAs and earns nothing while still depreciating.', when: 'As soon as racks are deployed; orders include spares by default.', go: 'stock',
     status: g => { const ids = new Set<string>(); g.halls.forEach(h => h.racks.forEach(p => { const d = g.racks.find(r => r.id === p.designId); d?.items.forEach(it => { if (it.type === 'tray') g.trays.find(t => t.id === it.trayId)?.parts.forEach(pt => ids.add(pt.itemId)); }); })); const short = [...ids].filter(id => (g.spareStock?.[id] ?? 0) < recommendedSpares(g, id)).length; return !ids.size ? { level: 'na', text: 'No racks deployed yet.' } : short ? { level: 'soon', text: `${short} part type(s) below the advised spare count.` } : { level: 'ok', text: 'Spares shelf is stocked.' }; } },
 ];
+
+/** The incident handbook: each random incident and dated event, with what it teaches. */
+export const INCIDENT_CONCEPTS: Concept[] = LESSONS.map((l) => ({
+  id: `incident-${l.id}`, icon: l.icon, name: `Incident: ${l.title}`, what: l.what, why: l.lesson,
+  when: 'Shows up in the log as a random incident or a dated event. Read it now, before it happens to you.',
+  status: () => ({ level: 'na' as const, text: 'Handbook entry: learn it before it happens.' }),
+}));
+

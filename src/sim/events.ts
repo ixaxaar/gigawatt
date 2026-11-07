@@ -23,7 +23,7 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
 
   pool.push(() => {
     s.utilityUSDPerKWh = Math.min(0.2, Math.round(s.utilityUSDPerKWh * 1.3 * 10000) / 10000);
-    log('bad', `⚡ Energy crisis: utility rate jumps to $${s.utilityUSDPerKWh.toFixed(3)}/kWh. Lesson: power is the biggest opex line — long-term PPAs, on-site solar/gas and a lower PUE are how real operators hedge.`);
+    log('bad', `⚡ Energy crisis: utility rate jumps to $${s.utilityUSDPerKWh.toFixed(3)}/kWh.`);
   });
   // Grants reward operators who actually host capacity; an empty hall earns nothing (idle play must not profit).
   if (racks > 0) pool.push(() => {
@@ -40,14 +40,14 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
   if (year >= 2021) pool.push(() => {
     const bill = Math.round(25_000 * Math.max(1, racks));
     s.cash -= bill;
-    log('bad', `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1000).toFixed(0)}k. Lesson: warm-water DLC tolerates hot days — air-cooled halls suffer first.`);
+    log('bad', `🌡 Heatwave: dry-coolers derate in hot ambient air; extra chiller/pump energy costs $${(bill / 1000).toFixed(0)}k.`);
   });
   if (racks > 0 && s.uplinks) {
     pool.push(() => {
       if (carrierCount(s) >= 2) { log('good', '🧵 A backhoe cuts a fiber route, but your second carrier on a diverse path keeps every customer online.'); return; }
       s.activeContracts.forEach((a) => { a.slaMisses += 1; });
       s.reputation = Math.max(0, s.reputation - 2);
-      log('bad', '🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit. Lesson: buy a second circuit from a different carrier on a diverse path.');
+      log('bad', '🧵 A backhoe cuts your only fiber route: customers lose connectivity for hours and SLAs take a hit.');
     });
   }
   if (racks > 0) {
@@ -62,7 +62,7 @@ export function rollEvents(s: GameState, rng: RNG, log: Log, graceMonths = 4): v
       s.activeContracts.forEach((a) => { a.slaMisses += 1; });
       s.reputation = Math.max(0, s.reputation - 2);
       const why = weakest?.gaps[0] ?? 'no backup power installed';
-      log('bad', `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit. Lesson: UPS + battery + generator + transfer switch, sized N+1, keep training alive.`);
+      log('bad', `🔌 Utility outage with weak protection (${why}): running jobs restart from checkpoint and SLAs take a hit.`);
     });
     pool.push(() => {
       const bonus = Math.round(racks * 40_000);

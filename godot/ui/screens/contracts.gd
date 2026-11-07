@@ -6,6 +6,7 @@ var msg := ""
 var pick := {}
 var rack_pick := {}
 var folds := {}
+var money := {}
 const VERDICT := {
 	"ready": [Kit.GR, "✓ CAN SERVE NOW"], "building": [Kit.AM, "◔ CAN BUILD IN TIME"],
 	"short": [Kit.RD, "✗ NEED MORE / DIFFERENT HARDWARE"], "none": [Kit.RD, "✗ NO CLUSTER YET"]}
@@ -38,7 +39,10 @@ func _rebuild() -> void:
 	left.add_child(Kit.label("MARKET OFFERS (%d)" % g.availableContracts.size(), 14, Kit.CY))
 	if g.availableContracts.is_empty(): left.add_child(Kit.label("No offers right now — new ones appear every month.", 14, Kit.DIM))
 	var offers: Array = g.availableContracts.duplicate()
-	offers.sort_custom(func(a, b2): return a.has("renewalOf") and not b2.has("renewalOf"))   # renewals first
+	var mq = b.q("offerMoney"); money = mq if mq is Dictionary else {}
+	offers.sort_custom(func(a, b2):
+		if a.has("renewalOf") != b2.has("renewalOf"): return a.has("renewalOf")   # renewals first, then most profitable
+		return float(money.get(a.id, {}).get("profitMo", 0)) > float(money.get(b2.id, {}).get("profitMo", 0)))
 	for c in offers: _offer(left, c)
 	var p: Dictionary = b.q("pipeline")
 	var cp := Kit.panel("Your capacity (accelerators)", false, right)
@@ -59,7 +63,8 @@ func _checks(parent: Control, c: Dictionary) -> Dictionary:
 	if f.get("best") != null:
 		var rows := []
 		for x in f.best.checks: rows.append([Kit.label("✓" if x.ok else "✗", 13, Kit.GR if x.ok else Kit.RD), x.label, "need %s" % x.need, "have %s" % x.have])
-		parent.add_child(Kit.table([], rows)); parent.add_child(Kit.label("vs best cluster: %s" % f.best.cluster.name, 11, Kit.DIM))
+		var rq := Kit.fold_panel("Requirements vs your best cluster", "r" + str(c.id), folds, refresh, false, parent, true)
+		if not bool(folds.get("r" + str(c.id), true)): rq[1].add_child(Kit.table([], rows)); rq[1].add_child(Kit.label("vs best cluster: %s" % f.best.cluster.name, 11, Kit.DIM))
 	if f.get("shortfall") != null: parent.add_child(Kit.label(str(f.shortfall), 12, Kit.AM, true))
 	if f.verdict != "ready": parent.add_child(Kit.label("Pipeline not yet clustered: %s online · %s commissioning · %s in warehouse · %s on order (accelerators)." % [Kit.num(p.freeOnline), Kit.num(p.installing), Kit.num(p.warehouse), Kit.num(p.ordered)], 11, Kit.DIM, true))
 	return f
@@ -89,10 +94,13 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 func _offer(parent: Control, c: Dictionary) -> void:
 	var b: Bridge = app.b
 	var renew: bool = c.has("renewalOf")
-	var pn := Kit.fold_panel(("↻ RENEWAL · " if renew else "") + "%s · %s · %s" % [c.customer, c.archetype, c.model.name], "o" + str(c.id), folds, refresh, true, parent, not renew); var v: VBoxContainer = pn[1]
+	var m: Dictionary = money.get(c.id, {})
+	var mline := ("+%s/mo · %s total · ~%s/mo after power" % [Kit.usd(float(m.monthly)), Kit.usd(float(m.total)), Kit.usd(float(m.profitMo))]) if not m.is_empty() else ""
+	var pn := Kit.fold_panel(("↻ " if renew else "") + "%s · %s%s" % [c.customer, c.model.name, ("  ·  " + mline) if mline != "" else ""], "o" + str(c.id), folds, refresh, true, parent, not renew); var v: VBoxContainer = pn[1]
 	if bool(folds.get("o" + str(c.id), not renew)): return   # collapsed: don't build the (expensive) body until it is opened
 	if renew: v.add_child(Kit.label("↻ %s liked your last contract and wants a bigger one — priced +5%%." % c.renewalOf, 13, Color("#ffd166"), true))
 	var t: bool = c.kind == "training"
+	if mline != "": v.add_child(Kit.label(mline, 17, Kit.GR, true))
 	v.add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%sB%s · %s[/color]" % [c.model.name, Kit.num(c.model.paramsB, 1), (" (%sB active)" % Kit.num(c.model.activeParamsB, 1)) if c.model.activeParamsB != c.model.paramsB else "", c.kind], 15))
 	var head := ("%s+ GPUs · %s/GPU-hr" % [Kit.num(c.minAccelerators), Kit.usd(c.pricePerAccelHour)]) if t else ("%s tok/s · %s/Mtok" % [Kit.num(c.tokensPerSec), Kit.usd(c.pricePerMTok)])
 	v.add_child(Kit.label("%s · %d mo · SLA %.1f%%" % [head, int(c.durationMonths), c.slaAvailability * 100.0], 14, Kit.CY))
