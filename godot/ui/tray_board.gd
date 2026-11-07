@@ -2,14 +2,15 @@ class_name TrayBoard
 extends Control
 ## Motherboard view of a server tray. Same placement algorithm as the web Design Lab; click a socket to target it.
 signal socket_clicked(kind: String, idx: int)
-const SOCK := {"accelerator": Vector2(108, 108), "cpu": Vector2(128, 128), "dimm": Vector2(13, 150), "nic": Vector2(150, 36), "dpu": Vector2(150, 36), "nvme": Vector2(62, 28), "psu": Vector2(100, 54), "coldplate": Vector2(80, 50), "switchchip": Vector2(66, 66), "fan": Vector2(48, 48)}
+## Sizes are real parts at ~1.6 units per mm: SXM module 105x135, SP5-class socket 72x76, DDR5 DIMM 8.5x133, half-length NIC 167x69, E1.S drive 31x118, CRPS PSU 185x39.
+const SOCK := {"accelerator": Vector2(168, 216), "cpu": Vector2(118, 122), "dimm": Vector2(14, 213), "nic": Vector2(267, 96), "dpu": Vector2(267, 96), "nvme": Vector2(190, 50), "psu": Vector2(296, 64), "coldplate": Vector2(160, 110), "switchchip": Vector2(84, 84), "fan": Vector2(100, 100)}
 const ZONE := {"accelerator": "ACCELERATOR", "cpu": "CPU", "dimm": "DIMM", "nic": "PCIe NIC", "dpu": "PCIe DPU", "nvme": "NVMe BAY", "psu": "PSU BAY", "coldplate": "COLD PLATE", "switchchip": "SWITCH CHIP", "fan": "FAN"}
 var ch: Dictionary = {}
 var cells: Dictionary = {}       # kind -> Array[String|null]
 var items: Dictionary = {}       # id -> catalog item
 var sel_kind := ""
 var sel_idx := -1
-var W := 1400.0
+var W := 1800.0
 var H := 700.0
 var place: Dictionary = {}
 var traces: Array = []
@@ -31,7 +32,7 @@ func _cnt(k: String) -> int:
 func compute() -> void:
 	place.clear(); traces.clear(); chips.clear(); silk.clear()
 	if ch.is_empty(): return
-	var GAP := 10.0; var NV_PER := 10; var PS_PER := 6
+	var GAP := 10.0; var NV_PER := 8; var PS_PER := 4
 	nvW = ceil(_cnt("nvme") / float(NV_PER)) * (SOCK.nvme.x + 8) if _has("nvme") else 0.0
 	psW = ceil(_cnt("psu") / float(PS_PER)) * (SOCK.psu.x + 8) if _has("psu") else 0.0
 	bx0 = 40.0 + nvW + (26.0 if nvW > 0 else 0.0); bx1 = W - 30.0 - psW - (26.0 if psW > 0 else 0.0); var bw := bx1 - bx0 - (64.0 if _has("cpu") else 0.0)
@@ -70,7 +71,7 @@ func compute() -> void:
 		for i in n: var r: int = i / per; place["accelerator"].append(Vector2(x0 + (i % per) * pitch, y + 36 + r * (sk.y + 30) + (sw if r >= 1 else 0.0)))
 		if bb.get("includesSwitchChips", false) and sw > 0:
 			var cy := y + 36 + sk.y + 15 + 8; var n_sw := 4 if per <= 4 else 6
-			for k in n_sw: chips.append([Vector2(bx0 + bw / 2 - (n_sw * 78) / 2.0 + k * 78 + 6, cy), Vector2(66, 50), "NVSWITCH", true])
+			for k in n_sw: chips.append([Vector2(bx0 + bw / 2 - (n_sw * 96) / 2.0 + k * 96 + 6, cy), Vector2(84, 50), "NVSWITCH", true])
 			for i in n:
 				var p: Vector2 = place["accelerator"][i]; var r3: int = i / per
 				traces.append([Vector2(p.x + sk.x / 2, p.y + sk.y), Vector2(p.x + sk.x / 2, cy + 20), 3, 7.0, true] if r3 == 0 else [Vector2(p.x + sk.x / 2, p.y), Vector2(p.x + sk.x / 2, cy + 30), 3, 7.0, true])
@@ -89,7 +90,7 @@ func compute() -> void:
 		for k in misc:
 			place[k] = []
 			for i in _cnt(k): place[k].append(Vector2(x, y + 18)); silk.append([Vector2(x, y + 12), "%s %d" % [k.to_upper(), i + 1], false]); x += SOCK[k].x + 18.0
-		y += 100.0
+		y += 160.0
 	var nic_kinds := []; for k in ["nic", "dpu"]:
 		if _has(k): nic_kinds.append(k)
 	if nic_kinds.size() > 0:
@@ -98,13 +99,13 @@ func compute() -> void:
 			place[kind] = []
 			for i in _cnt(kind):
 				var idx := k; k += 1
-				var p5 := Vector2(bx0 + 36 + (idx % per) * wslot, y + 30 + (idx / per) * 60); place[kind].append(p5); silk.append([Vector2(p5.x + SOCK.nic.x + 6, p5.y + 6), "PCIE5 x16 #%d" % (idx + 1), false])
+				var p5 := Vector2(bx0 + 36 + (idx % per) * wslot, y + 30 + (idx / per) * (SOCK.nic.y + 18)); place[kind].append(p5); silk.append([Vector2(p5.x, p5.y - 5), "PCIE5 x16 #%d" % (idx + 1), false])
 		var rows2: int = int(ceil(k / float(per)))
 		if cpu_band != null and place.has("cpu"): traces.append([Vector2(bx0 + 20, cpu_band.y + cpu_band.h / 2), Vector2(bx0 + 20, y + 20), 6, 5.0, true])
-		y += rows2 * 60.0 + 54.0
+		y += rows2 * (SOCK.nic.y + 18.0) + 54.0
 	bottom = y + 6.0
 	chips.append([Vector2(bx0 + 300, bottom + 40), Vector2(54, 30), "BMC", false]); chips.append([Vector2(bx0 + 368, bottom + 40), Vector2(54, 30), "PCH", false]); chips.append([Vector2(bx0 + 436, bottom + 40), Vector2(40, 30), "TPM", false])
-	H = maxf(bottom + 128.0, top + 40.0 + maxf(minf(_cnt("nvme"), NV_PER) * 36.0 if _has("nvme") else 0.0, minf(_cnt("psu"), PS_PER) * 62.0 if _has("psu") else 0.0) + 30.0)
+	H = maxf(bottom + 128.0, top + 40.0 + maxf(minf(_cnt("nvme"), NV_PER) * (SOCK.nvme.y + 8) if _has("nvme") else 0.0, minf(_cnt("psu"), PS_PER) * (SOCK.psu.y + 8) if _has("psu") else 0.0) + 30.0)
 
 func _k() -> float: return minf(size.x / W, size.y / H)
 func _o() -> Vector2: var k := _k(); return Vector2((size.x - W * k) * 0.5, (size.y - H * k) * 0.5)
@@ -201,11 +202,14 @@ func _draw_nic(rc: Rect2, it: Dictionary, vc: Color, filled: bool, dpu: bool) ->
 		_fill(Rect2(card.position + Vector2(card.size.x * 0.82, card.size.y * 0.1), Vector2(card.size.x * 0.16, card.size.y * 0.8)), WH)
 		_fill(Rect2(card.position + Vector2(card.size.x * 0.05, card.size.y * 0.15), Vector2(card.size.x * 0.16, 4 * _k())), vc)
 
-func _draw_nvme(rc: Rect2, filled: bool, vc: Color) -> void:
+func _draw_nvme(rc: Rect2, filled: bool, vc: Color) -> void:   # E1.S: long body, edge connector at the rear
+	var cn := Rect2(rc.position, Vector2(rc.size.x * 0.1, rc.size.y)); _fill(cn, WH if filled else GYD)
+	for i in 6: _fill(Rect2(cn.position + Vector2(cn.size.x * 0.3, 3 + i * (cn.size.y - 6) / 6.0), Vector2(cn.size.x * 0.4, 2.0)), GYD)
+	var body := Rect2(rc.position + Vector2(rc.size.x * 0.12, 0), Vector2(rc.size.x * 0.88, rc.size.y))
 	if filled:
-		_soic(rc, GY); _fill(Rect2(rc.position + Vector2(rc.size.x * 0.3, rc.size.y * 0.45), Vector2(rc.size.x * 0.4, 3 * _k())), vc); draw_circle(rc.position + Vector2(rc.size.x * 0.5, rc.size.y * 0.2), 2.4 * _k(), BLL)
-	else:
-		_soic(rc, GYD); _fill(Rect2(rc.position + rc.size * Vector2(0.2, 0.2), rc.size * Vector2(0.6, 0.6)), BD)
+		_fill(body, GY); _fill(Rect2(body.position + Vector2(body.size.x * 0.1, body.size.y * 0.3), Vector2(body.size.x * 0.45, 3 * _k())), vc)
+		_fill(Rect2(body.position + Vector2(body.size.x * 0.1, body.size.y * 0.55), Vector2(body.size.x * 0.3, 3 * _k())), WH); draw_circle(body.position + Vector2(body.size.x * 0.93, body.size.y * 0.5), 3.0 * _k(), BLL)
+	else: _fill(body, BD); draw_rect(body, GYD, false, 1.5)
 
 func _draw_psu(rc: Rect2, filled: bool) -> void:
 	_fill(rc, BD); draw_rect(rc, GYD, false, 1.5)
@@ -247,8 +251,8 @@ func _draw() -> void:
 	_fill(_r(Vector2(12, 12), Vector2(W - 24, 30)), Color(0.06, 0.12, 0.18))
 	_txt(Vector2(26, 32), "◀ FRONT · %s · %sU · %s · REAR ▶" % [str(ch.name).to_upper().left(56), int(ch.rackUnits), str(ch.cooling).to_upper()], 14, Color(0.62, 0.78, 0.92))
 	_txt(Vector2(W - 380, 32), "click a socket, then choose a part →", 12, Color(0.45, 0.58, 0.7))
-	if _has("nvme"): var nr := _r(Vector2(30, top + 8), Vector2(nvW + 20, minf(_cnt("nvme"), 10) * 36.0 + 44)); _fill(nr, BD); draw_rect(nr, GYD, false, 1.0); _txt(Vector2(40, top + 24), "NVME CAGE", 10, GY)
-	if _has("psu"): var pr := _r(Vector2(bx1 + 16, top + 8), Vector2(psW + 20, minf(_cnt("psu"), 6) * 62.0 + 44)); _fill(pr, BD); draw_rect(pr, GYD, false, 1.0); _txt(Vector2(bx1 + 26, top + 24), "REAR PSU BAY", 10, GY)
+	if _has("nvme"): var nr := _r(Vector2(30, top + 8), Vector2(nvW + 20, minf(_cnt("nvme"), 8) * (SOCK.nvme.y + 8) + 44)); _fill(nr, BD); draw_rect(nr, GYD, false, 1.0); _txt(Vector2(40, top + 24), "NVME CAGE", 10, GY)
+	if _has("psu"): var pr := _r(Vector2(bx1 + 16, top + 8), Vector2(psW + 20, minf(_cnt("psu"), 4) * (SOCK.psu.y + 8) + 44)); _fill(pr, BD); draw_rect(pr, GYD, false, 1.0); _txt(Vector2(bx1 + 26, top + 24), "REAR PSU BAY", 10, GY)
 	# the PCB: charcoal with a bright rim and grey mounting circles
 	var pcb := _r(Vector2(bx0 - 8, top), Vector2(bx1 - bx0 + 16, H - top - 18))
 	var sbx := StyleBoxFlat.new(); sbx.bg_color = BD; sbx.border_color = RIM; sbx.set_border_width_all(maxi(3, int(4 * k))); sbx.set_corner_radius_all(int(18 * k)); draw_style_box(sbx, pcb)
@@ -273,7 +277,7 @@ func _draw() -> void:
 			var pa := _p(a + (Vector2(off, 0) if vert else Vector2(0, off))); var pb := _p(b + (Vector2(off, 0) if vert else Vector2(0, off)))
 			draw_line(pa, pb, GYD, maxf(1.8, 2.4 * k)); draw_circle(pa, maxf(1.8, 2.4 * k), GY); draw_circle(pb, maxf(1.8, 2.4 * k), GY)
 	if _has("cpu"):   # 24-pin power block on the right edge
-		var pw := _r(Vector2(bx1 - 52, top + 40), Vector2(34, 150)); _fill(pw, BL)
+		var pw := _r(Vector2(bx1 - 52, top + 40), Vector2(32, 84)); _fill(pw, BL)
 		for gx in 2: for gy in 12: _fill(Rect2(pw.position + Vector2(3 + gx * pw.size.x * 0.5, 3 + gy * (pw.size.y - 6) / 12.0), Vector2(pw.size.x * 0.5 - 6, (pw.size.y - 6) / 12.0 - 3)), BLL.lightened(0.4))
 	_heatsink(_r(Vector2(bx0 + 30, bottom + 14), Vector2(120, 100)), false)   # M.2 / chipset heatsink
 	var ec := _p(Vector2(bx0 + 226, bottom + 62)); var er := 40.0 * k   # chipset emblem
