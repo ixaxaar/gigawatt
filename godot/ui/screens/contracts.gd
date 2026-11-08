@@ -30,9 +30,9 @@ func _rebuild() -> void:
 		pick[k] = pick[k].filter(func(id): return live_ids.has(id))
 		if pick[k].is_empty(): pick.erase(k)
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
+	var hd := Kit.head_row(12); root.add_child(hd)
 	hd.add_child(Kit.label("CUSTOMERS & CONTRACTS", 26, Kit.CY))
-	hd.add_child(Kit.label("Sign now, deploy within the ramp window — or wait until you can serve at once.", 13, Kit.DIM, true))
+	hd.add_child(Kit.label("Sign now, deploy within the ramp window — or wait until you can serve at once.", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
 	if msg != "": root.add_child(Kit.label(msg, 14, Kit.CY, true))
 	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
 	left.add_child(Kit.tip("Customers pay for capacity: training customers rent a big coherent cluster by the GPU-hour; inference customers pay per million tokens. Each offer shows what it needs and what you still lack — hit EASY PATH and the game orders, installs, deploys and assigns it for you."))

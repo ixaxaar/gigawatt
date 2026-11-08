@@ -55,8 +55,8 @@ func _rebuild() -> void:
 	var stats = null
 	if sel.size() > 0: stats = b.q("evaluateCluster", [{"id": "draft", "name": cname, "rackIds": sel, "fabric": f}])
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
-	hd.add_child(Kit.label("SUPERCOMPUTER BUILDER", 26, Kit.CY)); hd.add_child(Kit.label("Group online racks into one machine, wire its network, and see what it can train or serve.", 13, Kit.DIM, true))
+	var hd := Kit.head_row(12); root.add_child(hd)
+	hd.add_child(Kit.label("SUPERCOMPUTER BUILDER", 26, Kit.CY)); hd.add_child(Kit.label("Group online racks into one machine, wire its network, and see what it can train or serve.", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
 	var nh = app.b.q("netHealth")
 	if nh is Dictionary and int(nh.level) > 0:
 		var warn := PanelContainer.new(); warn.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.tint(Kit.AM, 0.12), 2, 10)); root.add_child(warn)

@@ -148,6 +148,18 @@ static func _styles(kind: String) -> Dictionary:
 	st.disabled.border_color = LINE
 	_btn_styles[kind] = st; return st
 
+## Header row of a drawer: one line on desktop; buttons wrap onto more lines on small screens.
+static func head_row(sep := 8) -> Container:
+	var c: Container = HFlowContainer.new() if Layout.compact else HBoxContainer.new()
+	c.add_theme_constant_override("separation", sep); c.add_theme_constant_override("h_separation", sep); c.add_theme_constant_override("v_separation", 4)
+	return c
+
+## The grey hint next to a screen title: on small screens it takes its own line at the drawer's width instead of being squeezed beside the title.
+static func hint_fix(hd: Container, app) -> void:
+	if not Layout.compact or hd.get_child_count() == 0: return
+	var l := hd.get_child(hd.get_child_count() - 1) as Label
+	if l != null: l.custom_minimum_size.x = maxf(160.0, app.drawer_w() - 70.0)
+
 static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
 	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", fs(size)); b.custom_minimum_size.y = maxf(36.0, Layout.tap()); b.add_theme_font_override("font", Fonts.bold); b.focus_mode = focus_mode()
 	var st := _styles(kind)

@@ -29,7 +29,7 @@ func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	if next_tab != "": tab = next_tab; next_tab = ""
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)
+	var hd := Kit.head_row(8); root.add_child(hd)
 	hd.add_child(Kit.label("PROCUREMENT", 26, Kit.CY))
 	hd.add_child(Kit.btn("Guided planner", func(): tab = "plan"; refresh(), "pri" if tab == "plan" else ""))
 	hd.add_child(Kit.btn("Parts bin (advanced)", func(): tab = "parts"; refresh(), "pri" if tab == "parts" else ""))

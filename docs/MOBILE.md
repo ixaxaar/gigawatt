@@ -17,3 +17,10 @@ What is in the project, what works, and what is missing before a store build.
 `scripts/build-android-native.sh` installs the Gradle template, fetches nodejs-mobile, builds the JNI shim (`godot/android/native/gwnode.cpp`) and copies the Java `NodeRunner` in; then `godot --headless --path godot --export-debug Android build/android/GIGAWATT-debug.apk` produces an APK (arm64-v8a; set `architectures/x86_64=true` for an emulator).
 - **Verified on a Pixel 9a (Android, Mali-G715, Vulkan Mobile):** the APK installs, Node starts in-process (`engine listening on 127.0.0.1:47820`), the game connects, and the Home screen renders in landscape (activity orientation `USER_LANDSCAPE`) at 2424x1080.
 - **Emulator:** the x86_64 emulator (SwiftShader graphics) crashes inside Godot's native library a few seconds after start; the phone does not, so treat that as an emulator problem.
+
+## Touch and responsive layout (v0.8.1)
+- **Touch is a first-class input**, like mouse+keyboard and gamepad: `game/touch_scroll.gd` scrolls any list by dragging from anywhere (cards and buttons included; a drag that starts on a button cancels the tap), scrollbars are hidden on touch, and buttons are at least 52 logical px tall.
+- **Drawers resize.** Every drawer has a divider with a pill grip on its edge (`ui/drawer_grip.gd`): drag it to size the drawer (phones start at 30% of the width, the choice is saved), tap it to fold the drawer away. Works on every layout, not only phones.
+- **Responsive text.** `game/wrap_guard.gd` wraps any label or button inside a scrolling screen that is wider than the screen's visible width; header rows flow onto several lines (`Kit.head_row`), and every touch screen sits in a `ScreenScroll` so nothing is cut off (it scrolls).
+- `GW_AUDIT=1` prints controls that are squeezed to a sliver and stretched tall; `GW_LAYOUT=phone` with a 2424x1080 window previews the phone layout on a desktop.
+- New games start with walls off (open plan).

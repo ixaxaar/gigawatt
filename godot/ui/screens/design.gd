@@ -29,7 +29,7 @@ func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)
+	var hd := Kit.head_row(8); root.add_child(hd)
 	hd.add_child(Kit.label("DESIGN LAB", 26, Kit.CY))
 	hd.add_child(Kit.btn("① Tray bench", func(): tab = "tray"; refresh(), "pri" if tab == "tray" else ""))
 	hd.add_child(Kit.btn("② Rack bench", func(): tab = "rack"; refresh(), "pri" if tab == "rack" else ""))

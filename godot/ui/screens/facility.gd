@@ -132,9 +132,9 @@ func _rebuild() -> void:
 	nr.add_child(Kit.option(["air", "rdhx", "dlc", "immersion"], nh_cool, func(v): nh_cool = v)); nr.add_child(Kit.spin(nh_slots, 4, 200, 1, func(v): nh_slots = int(v)))
 	nr.add_child(Kit.btn("Build", func(): msg = b.act("buildHall", [nh_name, nh_cool, nh_slots]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 13))
 	# ---- bottom-left placement strip
-	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); bl.offset_left = 8; bl.offset_bottom = -8; bl.offset_top = -330; bl.offset_right = 760; bl.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.94), Kit.CY, 12, 1, 12)); add_child(bl)
+	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); bl.offset_left = 8; bl.offset_bottom = -8; bl.offset_top = -330 if not Layout.phone else -190.0; bl.offset_right = 760 if not Layout.phone else 8.0 + maxf(320.0, app.vw() - app.RAIL_W - 8.0 - app.overlay_w() - 56.0); bl.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.94), Kit.CY, 12, 1, 12)); add_child(bl)
 	var bv := VBoxContainer.new(); bv.add_theme_constant_override("separation", 6); bl.add_child(bv)
-	bv.add_child(Kit.label("%s floor — choose a rack design, then click an empty slot" % hall.name, 14, Kit.CY))
+	bv.add_child(Kit.label("%s floor — choose a rack design, then click an empty slot" % hall.name, 14, Kit.CY, true))
 	var dr := HBoxContainer.new(); dr.add_theme_constant_override("separation", 8); bv.add_child(dr)
 	var dopts := [["", "choose rack design…"]]; for d in g.racks: dopts.append([d.id, d.name])
 	dr.add_child(Kit.option(dopts, design, func(v): design = v; refresh()))
@@ -146,7 +146,7 @@ func _rebuild() -> void:
 	var pb := Kit.btn("PLACE RACK", func(): msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0; dr.add_child(pb)
 	if missing.size() > 0: dr.add_child(Kit.label("missing %d part type(s)" % missing.size(), 12, Kit.AM))
 	if design != "" and missing.size() > 0:
-		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)
+		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170 if not Layout.phone else 80); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)
 		MissingParts.build(app, mv, design, 1, func(m): msg = m; refresh(), sp_state)
 	if msg != "": bv.add_child(Kit.label(msg, 12, Kit.DIM, true))
 	if _focus != "" and _scroll != null:

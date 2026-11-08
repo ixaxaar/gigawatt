@@ -23,9 +23,9 @@ func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
+	var hd := Kit.head_row(12); root.add_child(hd)
 	hd.add_child(Kit.label("OPERATIONS", 26, Kit.CY))
-	hd.add_child(Kit.label("People, money and end-of-life hardware." + ("  " + msg if msg != "" else ""), 13, Kit.RD if msg_bad else Kit.DIM, true))
+	hd.add_child(Kit.label("People, money and end-of-life hardware." + ("  " + msg if msg != "" else ""), 13, Kit.RD if msg_bad else Kit.DIM, true)); Kit.hint_fix(hd, app)
 	var sc := Kit.column(root, 0, true)
 	var top := VBoxContainer.new(); top.add_theme_constant_override("separation", 12); sc.add_child(top)
 	# --- team

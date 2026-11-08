@@ -17,7 +17,8 @@ func accent_of(id: String) -> Color:
 	return Kit.CY
 func drawer_w(id := "") -> float:
 	var w := get_viewport().get_visible_rect().size.x
-	if Layout.phone: return clampf(w * 0.68, 560.0, w - RAIL_W - 14.0)   # leaves a strip of the hall visible beside the sheet
+	var f := Settings.drawer_frac if Settings.drawer_frac > 0.0 else (0.30 if Layout.phone else -1.0)   # the player drags the divider to resize it
+	if f > 0.0: return clampf(w * f, 300.0, maxf(320.0, w - (RAIL_W + 14.0 if Layout.phone else 300.0)))
 	if Layout.handheld: return minf(w * (0.8 if id == "shop" else 0.68), w - 120.0)
 	return minf(clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0), w - 300.0)
 const SECS := [0.0, 4.0, 1.6, 0.6]
@@ -62,6 +63,7 @@ func _ready() -> void:
 		get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
 		if get("hall") != null and hall != null: hall.apply_scale()
 		if was != Layout.kind or true: call_deferred("_on_resized", was))
+	add_child(WrapGuard.new())
 	if Layout.touch: add_child(TouchScroll.new())   # finger scrolling from anywhere, no scrollbars
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
@@ -92,6 +94,7 @@ func _ready() -> void:
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_CAM") != "" and OS.get_environment("GW_SCENARIO") == "" and started:   # screenshots: explicit camera on a normal game
 		var cc := OS.get_environment("GW_CAM").split_floats(","); if cc.size() >= 5: hall.yaw = cc[0]; hall.pitch = cc[1]; hall.dist = cc[2]; hall.target = Vector3(cc[3], 0.8, cc[4]); hall.auto_orbit = false; hall._update_cam()
+	if OS.get_environment("GW_AUDIT") != "": get_tree().create_timer(4.0).timeout.connect(_audit_layout)
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 	if OS.get_environment("GW_GUIDE") != "": get_tree().create_timer(0.6).timeout.connect(func(): guide.visible = true; guide.open())
 	if OS.get_environment("GW_INSPECT") != "": get_tree().create_timer(0.8).timeout.connect(func(): _inspect(int(OS.get_environment("GW_INSPECT"))))
@@ -220,7 +223,7 @@ func vw() -> float: return get_viewport().get_visible_rect().size.x
 
 ## Right-hand drawers that leave the hall clickable (Overview, Facility): 520 px on desktops, the full screen on phones.
 func overlay_w() -> float:
-	if Layout.phone: return clampf(vw() * 0.62, 520.0, vw() - RAIL_W - 14.0)
+	if Layout.phone or Settings.drawer_frac > 0.0: return drawer_w()
 	return minf(520.0 if not Layout.handheld else 470.0, vw() - 240.0)
 
 const RAIL_W := 92.0
@@ -237,7 +240,7 @@ func _dock_meta(d: Button, full_name: String, i: int) -> void:
 
 ## Small screens: a tab on the drawer's edge folds every drawer away so the hall fills the screen, and brings it back.
 var drawer_hidden := false
-var drawer_tab: Button
+var drawer_tab: DrawerGrip
 func _cover_of(id: String) -> float:
 	if OVERLAY.has(id): return overlay_w()
 	return 0.0 if FULL.has(id) else drawer_w(id)
@@ -247,16 +250,39 @@ func toggle_drawer() -> void:
 func _place_tab_deferred() -> void: call_deferred("_place_tab")
 func _place_tab() -> void:
 	if drawer_tab == null: return
-	drawer_tab.visible = Layout.compact and started and not FULL.has(cur) and cur != ""
-	drawer_tab.text = "◀" if drawer_hidden else "▶"
+	drawer_tab.visible = started and not FULL.has(cur) and cur != ""
+	drawer_tab.accent = Kit.accent; drawer_tab.folded = drawer_hidden
 	var vh := get_viewport().get_visible_rect().size.y
-	drawer_tab.position = Vector2(vw() - (0.0 if drawer_hidden else _cover_of(cur)) - 50.0, vh * 0.5 - 52.0)
+	var top := _bar_h + 10.0; var wd := 44.0 if Layout.touch else 30.0
+	var bottom := 6.0 if Layout.phone else _dock_h + 8.0
+	drawer_tab.position = Vector2(vw() - (0.0 if drawer_hidden else _cover_of(cur)) - wd, top); drawer_tab.size = Vector2(wd, vh - top - bottom)
+## Drag the handle on a drawer's edge to size it; a plain tap folds the drawer away (and back).
+var _grip_down := false
+var _grip_moved := false
+func _grip_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		if e.pressed: _grip_down = true; _grip_moved = false; drawer_tab.active = true
+		else:
+			_grip_down = false; drawer_tab.active = false
+			if _grip_moved: Settings.save_all(); var scr = screens.get(cur); if scr != null and scr.has_method("refresh"): scr.refresh()
+			else: toggle_drawer()
+	elif e is InputEventMouseMotion and _grip_down:
+		var x := get_viewport().get_mouse_position().x
+		var f := clampf((vw() - x) / vw(), 0.2, 0.92)
+		if absf(f - Settings.drawer_frac) < 0.004 and not _grip_moved: return
+		_grip_moved = true; Settings.drawer_frac = f
+		if drawer_hidden: drawer_hidden = false; holder.visible = true
+		_apply_drawer_width()
+func _apply_drawer_width() -> void:
+	for id in screens:
+		var sc: Control = screens[id]
+		if sc is ScreenWrap and not OVERLAY.has(id) and not FULL.has(id): sc.offset_left = -drawer_w(id)
+	hall.set_cover(_cover_of(cur)); _place_tab()
 
 func _relayout() -> void:
 	if top == null: return
 	if drawer_tab == null:
-		drawer_tab = Button.new(); drawer_tab.custom_minimum_size = Vector2(50, 104); drawer_tab.focus_mode = Control.FOCUS_NONE
-		drawer_tab.add_theme_font_size_override("font_size", 22); drawer_tab.pressed.connect(toggle_drawer); root.add_child(drawer_tab)
+		drawer_tab = DrawerGrip.new(); drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP; drawer_tab.gui_input.connect(_grip_input); root.add_child(drawer_tab)
 	_place_tab_deferred()
 	var k := Layout.kind
 	var compact := k != "desktop"
@@ -320,22 +346,28 @@ func _title() -> void:
 	gt.gradient = gr; gt.fill_from = Vector2(0, 0); gt.fill_to = Vector2(1, 0); gt.width = 512; gt.height = 8
 	var shade := TextureRect.new(); shade.texture = gt; shade.stretch_mode = TextureRect.STRETCH_SCALE; shade.set_anchors_preset(Control.PRESET_LEFT_WIDE); shade.anchor_right = 0.62; shade.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(shade)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90 if not Layout.compact else 24; vb.offset_top = -310 if not Layout.phone else -vs_h() * 0.5 + 16; vb.offset_bottom = 310 if not Layout.phone else vs_h() * 0.5 - 16; vb.offset_right = 780 if not Layout.phone else vw() - 24; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	var bv: VBoxContainer = vb   # where the menu buttons go
+	if Layout.phone:   # landscape phone: title and blurb on the left, the buttons in a finger-scrollable column on the right
+		vb.offset_right = vw() * 0.44
+		var sc := ScrollContainer.new(); sc.set_anchors_preset(Control.PRESET_RIGHT_WIDE); sc.anchor_left = 0.47; sc.offset_left = 0; sc.offset_right = -24; sc.offset_top = 14; sc.offset_bottom = -14
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; h.add_child(sc)
+		bv = VBoxContainer.new(); bv.add_theme_constant_override("separation", 10); bv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(bv)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110 if not Layout.phone else 64, Kit.CY))
 	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
 	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
-		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0), 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
+		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0) if not Layout.phone else 0.0, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; bt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if Layout.phone else TextServer.AUTOWRAP_OFF; bv.add_child(bt)
 	b.act("newGame", [7, "operator"]); _demo_hall()
 	var recent: Array = b.q("saves")
 	if recent.size() > 0:
 		var rs: Dictionary = recent[0]
-		var cont := Kit.btn("CONTINUE\n%s · %s · %d racks" % [Kit.date_of(int(rs.month)), Kit.usd(float(rs.cash)), int(rs.racks)], func(): _load_slot(str(rs.slot), func(): h.queue_free()), "go", 18); cont.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0), 76); cont.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		vb.add_child(cont); vb.move_child(cont, 3)
-	vb.add_child(Kit.btn("LOAD GAME", func(): _slots("load", func(): h.queue_free()), "", 16))
-	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
-	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
-	vb.add_child(Kit.label("Settings has the full list of controls.", 14, Kit.DIM))
+		var cont := Kit.btn("CONTINUE\n%s · %s · %d racks" % [Kit.date_of(int(rs.month)), Kit.usd(float(rs.cash)), int(rs.racks)], func(): _load_slot(str(rs.slot), func(): h.queue_free()), "go", 18); cont.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0) if not Layout.phone else 0.0, 76); cont.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		bv.add_child(cont); bv.move_child(cont, 3 if bv == vb else 0)
+	bv.add_child(Kit.btn("LOAD GAME", func(): _slots("load", func(): h.queue_free()), "", 16))
+	bv.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
+	bv.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
+	bv.add_child(Kit.label("Settings has the full list of controls.", 14, Kit.DIM))
 	var gw := Settings.gpu_warning()
-	if gw != "": var gl := Kit.label(gw, 14, Kit.AM); gl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; vb.add_child(gl)
+	if gw != "": var gl := Kit.label(gw, 14, Kit.AM); gl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; bv.add_child(gl)
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
 
 ## The title screen's backdrop: a short scripted game, so the first thing you see is a lit hall with racks in it.
@@ -576,6 +608,23 @@ func go(id: String) -> void: show_screen(id)
 var learn_id := ""
 func learn(id: String) -> void: learn_id = id; show_screen("codex")
 
+## Dev check (GW_AUDIT=1): print controls on the open screen that are squeezed to a sliver and stretched tall, or run off the screen.
+func _audit_layout() -> void:
+	var scr = screens.get(cur)
+	if scr == null: return
+	var vs := get_viewport().get_visible_rect().size; var n := 0
+	for c in (scr as Node).find_children("*", "Control", true, false):
+		var ctl := c as Control
+		if not ctl.is_visible_in_tree(): continue
+		var r := ctl.get_global_rect()
+		var thin: bool = r.size.x < 90.0 and r.size.y > 240.0 and not (ctl is ScrollBar) and not (ctl is VSeparator)
+		if thin or r.size.y > 2400.0:
+			var path := ""; var p: Node = ctl
+			for i in 5: if p != null and p != scr: path = "%s/%s" % [p.get_class(), path]; p = p.get_parent()
+			print("AUDIT %s thin %s size=%s text=%s" % [cur, path, r.size, str(ctl.get("text")).left(50)]); n += 1
+			if n > 12: break
+	print("AUDIT %s done n=%d frac=%.2f cover=%.0f vw=%.0f scr_left=%.0f" % [cur, n, Settings.drawer_frac, _cover_of(cur), vs.x, (scr as Control).offset_left])
+
 func _make_screen(id: String) -> Control:
 	var path: String = SCRIPTS.get(id, "")
 	var c: Control
@@ -592,6 +641,8 @@ func _make_screen(id: String) -> Control:
 		else:
 			w.set_anchors_preset(Control.PRESET_RIGHT_WIDE); w.offset_left = -drawer_w(id)
 			if GROUPS.has(dock_key(id)): var ts := tab_strip(id); ts.set_anchors_preset(Control.PRESET_TOP_WIDE); ts.offset_left = 20; ts.offset_top = 12; ts.offset_right = -20; w.add_child(ts); c.offset_top = 58
+		if Layout.touch:   # scrolls by finger instead of cutting content off
+			var ss := ScreenScroll.new(c); w.add_child(ss); w.inner = ss; return w
 		w.add_child(c); w.inner = c; return w
 	return c
 

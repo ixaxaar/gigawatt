@@ -17,7 +17,7 @@ func _rebuild() -> void:
 	if next_view != "": view = next_view; next_view = ""
 	if app.learn_id != "": sel = app.learn_id; app.learn_id = ""; view = "list"
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 8); root.add_child(hd)
+	var hd := Kit.head_row(8); root.add_child(hd)
 	hd.add_child(Kit.label("CODEX", 26, Kit.CY)); hd.add_child(Kit.label("%d real parts" % b.items.size(), 13, Kit.DIM))
 	var le := LineEdit.new(); le.placeholder_text = "search: hbm, nvlink, dpu, liquid…"; le.text = q; le.custom_minimum_size = Vector2(300, 0); le.text_submitted.connect(func(t): q = t; refresh()); le.text_changed.connect(func(t): q = t); hd.add_child(le)
 	hd.add_child(Kit.btn("Search", func(): refresh(), "", 14))

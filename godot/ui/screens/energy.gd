@@ -22,8 +22,8 @@ func _rebuild() -> void:
 	var accels := 0.0; for c in g.clusters: accels += c.stats.accelerators if c.get("stats") != null else 0.0
 	var cost_gpu_hr: float = (pv.opex.itPowerKW / accels * pv.opex.pue * g.utilityUSDPerKWh) if accels > 0 else 0.0
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
-	hd.add_child(Kit.label("ENERGY & SPOT MARKET", 26, Kit.CY)); hd.add_child(Kit.label("Buy power on take-or-pay contracts (cheap, but paid even if unused) or stay on spot." + ("  " + msg if msg != "" else ""), 13, Kit.DIM, true))
+	var hd := Kit.head_row(12); root.add_child(hd)
+	hd.add_child(Kit.label("ENERGY & SPOT MARKET", 26, Kit.CY)); hd.add_child(Kit.label("Buy power on take-or-pay contracts (cheap, but paid even if unused) or stay on spot." + ("  " + msg if msg != "" else ""), 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
 	var sc := Kit.column(root, 0, true)
 	var top := VBoxContainer.new(); top.add_theme_constant_override("separation", 12); sc.add_child(top)
 	# power position

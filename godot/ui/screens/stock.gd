@@ -62,9 +62,9 @@ func _rebuild() -> void:
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	if hall_id == "" or b.hall(hall_id).is_empty(): hall_id = g.halls[0].id
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
+	var hd := Kit.head_row(12); root.add_child(hd)
 	hd.add_child(Kit.label("WAREHOUSE & ASSEMBLY", 26, Kit.CY))
-	hd.add_child(Kit.label("Parts live in one of three states: on order (paid, in transit) → warehouse (arrived) → deployed (racked on the floor or installed in a hall).", 13, Kit.DIM, true))
+	hd.add_child(Kit.label("Parts live in one of three states: on order (paid, in transit) → warehouse (arrived) → deployed (racked on the floor or installed in a hall).", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
 	if msg != "": root.add_child(Kit.label(msg, 14, Kit.CY, true))
 	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
 	left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
