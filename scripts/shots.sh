@@ -19,7 +19,7 @@ shot hall "${A[@]}"
 shot thermal "${A[@]}" GW_THERMAL=1
 shot procure "${A[@]}" GW_SCREEN=shop
 shot design "${A[@]}" GW_SCREEN=design
-shot supercomputer "${A[@]}" GW_SCREEN=network
+shot supercomputer "${A[@]}" GW_SCENARIO=supercomputer GW_SCREEN=network GW_SHOT_AT=10
 shot customers "${A[@]}" GW_SCREEN=contracts
 shot codex "${A[@]}" GW_SCREEN=codex
 shot build-ledger "${A[@]}" GW_SCREEN=facility

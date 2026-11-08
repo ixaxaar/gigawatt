@@ -22,7 +22,7 @@ function plantUnit(kind: 'power' | 'cooling', cls0: string) {
 const advance = (n: number) => { for (let i = 0; i < n; i++) st().nextMonth(); };
 
 /** Build one 200-slot hall per cooling class and fill each with `racksPerTemplate` of every compatible template. Returns a report. */
-export function stressFill(racksPerTemplate: number, hallsPerClass = 1) {
+export function stressFill(racksPerTemplate: number, hallsPerClass = 1, only?: (t: typeof TEMPLATES[number]) => boolean) {
   const report: Record<string, any> = { halls: [], skipped: [] };
   const classes: CoolingClass[] = ['air', 'rdhx', 'dlc', 'immersion'];
   const hallOf: Record<string, string[]> = {};
@@ -30,6 +30,7 @@ export function stressFill(racksPerTemplate: number, hallsPerClass = 1) {
   const load: Record<string, number> = {}; const plan: { t: typeof TEMPLATES[number]; hall: string; n: number }[] = [];
   let rr = 0;
   for (const t of TEMPLATES) {
+    if (only && !only(t)) continue;
     const f = templateFacts(t); const cls = classes.find(c => c === t.rack.cooling) ?? 'air';
     const halls = hallOf[cls] ?? []; if (!halls.length) { report.skipped.push(t.id + ': no hall'); continue; }
     const hall = halls[rr++ % halls.length];
@@ -70,5 +71,6 @@ export const SCENARIOS: Scenario[] = [
   { id: 'lean', title: 'Lean start', seed: 2, horizonMonths: 120, description: '$8M cash: every dollar of capex and every contract choice matters.', setup: () => patch(g => { g.cash = 8_000_000; }) },
   { id: 'gold-rush-2025', title: 'GPU gold rush (Jan 2025)', seed: 3, horizonMonths: 60, description: 'Start in 2025 with $250M into Blackwell-era scarcity, high demand and allocation caps.', setup: () => patch(g => { g.month = 60; g.cash = 250_000_000; g.reputation = 60; g.demandBoost = 1.7; }) },
   { id: 'stress-all-racks', title: 'Stress: every rack type deployed', seed: 4, horizonMonths: 24, description: 'Sep-2026 start, effectively unlimited cash; four 200-slot halls (air/RDHx/DLC/immersion) pre-filled with every system template to test extremes of power, cooling, failures and fabric.', setup: () => { patch(g => { g.month = 80; g.cash = 5e10; }); stressFill(6); } },
+  { id: 'supercomputer', title: 'Showcase: an H200 supercomputer', seed: 6, horizonMonths: 24, description: 'Sep-2026 start with one air-cooled hall of 48 HGX H200 racks (768 GPUs), racks online and not yet clustered: open the Supercomputer screen to wire a multi-tier scale-out fabric.', setup: () => { patch(g => { g.month = 80; g.cash = 5e10; }); let first = ''; stressFill(48, 1, (t) => { if (!t.id.startsWith('tpl-hgx-h200-') || t.tier !== 'oem') return false; if (!first) first = t.id; return t.id === first; }); } },
   { id: 'stress-campus', title: 'Stress: multi-hall campus', seed: 5, horizonMonths: 24, description: 'Eight halls (two per cooling class), 12 racks of every template each: a gigawatt-class campus for scaling limits.', setup: () => { patch(g => { g.month = 80; g.cash = 2e11; }); stressFill(12, 2); } },
 ];

@@ -12373,7 +12373,7 @@ function plantUnit(kind, cls0) {
 const advance = (n) => {
   for (let i = 0; i < n; i++) st$2().nextMonth();
 };
-function stressFill(racksPerTemplate, hallsPerClass = 1) {
+function stressFill(racksPerTemplate, hallsPerClass = 1, only) {
   const report = { halls: [], skipped: [] };
   const classes = ["air", "rdhx", "dlc", "immersion"];
   const hallOf = {};
@@ -12385,6 +12385,7 @@ function stressFill(racksPerTemplate, hallsPerClass = 1) {
   const plan = [];
   let rr = 0;
   for (const t of TEMPLATES) {
+    if (only && !only(t)) continue;
     const f = templateFacts(t);
     const cls = classes.find((c) => c === t.rack.cooling) ?? "air";
     const halls = hallOf[cls] ?? [];
@@ -12470,6 +12471,18 @@ const SCENARIOS = [
       g.cash = 5e10;
     });
     stressFill(6);
+  } },
+  { id: "supercomputer", title: "Showcase: an H200 supercomputer", seed: 6, horizonMonths: 24, description: "Sep-2026 start with one air-cooled hall of 48 HGX H200 racks (768 GPUs), racks online and not yet clustered: open the Supercomputer screen to wire a multi-tier scale-out fabric.", setup: () => {
+    patch((g) => {
+      g.month = 80;
+      g.cash = 5e10;
+    });
+    let first = "";
+    stressFill(48, 1, (t) => {
+      if (!t.id.startsWith("tpl-hgx-h200-") || t.tier !== "oem") return false;
+      if (!first) first = t.id;
+      return t.id === first;
+    });
   } },
   { id: "stress-campus", title: "Stress: multi-hall campus", seed: 5, horizonMonths: 24, description: "Eight halls (two per cooling class), 12 racks of every template each: a gigawatt-class campus for scaling limits.", setup: () => {
     patch((g) => {
