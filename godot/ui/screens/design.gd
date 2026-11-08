@@ -105,7 +105,7 @@ func _tray(root: Control) -> void:
 		if it.kind == "accelerator": bf16 += float(it.tflops.get("bf16", it.tflops.get("fp16", 0))) * p.count
 	var design := {"id": "draft", "name": tname, "chassisId": cid, "parts": parts}
 	var v: Dictionary = b.q("validateTray", [design])
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
+	var cols := Kit.cols_row(); root.add_child(cols)
 	# --- bench
 	var bench := Kit.panel("Tray bench", true, cols); bench[0].size_flags_stretch_ratio = 1.6; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); bench[1].add_child(tools)
@@ -126,7 +126,7 @@ func _tray(root: Control) -> void:
 	bench[1].add_child(Kit.label(str(ch.codex.summary), 12, Kit.DIM, true))
 	if tmsg != "": bench[1].add_child(Kit.label(tmsg, 13, Kit.AM, true))
 	# --- right column
-	var col := Kit.column(cols, 560, false)
+	var col := Kit.column(cols, 560, false, true); Kit.fit_split(cols, app, [760, 560])
 	col.add_child(Kit.tip("This is a server tray. Click a socket on the board and pick a part. Watch the Sizing advisor: GPUs set the power and NIC needs, CPUs set PCIe lanes and memory channels — and everything you add costs money per GPU-hour."))
 	var active := _active(ch)
 	var ip := Kit.panel("Install into: %s%s" % [ZONE.get(active, active), (" #%d" % (sel_idx + 1)) if sel_idx >= 0 else ""], true, col)
@@ -279,7 +279,7 @@ func _rack(root: Control) -> void:
 	var sorted_items := ritems.duplicate(true); sorted_items.sort_custom(func(a, c): return a.get("u", 0) < c.get("u", 0))
 	var design := {"id": "draft", "name": rname, "rackId": rid, "items": sorted_items, "coolingInterface": cool}
 	var v: Dictionary = b.q("validateRack", [design, g.trays])
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
+	var cols := Kit.cols_row(); root.add_child(cols)
 	var bench := Kit.panel("Rack bench", true, cols); bench[0].size_flags_stretch_ratio = 1.0; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); bench[1].add_child(tools)
 	var ropts := []; for r in racks: ropts.append([r.id, "%s (%dU, %s kW)" % [r.name, int(r.units), r.maxKW]])
@@ -302,7 +302,7 @@ func _rack(root: Control) -> void:
 	bd.device_clicked.connect(func(i): sel_dev = i; refresh())
 	bench[1].add_child(bd)
 	if rmsg != "": bench[1].add_child(Kit.label(rmsg, 13, Kit.AM, true))
-	var col := Kit.column(cols, 560, false)
+	var col := Kit.column(cols, 560, false, true); Kit.fit_split(cols, app, [760, 560])
 	if sel_dev >= 0 and sel_dev < ritems.size():
 		var it: Dictionary = ritems[sel_dev]; var sp := Kit.panel("Selected: %s   U%d–%d" % [_meta(it).label, int(it.get("u", 0)) + 1, int(it.get("u", 0)) + _height(it)], true, col)
 		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 6); sp[1].add_child(h)

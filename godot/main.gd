@@ -16,7 +16,7 @@ func accent_of(id: String) -> Color:
 		if d[0] == dock_key(id): return d[2]
 	return Kit.CY
 func drawer_w(id := "") -> float:
-	var w := get_viewport().get_visible_rect().size.x
+	var w := vw()
 	var f := Settings.drawer_frac if Settings.drawer_frac > 0.0 else (0.30 if Layout.phone else -1.0)   # the player drags the divider to resize it
 	if f > 0.0: return clampf(w * f, 300.0, maxf(320.0, w - (RAIL_W + 14.0 if Layout.phone else 300.0)))
 	if Layout.handheld: return minf(w * (0.8 if id == "shop" else 0.68), w - 120.0)
@@ -184,7 +184,7 @@ func _build_shell() -> void:
 	lbl.speed = Kit.btn("⏸ Paused", func(): set_speed((speed + 1) % 4), "", 15); lbl.speed.custom_minimum_size = Vector2(124, 0); lbl.speed.tooltip_text = "Auto-advance speed: click to cycle Paused, 1x, 2x, 3x. Space advances one month."; hb.add_child(lbl.speed)
 	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
 	menu_btn = Kit.btn("MENU", func(): _menu(), "", 14); hb.add_child(menu_btn)
-	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
+	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; holder.clip_contents = true; root.add_child(holder)
 	dock_scroll = ScrollContainer.new(); dock_scroll.set_anchors_preset(Control.PRESET_BOTTOM_WIDE); dock_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; dock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO; root.add_child(dock_scroll)
 	dock_box = BoxContainer.new(); var dock := dock_box; dock.size_flags_horizontal = Control.SIZE_EXPAND_FILL; dock.add_theme_constant_override("separation", 8); dock_scroll.add_child(dock)
 	for i in DOCK.size():
@@ -218,8 +218,27 @@ func _on_resized(was: String) -> void:
 		if started: show_screen(cur)
 	elif started and screens.has(cur): show_screen(cur)
 
-func vs_h() -> float: return get_viewport().get_visible_rect().size.y
-func vw() -> float: return get_viewport().get_visible_rect().size.x
+func vs_h() -> float: return get_viewport().get_visible_rect().size.y - inset.y - inset.w
+func vw() -> float: return get_viewport().get_visible_rect().size.x - inset.x - inset.z
+
+## Rounded corners and camera cut-outs: the interface sits inside the display's safe area (plus a small margin on phones).
+var inset := Vector4.ZERO   # left, top, right, bottom, in interface pixels
+func _apply_safe_area() -> void:
+	if root == null: return
+	var vp := get_viewport().get_visible_rect().size
+	var ratio := maxf(0.01, float(DisplayServer.window_get_size().x) / maxf(1.0, vp.x))   # screen pixels per interface pixel
+	var v := Vector4.ZERO
+	if OS.get_environment("GW_INSET") != "":   # desktop preview: GW_INSET="left,top,right,bottom"
+		var p := OS.get_environment("GW_INSET").split_floats(",")
+		if p.size() == 4: v = Vector4(p[0], p[1], p[2], p[3])
+	elif OS.has_feature("android") or OS.has_feature("ios"):
+		var sa := Rect2(DisplayServer.get_display_safe_area()); var sc := Vector2(DisplayServer.screen_get_size())
+		v = Vector4(sa.position.x / ratio, sa.position.y / ratio, (sc.x - sa.end.x) / ratio, (sc.y - sa.end.y) / ratio)
+	if Layout.touch and (OS.has_feature("android") or OS.has_feature("ios") or OS.get_environment("GW_INSET") != ""):
+		v = Vector4(maxf(v.x, 14.0), maxf(v.y, 6.0), maxf(v.z, 14.0), maxf(v.w, 8.0))   # rounded screen corners
+	if v == inset and root.offset_left == v.x: return
+	inset = v
+	root.offset_left = v.x; root.offset_top = v.y; root.offset_right = -v.z; root.offset_bottom = -v.w
 
 ## Right-hand drawers that leave the hall clickable (Overview, Facility): 520 px on desktops, the full screen on phones.
 func overlay_w() -> float:
@@ -246,13 +265,13 @@ func _cover_of(id: String) -> float:
 	return 0.0 if FULL.has(id) else drawer_w(id)
 func toggle_drawer() -> void:
 	drawer_hidden = not drawer_hidden; holder.visible = not drawer_hidden
-	hall.set_cover(0.0 if drawer_hidden else _cover_of(cur)); _place_tab(); sfx("click")
+	hall.set_cover(0.0 if drawer_hidden else _cover_of(cur) + inset.z); _place_tab(); sfx("click")
 func _place_tab_deferred() -> void: call_deferred("_place_tab")
 func _place_tab() -> void:
 	if drawer_tab == null: return
 	drawer_tab.visible = started and not FULL.has(cur) and cur != ""
 	drawer_tab.accent = Kit.accent; drawer_tab.folded = drawer_hidden
-	var vh := get_viewport().get_visible_rect().size.y
+	var vh := vs_h()
 	var top := _bar_h + 10.0; var wd := 44.0 if Layout.touch else 30.0
 	var bottom := 6.0 if Layout.phone else _dock_h + 8.0
 	drawer_tab.position = Vector2(vw() - (0.0 if drawer_hidden else _cover_of(cur)) - wd, top); drawer_tab.size = Vector2(wd, vh - top - bottom)
@@ -277,12 +296,13 @@ func _apply_drawer_width() -> void:
 	for id in screens:
 		var sc: Control = screens[id]
 		if sc is ScreenWrap and not OVERLAY.has(id) and not FULL.has(id): sc.offset_left = -drawer_w(id)
-	hall.set_cover(_cover_of(cur)); _place_tab()
+	hall.set_cover(_cover_of(cur) + inset.z); _place_tab()
 
 func _relayout() -> void:
 	if top == null: return
+	_apply_safe_area()
 	if drawer_tab == null:
-		drawer_tab = DrawerGrip.new(); drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP; drawer_tab.gui_input.connect(_grip_input); root.add_child(drawer_tab)
+		drawer_tab = DrawerGrip.new(); drawer_tab.z_index = -3; drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP; drawer_tab.gui_input.connect(_grip_input); root.add_child(drawer_tab)
 	_place_tab_deferred()
 	var k := Layout.kind
 	var compact := k != "desktop"
@@ -581,7 +601,7 @@ func show_screen(id: String) -> void:
 	var cover := 0.0
 	if OVERLAY.has(id): cover = overlay_w()
 	elif not FULL.has(id): cover = drawer_w()
-	hall.set_cover(cover)
+	hall.set_cover(cover + (inset.z if cover > 0.0 else 0.0))
 	if not screens.has(id): screens[id] = _make_screen(id); holder.add_child(screens[id])
 	var scr: Control = screens[id]
 	if scr is ScreenWrap:   # (re)apply the inner margins: some screens reset their own anchors in _ready()

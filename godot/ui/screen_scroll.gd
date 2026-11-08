@@ -8,7 +8,7 @@ var app:
 var _t := 0.0
 
 func _init(c: Control) -> void:
-	content = c; horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO; vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	content = c; follow_focus = false; horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO; vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL; c.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(c)
 

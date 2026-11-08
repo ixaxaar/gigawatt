@@ -34,8 +34,8 @@ func _rebuild() -> void:
 			v.add_child(Kit.label(str(a.availableFrom), 12, Kit.DIM)); v.add_child(Kit.label(a.name, 14, vc, true)); v.add_child(Kit.label("%d GB · %s TB/s · %d W" % [int(a.memGB), Kit.num(a.memBWTBs, 1), int(a.tdpW)], 11, Kit.DIM)); v.add_child(Kit.label(a.scaleUp, 11, Kit.DIM))
 			var bt := Button.new(); bt.flat = true; bt.set_anchors_preset(Control.PRESET_FULL_RECT); bt.focus_mode = Control.FOCUS_NONE; bt.pressed.connect(func(): sel = a.id; view = "list"; refresh()); card.add_child(bt); fl.add_child(card)
 	else:
-		var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
-		var lc := Kit.column(cols, 0, true); var dc := Kit.column(cols, 0, true)
+		var cols := Kit.cols_row(); root.add_child(cols)
+		var lc := Kit.column(cols, 0, true, true); var dc := Kit.column(cols, 0, true, true); Kit.fit_split(cols, app, [1, 1])
 		var ql := q.to_lower()
 		var groups := {}
 		for i in b.items.values():

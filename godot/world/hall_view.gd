@@ -618,12 +618,13 @@ func _update_cables(force: bool) -> void:
 		var e: Dictionary = _rack_nodes[slot]; var node: Node3D = e.node
 		if not is_instance_valid(node): continue
 		var d := cam.position.distance_to(node.global_position); var want := 0
-		if q >= 3: want = 2 if d < 5.0 else (1 if d < 12.0 else 0)
-		elif q == 2: want = 1 if d < 8.0 else 0
+		if q >= 3: want = 2 if d < 8.0 else (1 if d < 70.0 else 0)   # cables stay visible at every zoom; only the detail drops with distance
+		elif q == 2: want = 1 if d < 50.0 else 0
+		elif q == 1: want = 1 if d < 24.0 else 0
 		if want > 0: cand.append([d, slot, want])
 	cand.sort_custom(func(a, c): return a[0] < c[0])
 	var live := {}
-	for k in mini(cand.size(), 40): live[cand[k][1]] = cand[k][2]
+	for k in mini(cand.size(), 90): live[cand[k][1]] = cand[k][2]
 	for slot in _rack_nodes:
 		var e: Dictionary = _rack_nodes[slot]; var node: Node3D = e.node
 		if not is_instance_valid(node): continue

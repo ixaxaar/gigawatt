@@ -14,7 +14,7 @@ func _fit(c: Control) -> void:
 		if p is ScrollContainer and (p as Control).size.x > 100.0: sc = p
 		p = p.get_parent()
 	if sc == null: return
-	var avail := maxf(160.0, sc.size.x - 70.0)
+	var avail := maxf(160.0, sc.size.x - 130.0)
 	if c is Label:
 		var l := c as Label
 		if l.autowrap_mode != TextServer.AUTOWRAP_OFF or l.clip_text: return

@@ -254,7 +254,34 @@ static func cols2(root: Control) -> Array:
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); root.add_child(sc)
 	return [v, v]
 
-static func column(parent: Control, min_w := 0.0, expand := true) -> VBoxContainer:
+## A row of columns that reflows like a web layout: side by side when there is room, stacked when there is not (touch / compact layouts).
+static func cols_row(sep := 12) -> Container:
+	var c: Container = HFlowContainer.new() if (Layout.touch or Layout.compact) else HBoxContainer.new()
+	c.add_theme_constant_override("separation", sep); c.add_theme_constant_override("h_separation", sep); c.add_theme_constant_override("v_separation", sep)
+	if c is HBoxContainer: c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return c
+
+## Give the columns of a flowing row their widths: preferred proportions when they all fit, otherwise each takes the full row.
+static func fit_split(cols: Container, app, pref: Array) -> void:
+	if not cols is HFlowContainer: return
+	var avail: float = app.vw() - (app.RAIL_W + 14.0 if Layout.phone else 40.0) - 52.0
+	var kids := cols.get_children().filter(func(c): return c is Control)
+	var n := kids.size(); var sum := 0.0
+	for i in n: sum += float(pref[mini(i, pref.size() - 1)])
+	var gap := 12.0 * maxf(0.0, n - 1.0)
+	var min_each := 300.0
+	var fits := true
+	for i in n: if (avail - gap) * float(pref[mini(i, pref.size() - 1)]) / sum < min_each: fits = false
+	for i in n:
+		var c := kids[i] as Control
+		c.custom_minimum_size.x = (avail - gap) * float(pref[mini(i, pref.size() - 1)]) / sum if fits else avail
+		c.size_flags_horizontal = Control.SIZE_FILL
+
+static func column(parent: Control, min_w := 0.0, expand := true, flat := false) -> VBoxContainer:
+	if flat and Layout.touch:   # the whole screen already scrolls: no scroll area of its own
+		var fv := VBoxContainer.new(); fv.add_theme_constant_override("separation", 10); fv.custom_minimum_size = Vector2(min_w, 0)
+		if expand: fv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		parent.add_child(fv); return fv
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if Layout.phone else ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
 	if expand: sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.custom_minimum_size = Vector2(min_w, 0)
@@ -385,17 +412,26 @@ static func codex_card(parent: Control, codex: Dictionary, name := "") -> void:
 	parent.add_child(p)
 
 
+## Put scroll positions back at once (no frame at the top): the new bars have no range yet, so give them one first.
+static func _restore_now(node: Node, vals: Array) -> void:
+	var scs := node.find_children("*", "ScrollContainer", true, false).filter(func(s): return not s.is_queued_for_deletion())
+	for i in mini(scs.size(), vals.size()):
+		var sc := scs[i] as ScrollContainer
+		var bar := sc.get_v_scroll_bar(); bar.max_value = maxf(bar.max_value, float(vals[i]) + 6000.0)
+		sc.scroll_vertical = vals[i]
+
 ## Rebuild a screen without losing scroll positions (rebuild frees old ScrollContainers; restore by index).
 static func refresh_keep(node: Control) -> void:
 	if not node.has_method("refresh"): return
 	var vals := []
 	for sc in node.find_children("*", "ScrollContainer", true, false): vals.append((sc as ScrollContainer).scroll_vertical)
 	node.refresh()
+	_restore_now(node, vals)
 	if vals.is_empty() or not node.is_inside_tree(): return
 	var tree := node.get_tree()
 	await tree.process_frame; await tree.process_frame
 	if not is_instance_valid(node): return
-	var scs := node.find_children("*", "ScrollContainer", true, false)
+	var scs := node.find_children("*", "ScrollContainer", true, false).filter(func(s): return not s.is_queued_for_deletion())
 	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
 
 ## Collapsible panel. `folds` is a persistent Dictionary (key -> bool collapsed); toggling calls `on_toggle`.
@@ -444,11 +480,12 @@ static func rebuild_keep(node: Control, rebuild: Callable) -> void:
 		var fo := node.get_viewport().gui_get_focus_owner()
 		if fo != null and node.is_ancestor_of(fo): fi = node.find_children("*", "BaseButton", true, false).find(fo)
 	rebuild.call()
+	_restore_now(node, vals)
 	if (vals.is_empty() and fi < 0) or not node.is_inside_tree(): return
 	var tree := node.get_tree()
 	await tree.process_frame; await tree.process_frame
 	if not is_instance_valid(node): return
-	var scs := node.find_children("*", "ScrollContainer", true, false)
+	var scs := node.find_children("*", "ScrollContainer", true, false).filter(func(s): return not s.is_queued_for_deletion())
 	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
 	if fi >= 0 and pad_mode:
 		var bs := node.find_children("*", "BaseButton", true, false).filter(func(b): return b.is_visible_in_tree() and b.focus_mode == Control.FOCUS_ALL)

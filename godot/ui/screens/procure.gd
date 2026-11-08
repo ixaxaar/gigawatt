@@ -205,7 +205,7 @@ func _parts(root: Control) -> void:
 	vendors.sort(); var vopts := [["all", "all vendors"]]; for v in vendors: vopts.append([v, v])
 	bar.add_child(Kit.option(vopts, vendor, func(v): vendor = v; refresh()))
 	bar.add_child(Kit.check("show unreleased/EOL", future, func(on): future = on; refresh()))
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
+	var cols := Kit.cols_row(); root.add_child(cols)
 	var list: Array = []
 	for it in b.items.values():
 		if it.kind != kind or (vendor != "all" and it.vendor != vendor): continue
@@ -213,7 +213,7 @@ func _parts(root: Control) -> void:
 		if future or o.available: list.append(o)
 	list.sort_custom(func(a, c): return a.item.availableFrom < c.item.availableFrom)
 	var lp := PanelContainer.new(); lp.add_theme_stylebox_override("panel", Kit.sb(Kit.PANEL, Kit.LINE, 12, 1, 8)); lp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lp.size_flags_stretch_ratio = 1.5; cols.add_child(lp)
-	var lc := Kit.column(lp, 0, true)
+	var lc := Kit.column(lp, 0, true, true)
 	lc.add_child(Kit.label("%-34s %-44s %9s %6s %6s" % ["PART", "KEY SPECS", "PRICE", "LEAD", "STOCK"], 12, Kit.DIM))
 	for o in list:
 		var it: Dictionary = o.item
@@ -226,7 +226,7 @@ func _parts(root: Control) -> void:
 		if o.get("preorder", false): sub += " · PRE-ORDER, ships %s" % Kit.date_of(int(o.ships))
 		elif o.get("opens") != null and not o.available: sub += " · announced, orders open %s" % Kit.date_of(int(o.opens))
 		lc.add_child(Kit.label(sub, 11, Kit.GR if o.get("preorder", false) else Kit.DIM))
-	var dc := Kit.column(cols, 460, false)
+	var dc := Kit.column(cols, 460, false, true); Kit.fit_split(cols, app, [700, 460])
 	if sel != "" and offers.has(sel):
 		var o: Dictionary = offers[sel]; var it: Dictionary = o.item
 		var dp := Kit.panel(it.name, true, dc)

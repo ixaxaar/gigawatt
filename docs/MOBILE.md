@@ -24,3 +24,6 @@ What is in the project, what works, and what is missing before a store build.
 - **Responsive text.** `game/wrap_guard.gd` wraps any label or button inside a scrolling screen that is wider than the screen's visible width; header rows flow onto several lines (`Kit.head_row`), and every touch screen sits in a `ScreenScroll` so nothing is cut off (it scrolls).
 - `GW_AUDIT=1` prints controls that are squeezed to a sliver and stretched tall; `GW_LAYOUT=phone` with a 2424x1080 window previews the phone layout on a desktop.
 - Halls have no walls at all (open plan); the Walls option was removed from the site picker.
+- **Safe area.** The interface sits inside the display's safe area (camera cut-outs, rounded corners) plus a small margin on phones (`GW_INSET="l,t,r,b"` previews it on a desktop).
+- **Reflowing columns.** Multi-column screens (Design, Procure, Codex) stack when narrow (`Kit.cols_row` / `Kit.fit_split`); the Supercomputer builder on touch is one row of cards you swipe left and right, each card scrolling up and down.
+- Scroll positions are restored the same frame after a screen rebuild (no jump to the top when you toggle a button); touch-scroll picks the innermost list that can still move that way and ignores lists covered by a pop-up.

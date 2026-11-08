@@ -61,8 +61,17 @@ func _rebuild() -> void:
 	if nh is Dictionary and int(nh.level) > 0:
 		var warn := PanelContainer.new(); warn.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.tint(Kit.AM, 0.12), 2, 10)); root.add_child(warn)
 		var wl := Kit.label("🔗 %s. Links flap and die every month at scale: optics most, DACs least. Keep spare cables and optics in the Warehouse and a down link is fixed next month instead of after a 3-month RMA." % nh.summary, 14, Kit.TX, true); warn.add_child(wl)
-	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
-	var c1 := Kit.column(cols, 380, false)
+	# Touch: the three cards are one row you swipe left and right; each card scrolls up and down on its own.
+	var touch := Layout.touch
+	var colw := clampf((app.vw() - (app.RAIL_W + 14.0 if Layout.phone else 40.0) - 60.0) * 0.92, 340.0, 640.0)
+	var cols: Container
+	if touch:
+		var hs := ScrollContainer.new(); hs.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; hs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		hs.size_flags_vertical = Control.SIZE_EXPAND_FILL; hs.size_flags_horizontal = Control.SIZE_EXPAND_FILL; root.add_child(hs)
+		cols = HBoxContainer.new(); cols.add_theme_constant_override("separation", 12); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; hs.add_child(cols)
+	else:
+		cols = Kit.cols_row(); root.add_child(cols)
+	var c1 := Kit.column(cols, colw if touch else 380, false)
 	c1.add_child(Kit.tip("A cluster is racks + a network. Scale-up (NVLink, purple boxes) links GPUs inside a rack at TB/s; scale-out (InfiniBand/Ethernet, green/gold) links racks. Training needs both; inference mostly needs memory and tokens/s."))
 	var p1 := Kit.panel("1 · Pick racks", true, c1)
 	if free.is_empty(): p1[1].add_child(Kit.label("No free online racks — deploy racks in Warehouse and wait for commissioning. (You can also serve a customer straight from racks in Customers.)", 12, Kit.DIM, true))
@@ -108,7 +117,9 @@ func _rebuild() -> void:
 			refresh(), "", 12))
 		p3[1].add_child(Kit.hsep())
 	# center: topology + stat strip
-	var cc := VBoxContainer.new(); cc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; cc.add_theme_constant_override("separation", 10); cols.add_child(cc)
+	var cc: VBoxContainer
+	if touch: cc = Kit.column(cols, colw, false)
+	else: cc = VBoxContainer.new(); cc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; cc.add_theme_constant_override("separation", 10); cols.add_child(cc)
 	var tp := Kit.panel("Topology", true, cc); tp[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var tv := TopoView.new(); tv.size_flags_vertical = Control.SIZE_EXPAND_FILL; tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tv.f = f; tv.stats = stats
 	var rinfo := []
@@ -125,7 +136,7 @@ func _rebuild() -> void:
 		var sp := Kit.panel("", false, cc)
 		sp[1].add_child(Kit.stats([["Accelerators", Kit.num(stats.accelerators)], ["Scale-up domain", str(int(stats.scaleUpDomain))], ["FP8 compute", "%s PF" % Kit.num(stats.peakPFLOPSFp8, 1)], ["Memory", "%s TB" % Kit.num(stats.totalMemGB / 1000.0, 1)], ["Power", "%s kW" % Kit.num(stats.powerKW)], ["Scale-out / GPU", "%.1f GB/s" % stats.effScaleOutGBs, Kit.GR if stats.effScaleOutGBs >= tier else Kit.AM], ["Bisection", "%s Tb/s" % Kit.num(stats.bisectionTbps)], ["Network capex", Kit.usd(cap)]], 4))
 	# right: what can it do + checks
-	var c3 := Kit.column(cols, 420, false)
+	var c3 := Kit.column(cols, colw if touch else 420, false)
 	var wp := Kit.panel("3 · What can this machine do?", true, c3)
 	if stats == null: wp[1].add_child(Kit.label("Select racks to see which models it can train and serve.", 13, Kit.DIM, true))
 	else:
