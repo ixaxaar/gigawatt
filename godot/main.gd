@@ -75,7 +75,7 @@ func _ready() -> void:
 		var st := {}; for kv in OS.get_environment("GW_SITE").split(","): var pr := kv.split(":"); if pr.size() == 2: st[pr[0]] = pr[1]
 		b.act("setSite", [st])
 	if OS.get_environment("GW_TOUR") != "" and started: _tour(OS.get_environment("GW_TOUR"))
-	if OS.get_environment("GW_SITE_SCREEN") != "": _pick_site("operator", root.get_node("title")) if root.has_node("title") else _change_look()
+	if OS.get_environment("GW_SITE_SCREEN") != "": _pick_site("operator", root.get_node("title"), true) if root.has_node("title") else _change_look()
 	if OS.get_environment("GW_SETTINGS") != "": _settings()
 	if OS.get_environment("GW_AUTOPLAY") != "": quiet = true; var ap := OS.get_environment("GW_AUTOPLAY").split(":"); b.env("autoplay", [ap[0], int(ap[1])]);; quiet = false   # screenshots: "tycoon:48"
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
@@ -104,15 +104,19 @@ func _ready() -> void:
 		get_tree().create_timer(float(OS.get_environment("GW_SHOT_AT")) if OS.get_environment("GW_SHOT_AT") != "" else 6.0).timeout.connect(func(): get_viewport().get_texture().get_image().save_png(OS.get_environment("GW_SHOT")); get_tree().quit())
 
 ## New game step: choose the hall's surroundings, then start. Back returns to the title.
-func _pick_site(mode: String, title_h: Control) -> void:
+func _pick_site(mode: String, title_h: Control, force := false) -> void:
+	if Settings.site_seen and not force:   # asked once; later games reuse the last look
+		title_h.queue_free(); _new_game(mode)
+		if not Settings.site_last.is_empty(): b.act("setSite", [Settings.site_last])
+		return
 	title_h.visible = false
 	var sc := SiteScreen.new(); sc.name = "site"; root.add_child(sc)
-	sc.open(self, Site.DEFAULT, "CHOOSE YOUR SITE", "Start game ▶", func(st): title_h.queue_free(); _new_game(mode); b.act("setSite", [st]), func(): title_h.visible = true)
+	sc.open(self, Site.DEFAULT, "CHOOSE YOUR SITE", "Start game ▶", func(st): Settings.site_seen = true; Settings.site_last = st.duplicate(); Settings.save_all(); title_h.queue_free(); _new_game(mode); b.act("setSite", [st]), func(): title_h.visible = true)
 
 ## Pause menu: change the look of a running game.
 func _change_look() -> void:
 	var sc := SiteScreen.new(); sc.name = "site"; root.add_child(sc)
-	sc.open(self, Site.style_of(b.g), "CHANGE LOOK", "Apply", func(st): b.act("setSite", [st]); hall.rebuild(), func(): pass)
+	sc.open(self, Site.style_of(b.g), "CHANGE LOOK", "Apply", func(st): Settings.site_last = st.duplicate(); Settings.save_all(); b.act("setSite", [st]); hall.rebuild(), func(): pass)
 
 ## Scripted tours for recording the guide GIFs (GW_TOUR=basics|showroom|cables|looks|themes; see scripts/gifs.sh). Ends by quitting.
 func _wait(sec: float) -> void: await get_tree().create_timer(sec).timeout
@@ -226,6 +230,8 @@ func _title() -> void:
 	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
 	vb.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
 	vb.add_child(Kit.label("Settings has the full list of controls.", 14, Kit.DIM))
+	var gw := Settings.gpu_warning()
+	if gw != "": var gl := Kit.label(gw, 14, Kit.AM); gl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; vb.add_child(gl)
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
 
 ## The title screen's backdrop: a short scripted game, so the first thing you see is a lit hall with racks in it.

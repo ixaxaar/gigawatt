@@ -15,6 +15,8 @@ All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepa
 - **Money line in the top bar.** Cash, revenue, burn and net per month, net worth, debt (only when you have a loan) and reputation sit in the top bar with tooltips; the bottom cards on the Overview are gone.
 
 ### Changed
+- The Site screen is shown for the first new game only; later games reuse the last look (Menu ▸ Change look edits it).
+- The title screen warns when the game fell back to OpenGL on the integrated GPU (a stale `VK_ICD_FILENAMES` does this) and says how to fix it.
 - **Font.** Chakra Petch (OFL) replaces Fira Code in the game, website and wiki: narrower and sharper at small sizes.
 - **Start-up sound** is a soft low swell instead of a bright chime, about 6 dB quieter with almost nothing above 2 kHz.
 - Website restyled: darker stat strip with coloured numbers, new Watch and Make-it-yours sections.

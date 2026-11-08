@@ -15,6 +15,9 @@ static var reduced_motion := false
 static var high_contrast := false
 ## UI colour theme id (see Kit.THEMES).
 static var theme := "midnight"
+## The Site screen is shown for the first new game only; after that new games reuse the last look (Menu ▸ Change look edits it).
+static var site_seen := false
+static var site_last := {}
 ## Graphics preset: -1 = auto-detect, else 0 Potato, 1 Low, 2 Balanced, 3 High, 4 Ultra.
 static var preset := -1
 ## 3D render scale override (0 = the preset's own value). The UI always renders at native resolution.
@@ -57,6 +60,14 @@ static func detect() -> void:
 	elif integrated: detected = 1
 	elif t == 2: detected = 3
 
+## A warning for the title screen when the game is not on the Vulkan renderer (usually a stale VK_ICD_FILENAMES makes Vulkan fail, and the game silently runs on the integrated GPU through OpenGL).
+static func gpu_warning() -> String:
+	if not compat: return ""
+	var v := OS.get_environment("VK_ICD_FILENAMES")
+	var why := "Vulkan could not start"
+	if v != "" and not FileAccess.file_exists(v.split(":")[0]): why = "VK_ICD_FILENAMES points at a missing file (%s)" % v.split(":")[0]
+	return "Running on %s with OpenGL (slow). %s. Start with scripts/gigawatt.sh, or unset VK_ICD_FILENAMES." % [adapter, why]
+
 ## Per-tier knobs. Everything the hall and the viewport read comes from here.
 static func tier() -> Dictionary:
 	var q := quality
@@ -96,6 +107,7 @@ static func load_all() -> void:
 	text_boost = clampf(float(c.get_value("a", "text_boost", 1.0)), 1.0, 1.5)
 	colorblind = bool(c.get_value("a", "colorblind", false)); reduced_motion = bool(c.get_value("a", "reduced_motion", false)); high_contrast = bool(c.get_value("a", "high_contrast", false))
 	theme = str(c.get_value("a", "theme", "midnight"))
+	site_seen = bool(c.get_value("a", "site_seen", false)); var sl = c.get_value("a", "site_last", {}); site_last = sl if sl is Dictionary else {}
 	preset = int(c.get_value("a", "preset", -1)); render_scale = float(c.get_value("a", "render_scale", 0.0))
 	window_mode = clampi(int(c.get_value("a", "window_mode", 1)), 0, 2); vsync = clampi(int(c.get_value("a", "vsync", 1)), 0, 2); fps_cap = int(c.get_value("a", "fps_cap", 0))
 	tutorial = str(c.get_value("a", "tutorial", "on")); tutorial_step = int(c.get_value("a", "tutorial_step", 0))
@@ -105,7 +117,7 @@ static func save_all() -> void:
 	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode)
 	c.set_value("a", "ui_scale", ui_scale); c.set_value("a", "ui_scale_auto", ui_scale <= 0.0); c.set_value("a", "text_boost", text_boost)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "high_contrast", high_contrast)
-	c.set_value("a", "theme", theme); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
+	c.set_value("a", "theme", theme); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
 	c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)
 	c.save(PATH)
 
