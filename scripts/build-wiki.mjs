@@ -13,7 +13,7 @@ mkdirSync(OUT, { recursive: true });
 
 // reading order; any page not listed is appended alphabetically
 const ORDER = ['index', 'getting-started', 'first-hour', 'power-and-cooling', 'servers-and-racks', 'networking-and-clusters', 'customers-and-contracts',
-  'money-and-operations', 'energy-and-spot', 'hardware-roadmap', 'incidents-and-resilience', 'strategy-tips', 'performance-and-settings', 'faq', 'glossary'];
+  'money-and-operations', 'energy-and-spot', 'hardware-roadmap', 'incidents-and-resilience', 'strategy-tips', 'see-it-in-action', 'make-it-yours', 'performance-and-settings', 'faq', 'glossary'];
 const files = readdirSync(SRC).filter((f) => f.endsWith('.md') && f !== 'README.md').map((f) => f.replace(/\.md$/, ''));
 const slugs = [...ORDER.filter((s) => files.includes(s)), ...files.filter((s) => !ORDER.includes(s)).sort()];
 
@@ -115,7 +115,7 @@ const shell = (p, idx) => {
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="wiki.css">
 </head>

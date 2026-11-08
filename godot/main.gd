@@ -156,11 +156,11 @@ func _fatal(msg: String) -> void:
 # ---------- shell ----------
 func _build_shell() -> void:
 	top = PanelContainer.new(); top.set_anchors_preset(Control.PRESET_TOP_WIDE); top.offset_bottom = 66; top.add_theme_stylebox_override("panel", _top_sb(Kit.CY)); root.add_child(top)
-	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 20); top.add_child(hb)
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 16); top.add_child(hb)
 	hb.add_child(Kit.label("GIGAWATT", 26, Color("#ffd23f") if Kit.dark else Kit.AM))
 	var dv := VBoxContainer.new(); dv.custom_minimum_size = Vector2(110, 0); lbl.date = Kit.label("", 20); bar_month = Kit.bar(0, 1); dv.add_child(lbl.date); dv.add_child(bar_month); hb.add_child(dv)
-	for p in [["CASH", "cash"], ["DEBT", "debt"], ["NET WORTH", "nw"], ["REPUTATION", "rep"]]:
-		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 22); v.add_child(lbl[p[1]]); hb.add_child(v)
+	for p in [["CASH", "cash"], ["REVENUE / MO", "rev"], ["BURN / MO", "burn"], ["NET / MO", "net"], ["NET WORTH", "nw"], ["DEBT", "debt"], ["REP", "rep"]]:   # the money line: what used to be the Overview plaques
+		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 0); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 20); v.add_child(lbl[p[1]]); hb.add_child(v); lbl[p[1] + "_box"] = v
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
 	lbl.mode = Kit.btn("Operator", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); lbl.mode.custom_minimum_size = Vector2(112, 0); lbl.mode.tooltip_text = "Game mode: Learner (explainers, no bankruptcy), Operator, Tycoon. Click to change."; hb.add_child(lbl.mode)
 	lbl.speed = Kit.btn("⏸ Paused", func(): set_speed((speed + 1) % 4), "", 15); lbl.speed.custom_minimum_size = Vector2(124, 0); lbl.speed.tooltip_text = "Auto-advance speed: click to cycle Paused, 1x, 2x, 3x. Space advances one month."; hb.add_child(lbl.speed)
@@ -273,8 +273,17 @@ func _begin() -> void:
 func _on_changed() -> void:
 	if not started: return
 	var g := b.g
-	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(22, Kit.GR if g.cash >= 0 else Kit.RD)
+	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(20, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
+	lbl.debt_box.visible = float(g.debt) > 0.0   # no loans, nothing to show
+	var pn: Dictionary = b.q("pnl")
+	if not pn.is_empty():
+		lbl.rev.text = Kit.usd(pn.revenue); lbl.rev.label_settings = Kit.ls(20, Kit.GR)
+		lbl.burn.text = Kit.usd(pn.opex); lbl.burn.label_settings = Kit.ls(20, Kit.AM)
+		lbl.net.text = Kit.usd(pn.net); lbl.net.label_settings = Kit.ls(20, Kit.CY if pn.net >= 0 else Kit.RD)
+		var serving: int = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0).size()
+		lbl.rev_box.tooltip_text = "Monthly revenue: %s serving." % Kit.plural(serving, "contract"); lbl.burn_box.tooltip_text = "Monthly cost: power, staff, support and interest."; lbl.net_box.tooltip_text = "Revenue minus costs, after depreciation."
+		lbl.nw_box.tooltip_text = "Cash plus the value of what you own, minus debt."
 	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
 	_speed_label()
 	for i in range(_seen_log, g.log.size()):

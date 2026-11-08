@@ -10,8 +10,8 @@ rec() { # name, tour, extra env...
   local name=$1 tour=$2; shift 2
   env GW_AUTOSTART=operator GW_AUTOPLAY=operator:40 GW_TOUR=$tour "$@" timeout 240 godot --path . --rendering-driver vulkan --write-movie $T/$name.avi --fixed-fps 24 > /dev/null 2>&1
   [ -f $T/$name.avi ] || { echo "MISSING $name"; return; }
-  ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=12,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer:bayer_scale=4" $root/docs/gifs/$name.gif
-  ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=15,scale=960:-1:flags=lanczos" -c:v libwebp_anim -quality 65 -loop 0 $root/site/assets/$name.webp
+  ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=8,scale=560:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=48:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" -loop 0 $root/docs/gifs/$name.gif
+  ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=12,scale=800:-1:flags=lanczos" -c:v libwebp_anim -quality 55 -loop 0 $root/site/assets/$name.webp
   cp $root/site/assets/$name.webp $root/site/wiki/img/$name.webp
 }
 rec tour-basics basics

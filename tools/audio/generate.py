@@ -14,7 +14,7 @@ OUT = Path(__file__).resolve().parents[2] / "godot" / "assets" / "audio"
 LEVEL = {"hover": -16, "tick": -14, "click": -9, "tab": -10, "month": -14, "notif": -9, "open": -12, "close": -12, "toggle_on": -10, "toggle_off": -10,
          "confirm": -8, "cancel": -9, "error": -8, "step_ok": -9, "buy": -7, "sell": -8, "cash_big": -6, "order": -8, "loan": -8, "rack_place": -8,
          "online": -8, "delivery": -9, "good": -8, "fanfare": -6, "keynote": -7, "bad": -8, "incident": -8, "alarm": -9, "power_down": -8,
-         "gameover": -6, "save": -10, "load": -10, "boot": -6}
+         "gameover": -6, "save": -10, "load": -10, "boot": -12}
 JITTER = ["hover", "tick", "click", "tab", "month"]
 
 

@@ -171,9 +171,20 @@ def load_game():
                 (0.14, N(70, 0.18, 0.28, env=(0.002, 0.3, 0.6, 0.02))), (0.14, P(66, 0.18, 0.25, 0.5, vib=(1.5, 30), env=(0.002, 0.3, 0.6, 0.02)))])
 
 def boot():
-    parts = notes([60, 64, 67, 72, 76, 79, 84], 0.075, 0.1, mk=lambda m, d: P(m, d, 0.6, 0.25, env=(0.002, 0.15, 0.4, 0.08)))
-    parts += [(0.55, P(88, 0.6, 0.6, 0.125, vib=(0.15, 6), env=(0.004, 0.4, 0.5, 0.3))), (0.55, T(60, 0.6, 0.9, env=(0.004, 0.4, 0.5, 0.3)))]
-    return seq(parts)
+    """Start-up: a soft low swell with a quiet bell on top. Everything stays below ~2 kHz so it is warm, never sharp."""
+    n = int(2.0 * SR); t = np.arange(n) / SR
+    env = np.minimum(1.0, t / 0.55) ** 2 * np.exp(-np.maximum(0.0, t - 0.9) * 2.4)
+    pad = np.zeros(n)
+    for m, g in ((48, 0.9), (55, 0.7), (60, 0.55), (64, 0.4), (67, 0.25)):
+        for det in (-0.03, 0.03):
+            f = mtof(m + det); pad += g * (np.sin(2 * np.pi * f * t) + 0.25 * np.sin(2 * np.pi * 2 * f * t)) * 0.5
+    pad = lowpass_fast(lowpass_fast(pad * env, 1400), 1800)
+    thump = np.sin(2 * np.pi * np.cumsum(46 + 24 * np.exp(-t * 14)) / SR) * np.exp(-t * 7) * 0.7
+    bt = np.arange(int(1.4 * SR)) / SR
+    bell = (np.sin(2 * np.pi * mtof(76) * bt) + 0.3 * np.sin(2 * np.pi * mtof(88) * bt)) * np.exp(-bt * 3.2) * np.minimum(1.0, bt / 0.01) * 0.22
+    out = pad * 0.9 + thump * 0.8
+    i = int(0.5 * SR); out[i : i + len(bell)] += bell[: n - i]
+    return lowpass_fast(out, 2200)
 
 def sell_stock():
     return sell()

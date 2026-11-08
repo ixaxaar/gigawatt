@@ -33,6 +33,34 @@ The Overview opens with a **Needs you now** card, the one thing worth doing next
 
 Three modes — **Learner** (tips everywhere), **Operator**, **Tycoon**. A short guided tutorial walks a first run from the first customer to the first revenue, then hands over to a seven-chapter **Learning path** (power and cooling, silicon, networks, customers, money, resilience) with cash-rewarded goals and live "do I need this now?" concepts.
 
+## See it in action
+
+New here? Short looping clips of the game (recorded by `scripts/gifs.sh`):
+
+| The loop | Pick a rack |
+|---|---|
+| ![the drawers and the monthly loop](docs/gifs/tour-basics.gif) | ![the rack showroom](docs/gifs/tour-showroom.gif) |
+| **Down to the cables** | **Make it yours** |
+| ![from the hall to the rear of a rack](docs/gifs/tour-cables.gif) | ![floors, racks, walls and light](docs/gifs/tour-looks.gif) |
+
+## Close-ups
+
+| Tied and tagged rear cabling | The rear of a rack row |
+|---|---|
+| ![cabling](docs/screenshots/rack-cabling.png) | ![rear](docs/screenshots/rack-rear.png) |
+| **The Supply showroom** | **Cables on** |
+| ![showroom](docs/screenshots/showroom.png) | ![showroom with cables](docs/screenshots/showroom-cables.png) |
+
+## Make it yours
+
+The **Site** screen picks the floor (tile, white, black marble, oak parquet, walnut, steel plate, concrete, terrazzo, checker, green), the rack finish (black, white, brushed steel, graphite), the walls, the light and the accent colour, with a live preview; **seven UI themes** (Midnight, Graphite, Ember, High contrast, Paper, Sand, Mist) are in Settings. All cosmetic.
+
+| White tile, white racks | Black marble, steel racks | Oak parquet, brick |
+|---|---|---|
+| ![white](docs/screenshots/site-white.png) | ![marble](docs/screenshots/site-marble.png) | ![parquet](docs/screenshots/site-parquet.png) |
+| **The Site screen** | **Paper (light theme)** | **Ember (dark theme)** |
+| ![site screen](docs/screenshots/site-screen.png) | ![paper](docs/screenshots/theme-paper.png) | ![ember](docs/screenshots/theme-ember.png) |
+
 ## Screenshots
 
 | Thermal view | Supercomputer builder |

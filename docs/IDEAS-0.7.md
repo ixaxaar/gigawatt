@@ -1,3 +1,16 @@
+# Status after v0.7.0
+
+| Item | Status | Notes |
+|---|---|---|
+| A Customer logos | Done | Procedural badges, hand-assigned for the 19 customers and 3 rivals (no two share colour and mark, asserted in the smoke test), on contract cards, Overview, inspector, end screen and rack tops. |
+| B Site screen | Done, changed | Floor, rack finish, walls, lighting and accent colour with a live preview, saved with the game, changeable from the menu. The original brief's regions were dropped. A scenery layer (landscapes outside the hall, built first from primitives and then from Kenney and Poly Haven assets) was built, judged not good enough, and removed. UI themes (four dark, three light) were added instead. |
+| C Rack cabling | Done | One scale-out cable per NIC to the ToR, vertical cable managers with ties and tags, modelled plugs, NVLink spine, three levels of detail by distance and preset; cable count asserted for every template in the smoke test. Dimming for failed racks is in; amber pulsing for oversubscribed fabrics is not. |
+| D Rack showroom | Done | Turntable, door and cable toggles, overlay card with a hall lamp, one-row carousel, silhouettes for unreleased platforms. Not done: controller spin (right stick), reuse in the Design Lab, the Potato pre-rendered fallback. |
+| Extra: UI themes | Done | Midnight, Graphite, Ember, High contrast, Paper, Sand, Mist; live restyle. |
+| Extra: guide clips | Done | `scripts/gifs.sh` records scripted tours into GIFs (README) and animated WebP (site and wiki). |
+
+---
+
 # v0.7 requirements: logos, surroundings, cables, rack showroom
 
 Four player-facing features, written so an implementer can start without asking. Same ground rules as `docs/REVIEW-0.6.md` §0 (checks that must stay green, sidecar rebuild, quality tiers, no history phrasing in docs). Every item must respect the graphics tiers in `godot/game/settings.gd` and not regress `docs/perf/bench.md` by more than 10% on the iGPU at Balanced/1280x800.

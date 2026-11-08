@@ -27,6 +27,11 @@ If you are not sure what to do first, read [Getting started](getting-started.md)
 - [Customers and contracts](customers-and-contracts.md) — training vs inference offers, fit verdicts, the Easy Path, SLAs, renewals and the ramp window
 - [Energy and the spot market](energy-and-spot.md) — PPAs, take-or-pay, spot power and selling idle GPUs
 
+**See and customise**
+
+- [See it in action](see-it-in-action.md) — short looping clips of the loop, the rack showroom and the cabling
+- [Make it yours](make-it-yours.md) — floors, rack finishes, walls, light, accent colour and UI themes
+
 **Settings and performance**
 
 - [Performance and settings](performance-and-settings.md) — graphics presets, 3D resolution, Steam Deck, laptops with two GPUs, troubleshooting

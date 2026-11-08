@@ -9,7 +9,7 @@ GIGAWATT picks graphics settings for your machine the first time it starts and s
 
 ## The settings tabs
 
-- **Display**: window mode (windowed, borderless fullscreen or exclusive fullscreen), V-Sync, a frame-rate limit, UI size (Auto by default), and a "Copy diagnostics" button for bug reports.
+- **Display**: the UI theme (four dark and three light; see [Make it yours](make-it-yours.md)), window mode (windowed, borderless fullscreen or exclusive fullscreen), V-Sync, a frame-rate limit, UI size (Auto by default), and a "Copy diagnostics" button for bug reports.
 - **Graphics**: the preset and the 3D resolution.
 - **Audio**: master, music and effects volume, and the music style.
 - **Accessibility**: colour-blind-safe cluster colours, reduced motion (no auto-orbit camera and no sliding panels) and a text-size boost.

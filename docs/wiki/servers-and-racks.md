@@ -28,6 +28,16 @@ Rack density is the real limit of the whole game. An 8-GPU H100 tray draws rough
 ![Liquid-cooled racks](img/campus-dlc.png)
 *Dense liquid-cooled racks in a DLC hall — note the coolant plumbing.*
 
+## The rack showroom
+
+In **Supply**, the platform picker is a turntable. Pick a platform from the strip and the rack on the turntable changes; drag to spin it and use the wheel to zoom. **Door** opens the front so you can see the chassis, and **Cables** shows the wiring (the side panels turn clear so you can see it from any angle). The card beside the rack lists accelerators, power, memory and cooling, and a lamp says whether your hall can take it. Platforms that have not shipped yet show as a dark silhouette with the year they arrive.
+
+![The rack showroom](img/showroom.webp)
+*The showroom in the Supply drawer.*
+
+![The showroom with cables on](img/showroom-cables.webp)
+*Cables on: scale-out links in green and gold, a management cable in grey, and an orange tie every few centimetres.*
+
 ## From design to floor
 
 A saved design is only paper. The **Warehouse** shows, per design, how many racks are *ready to deploy* and exactly which parts are missing — with an **order all missing** button that buys everything, spares included. A rack can only be deployed when every part is in the warehouse and the hall has power, cooling headroom and a free slot. Then comes installation and commissioning (burn-in), which finds failed optics and GPUs before customers do. Skipping burn-in ships dead GPUs.

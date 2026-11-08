@@ -2,6 +2,20 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-11-08
+
+### Added
+- **Customer logos.** Every customer and rival gets a logo drawn from its name (badge shape, colour, mark and a monogram); no two share a colour and mark. They show on contract cards, the Overview, the rack inspector, the end screen's best deal and, up close, on rack tops in the hall.
+- **Rack showroom.** The Supply drawer's platform picker is a turntable: pick a platform from a one-row strip and the rack on the turntable changes, with the front door and a cabling view as toggles, a card with the key numbers and a "can your hall take it" lamp, and silhouettes for platforms that have not shipped.
+- **Tied and tagged cabling.** Rack rears show one cable per network port to the top-of-rack switch, run in vertical cable managers with ties and tags and modelled plugs, plus an NVLink spine on rack-scale systems; levels of detail by distance and preset.
+- **Site screen.** Before a new game (and from Menu ▸ Change look) choose the floor (grey tile, white tile, black marble, oak parquet, dark walnut, steel plate, concrete, terrazzo, checker, anti-static green), the rack finish (black, white, brushed steel, graphite), the walls, the lighting and the accent colour, with a live 3D preview. Cosmetic only; saved with the game.
+- **UI themes.** Four dark (Midnight, Graphite, Ember, High contrast) and three light (Paper, Sand, Mist), switchable live in Settings ▸ Display.
+- **Guide clips.** Scripted looping clips (the loop, the showroom, the cabling, the looks, the themes) in the README, the wiki's "See it in action" page and the website, recorded by `scripts/gifs.sh`; `scripts/shots.sh` retakes the screenshots, now with close-ups.
+- Wiki pages "See it in action" and "Make it yours".
+
+### Changed
+- README, website and wiki screenshots retaken with the textured hall.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added

@@ -1,11 +1,11 @@
 /* GIGAWATT site. Dark ground, sticker panels: thick edges, hard offset shadows, one accent colour per idea. */
-@font-face{font-family:"Fira Code";src:url("assets/FiraCode-Medium.ttf") format("truetype");font-weight:400 600;font-display:swap}
-@font-face{font-family:"Fira Code";src:url("assets/FiraCode-Bold.ttf") format("truetype");font-weight:700 900;font-display:swap}
+@font-face{font-family:"Chakra Petch";src:url("assets/ChakraPetch-Medium.ttf") format("truetype");font-weight:400 600;font-display:swap}
+@font-face{font-family:"Chakra Petch";src:url("assets/ChakraPetch-Bold.ttf") format("truetype");font-weight:700 900;font-display:swap}
 :root{
   --bg:#050912;--bg2:#0a1220;--panel:#111a2b;--edge:#2a3d57;--ink:#e6f0ff;--dim:#93a8c3;
   --violet:#9b6bff;--pink:#ff3d8b;--yellow:#ffd23f;--cyan:#35d0ff;--green:#3ddc97;--orange:#ff8a3d;
   --shadow:6px 6px 0 #000;
-  --mono:"Fira Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --mono:"Chakra Petch",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -56,11 +56,12 @@ h1 span{color:#fff}
 .c3{left:10%;bottom:-16px;background:var(--pink);transform:rotate(-2deg)}
 
 /* stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));background:var(--yellow);border-block:4px solid #000;color:#000}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));background:linear-gradient(180deg,#101a30,#0a1120);border-block:4px solid #000;color:var(--ink)}
 .stats div{padding:20px 18px;border-right:4px solid #000;text-align:center}
 .stats div:last-child{border-right:0}
-.stats b{display:block;font-size:clamp(30px,4vw,46px);line-height:1;font-weight:900}
-.stats span{font-size:13px;font-weight:600}
+.stats b{display:block;font-size:clamp(30px,4vw,46px);line-height:1;font-weight:900;color:var(--c,var(--cyan));text-shadow:3px 3px 0 #000}
+.stats span{font-size:13px;font-weight:600;color:var(--dim)}
+.stats div:nth-child(1){--c:var(--cyan)}.stats div:nth-child(2){--c:var(--green)}.stats div:nth-child(3){--c:var(--violet)}.stats div:nth-child(4){--c:var(--pink)}
 
 /* sections */
 section{padding:clamp(48px,7vw,96px) max(16px,4vw)}
@@ -145,3 +146,9 @@ footer a{color:var(--cyan)}
 
 .wikicall{max-width:1100px;margin:0 auto;padding:48px max(16px,4vw)}
 .wikicall .btn{margin:6px 10px 6px 0}
+
+.reel{max-width:1100px;margin:24px auto 0;padding:0 max(16px,4vw);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
+.reel figure{margin:0}
+.reel img{width:100%;height:auto;border:4px solid #000;border-radius:8px;box-shadow:8px 8px 0 #000;background:#05080d}
+.reel figcaption{color:var(--dim);font-size:14px;margin-top:10px}
+.reel figcaption b{color:#fff}

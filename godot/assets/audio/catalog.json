@@ -194,9 +194,9 @@
   },
   "boot": {
    "group": "event",
-   "db": -6,
+   "db": -12,
    "jitter": false,
-   "ms": 1450
+   "ms": 2000
   }
  },
  "music": [

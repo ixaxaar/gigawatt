@@ -24,6 +24,13 @@ Existing machines can be **unclustered** and **re-clustered** at any time — di
 ![Supercomputer builder](img/supercomputer.png)
 *Pick racks, wire the fabric, and see what the machine can train or serve.*
 
+## Cabling you can see
+
+Zoom the hall camera down to a rack and its rear shows the cabling: one cable per network port from each chassis to the top-of-rack switch, run in vertical cable managers, held by ties and tagged at the port end. Scale-out links alternate green and gold; a management cable is grey. Rack-scale systems add a thick purple NVLink spine. A failed or still-burning-in rack shows its cables dimmed. The count follows the design, so a rack with more NICs shows more cables. At a distance the cables thin out to one loom per chassis, and on the Low and Potato presets they are not drawn in the hall at all.
+
+![Rear cabling at close range](img/rack-cabling.webp)
+*The rear of a rack row at close range.*
+
 ## Oversubscription
 
 Spine uplinks can carry less than the sum of leaf downlinks — that ratio is **oversubscription**. 2:1 cuts your spine cost while slowing collective operations. Pick **1:1 for training** (big all-reduce traffic punishes congestion) and **2–4:1 for inference**, where it is usually fine and much cheaper. The stats panel flags effective GB/s per GPU below the year's training tier.
