@@ -17,6 +17,8 @@ static var high_contrast := false
 static var theme := "midnight"
 ## The Site screen is shown for the first new game only; after that new games reuse the last look (Menu ▸ Change look edits it).
 static var site_seen := false
+## Graphics card: "auto" = the best one Vulkan offers (a discrete GPU when there is one), "dgpu" or "igpu" to force. Linux; applied by restarting.
+static var gpu := "auto"
 static var site_last := {}
 ## Graphics preset: -1 = auto-detect, else 0 Potato, 1 Low, 2 Balanced, 3 High, 4 Ultra.
 static var preset := -1
@@ -58,7 +60,41 @@ static func detect() -> void:
 	if deck: detected = 1
 	elif compat: detected = 1
 	elif integrated: detected = 1
-	elif t == 2: detected = 3
+	elif t == 2: detected = 4 if _high_end(low) else 3
+
+## True for discrete cards fast enough for Ultra at 4K (RTX 3080 and up, 4070 and up, 5070 and up; RX 7800 XT and up, 9070 and up; Arc B-series is left at High).
+static func _high_end(low: String) -> bool:
+	var re := RegEx.new(); re.compile("(rtx|rx) ?(\\d{4})")
+	var m := re.search(low)
+	if m == null: return "quadro" in low or "rtx a" in low or "titan" in low
+	var n := int(m.get_string(2)); var series := n / 1000; var model := n % 1000
+	if m.get_string(1) == "rtx": return (series >= 4 and model >= 70) or (series == 3 and model >= 80)
+	return (series == 7 and model >= 800) or series >= 9 and model >= 700
+
+## Linux: make sure the game is on the right GPU. Vulkan fails when VK_ICD_FILENAMES names a missing driver file (then the engine silently
+## falls back to OpenGL on the integrated GPU), and the Graphics card setting can force the discrete or integrated GPU. Both are fixed by starting
+## the same executable again through `env`; returns true when a new process was started (the caller quits).
+static func ensure_gpu() -> bool:
+	if OS.get_name() != "Linux" or OS.has_environment("GW_NOREEXEC") or "--gw-relaunched" in OS.get_cmdline_args(): return false
+	var icd := OS.get_environment("VK_ICD_FILENAMES"); var stale := false
+	if icd != "":
+		for f in icd.split(":"):
+			if not FileAccess.file_exists(f): stale = true
+	var env := PackedStringArray()
+	if stale and gpu == "auto": env.append_array(["-u", "VK_ICD_FILENAMES"])
+	elif gpu != "auto" and (stale or int(RenderingServer.get_video_adapter_type()) != (2 if gpu == "dgpu" else 1) or compat):
+		var d := "/usr/share/vulkan/icd.d/"
+		var want: Array = ["nvidia_icd.json"] if gpu == "dgpu" else ["radeon_icd.json", "radeon_icd.x86_64.json", "intel_icd.x86_64.json", "intel_icd.json"]
+		var file := ""
+		for w in want:
+			if FileAccess.file_exists(d + w): file = d + w; break
+		if file == "": return false
+		env.append("VK_ICD_FILENAMES=" + file)
+		if gpu == "dgpu": env.append_array(["__NV_PRIME_RENDER_OFFLOAD=1", "__VK_LAYER_NV_optimus=NVIDIA_only", "__GLX_VENDOR_LIBRARY_NAME=nvidia"])
+		elif int(RenderingServer.get_video_adapter_type()) == 1 and not compat: return false
+	if env.is_empty() or not (compat or gpu != "auto"): return false
+	var args := PackedStringArray(); args.append_array(env); args.append(OS.get_executable_path()); args.append_array(OS.get_cmdline_args()); args.append("--gw-relaunched")
+	return OS.create_process("/usr/bin/env", args) > 0
 
 ## A warning for the title screen when the game is not on the Vulkan renderer (usually a stale VK_ICD_FILENAMES makes Vulkan fail, and the game silently runs on the integrated GPU through OpenGL).
 static func gpu_warning() -> String:
@@ -107,6 +143,7 @@ static func load_all() -> void:
 	text_boost = clampf(float(c.get_value("a", "text_boost", 1.0)), 1.0, 1.5)
 	colorblind = bool(c.get_value("a", "colorblind", false)); reduced_motion = bool(c.get_value("a", "reduced_motion", false)); high_contrast = bool(c.get_value("a", "high_contrast", false))
 	theme = str(c.get_value("a", "theme", "midnight"))
+	gpu = str(c.get_value("a", "gpu", "auto")); if not gpu in ["auto", "dgpu", "igpu"]: gpu = "auto"
 	site_seen = bool(c.get_value("a", "site_seen", false)); var sl = c.get_value("a", "site_last", {}); site_last = sl if sl is Dictionary else {}
 	preset = int(c.get_value("a", "preset", -1)); render_scale = float(c.get_value("a", "render_scale", 0.0))
 	window_mode = clampi(int(c.get_value("a", "window_mode", 1)), 0, 2); vsync = clampi(int(c.get_value("a", "vsync", 1)), 0, 2); fps_cap = int(c.get_value("a", "fps_cap", 0))
@@ -117,7 +154,7 @@ static func save_all() -> void:
 	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode)
 	c.set_value("a", "ui_scale", ui_scale); c.set_value("a", "ui_scale_auto", ui_scale <= 0.0); c.set_value("a", "text_boost", text_boost)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "high_contrast", high_contrast)
-	c.set_value("a", "theme", theme); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
+	c.set_value("a", "theme", theme); c.set_value("a", "gpu", gpu); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
 	c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)
 	c.save(PATH)
 

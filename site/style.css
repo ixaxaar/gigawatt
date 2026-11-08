@@ -152,3 +152,9 @@ footer a{color:var(--cyan)}
 .reel img{width:100%;height:auto;border:4px solid #000;border-radius:8px;box-shadow:8px 8px 0 #000;background:#05080d}
 .reel figcaption{color:var(--dim);font-size:14px;margin-top:10px}
 .reel figcaption b{color:#fff}
+
+/* Large and high-density screens: scale the whole layout so a 4K monitor at 100% looks like the 1080p design instead of a tiny column. */
+@media (min-width:2000px){html{zoom:1.25}}
+@media (min-width:2500px){html{zoom:1.5}}
+@media (min-width:3400px){html{zoom:2}}
+@media (min-width:5000px){html{zoom:3}}

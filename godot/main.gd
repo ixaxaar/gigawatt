@@ -49,7 +49,9 @@ var next_btn: Button
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
-	Settings.load_all(); if OS.has_environment("GW_THEME"): Settings.theme = OS.get_environment("GW_THEME")
+	Settings.load_all()
+	if Settings.ensure_gpu(): get_tree().quit(); return
+	if OS.has_environment("GW_THEME"): Settings.theme = OS.get_environment("GW_THEME")
 	Kit.set_theme(Settings.theme); Settings.apply(get_window()); Settings.write_log(get_window())
 	get_window().size_changed.connect(func():
 		get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
@@ -723,6 +725,10 @@ func _set_graphics(vb: VBoxContainer) -> void:
 		var t := Settings.tier()
 		info.text = "3D at %d%% resolution · %s anti-aliasing · shadows %s · %s lights · textures %d px%s" % [int(t.scale * 100.0), str(t.aa).to_upper(), "on" if t.shadows else "off", "all" if t.lights >= 999 else str(t.lights), t.tex, " · compatibility renderer" if Settings.compat else ""]
 	_opt_row(vb, "Graphics preset", names, Settings.preset + 1, func(i): Settings.preset = i - 1; Settings.save_all(); hall.apply_quality(); upd.call())
+	if OS.get_name() == "Linux":
+		var gi := ["auto", "dgpu", "igpu"]
+		_opt_row(vb, "Graphics card", ["Auto (best available)", "Discrete GPU", "Integrated GPU"], gi.find(Settings.gpu), func(i): if Settings.gpu != gi[i]: Settings.gpu = gi[i]; Settings.save_all(); toast("Graphics card changes after restarting the game.", "info"))
+		vb.add_child(Kit.label("Running on: %s (%s). Auto uses the discrete GPU when the system has one." % [Settings.adapter, RenderingServer.get_current_rendering_driver_name()], 13, Kit.DIM, true))
 	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); vb.add_child(r)
 	var l := Kit.label("3D resolution", 16, Kit.TX); l.custom_minimum_size = Vector2(170, 0); r.add_child(l)
 	var val := Kit.label("", 15, Kit.DIM); val.custom_minimum_size = Vector2(70, 0)
