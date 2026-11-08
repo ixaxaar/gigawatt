@@ -57,6 +57,10 @@ func _rebuild() -> void:
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); root.add_child(hd)
 	hd.add_child(Kit.label("SUPERCOMPUTER BUILDER", 26, Kit.CY)); hd.add_child(Kit.label("Group online racks into one machine, wire its network, and see what it can train or serve.", 13, Kit.DIM, true))
+	var nh = app.b.q("netHealth")
+	if nh is Dictionary and int(nh.level) > 0:
+		var warn := PanelContainer.new(); warn.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.tint(Kit.AM, 0.12), 2, 10)); root.add_child(warn)
+		var wl := Kit.label("🔗 %s. Links flap and die every month at scale: optics most, DACs least. Keep spare cables and optics in the Warehouse and a down link is fixed next month instead of after a 3-month RMA." % nh.summary, 14, Kit.TX, true); warn.add_child(wl)
 	var cols := HBoxContainer.new(); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; cols.add_theme_constant_override("separation", 12); root.add_child(cols)
 	var c1 := Kit.column(cols, 380, false)
 	c1.add_child(Kit.tip("A cluster is racks + a network. Scale-up (NVLink, purple boxes) links GPUs inside a rack at TB/s; scale-out (InfiniBand/Ethernet, green/gold) links racks. Training needs both; inference mostly needs memory and tokens/s."))

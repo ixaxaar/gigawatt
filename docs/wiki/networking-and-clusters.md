@@ -35,6 +35,16 @@ Zoom the hall camera down to a rack and its rear shows the cabling: one cable pe
 
 Spine uplinks can carry less than the sum of leaf downlinks — that ratio is **oversubscription**. 2:1 cuts your spine cost while slowing collective operations. Pick **1:1 for training** (big all-reduce traffic punishes congestion) and **2–4:1 for inference**, where it is usually fine and much cheaper. The stats panel flags effective GB/s per GPU below the year's training tier.
 
+## When links fail
+
+At scale, cables fail. Every month each cluster rolls for dead links: optics flap and get dirty most often, active optical cables less, passive copper (DAC) almost never. Bigger fabrics lose links more often, and a short-staffed crew makes it worse. While links are down, the cluster's scale-out bandwidth drops by more than the dead links' own share, because a collective operation is only as fast as its slowest rail. Training contracts that need a minimum scale-out bandwidth per GPU can be missed this way.
+
+- With **spare cables and optics of the failed type in the Warehouse**, the link is swapped and fixed next month.
+- Without spares, replacements take **three months** (RMA), and the log says so.
+- Use copper (DAC) for short runs inside a row and keep optics for the long ones; fewer optics means fewer incidents.
+
+You can see network health at all times: the **NETWORK** box in the top bar, the **Network** card on the Overview, and red overhead runs on the cluster in the hall.
+
 ## Design rules of thumb
 
 - **One NIC per GPU, rail-optimized**, for training trays; half that for inference (the tray sizing advisor checks this).

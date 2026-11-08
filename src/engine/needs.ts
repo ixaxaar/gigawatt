@@ -6,6 +6,7 @@ import { BOARD_STRIKES, boardTarget } from '../sim/systems/board';
 import { rackAccels } from '../sim/systems/helpers';
 import { DILEMMAS } from '../sim/story-data';
 import { buildOptions } from '../contractfit';
+import { uplinkGbps, totalNeedGbps } from '../sim/internet';
 import type { Accelerator, Contract, GameState } from '../types';
 
 export interface ClusterLoad { id: string; name: string; accels: number; contracts: number; loadPct: number; spot: boolean }
@@ -50,6 +51,38 @@ export function fleetOf(g: GameState): Fleet {
   return { clustered, loose, busy: Math.round(busy), utilization: clustered > 0 ? busy / clustered : 0, idleClusters, clusters };
 }
 
+export interface ClusterNet { id: string; name: string; accels: number; gbs: number; tech: string; topology: string; oversub: number; down: number; loss: number; fixMonth: number; fromSpares: boolean; cableName: string; spares: number; contracts: number }
+export interface NetHealth {
+  clusters: ClusterNet[];
+  uplink: { gbps: number; needGbps: number; pct: number; unlimited: boolean };
+  /** 0 = healthy, 1 = degraded (links down or uplink above 85%), 2 = saturated. */
+  level: 0 | 1 | 2;
+  /** Share of scale-out bandwidth available across clustered GPUs, 0..1. */
+  bandwidthPct: number;
+  summary: string;
+}
+
+/** The network at a glance: per-cluster fabric, links down, and the internet uplink. */
+export function netHealth(g: GameState): NetHealth {
+  const clusters: ClusterNet[] = [];
+  let acc = 0; let lossW = 0;
+  for (const cl of g.clusters) {
+    const st = cl.stats; if (!st || st.accelerators <= 0) continue;
+    const f = cl.linkFaults;
+    const loss = st.linkLoss ?? 0;
+    acc += st.accelerators; lossW += st.accelerators * loss;
+    clusters.push({ id: cl.id, name: cl.name, accels: st.accelerators, gbs: st.effScaleOutGBs, tech: cl.fabric?.scaleOutTech ?? '', topology: cl.fabric?.topology ?? '', oversub: cl.fabric?.oversubscription ?? 1, down: f?.down ?? 0, loss, fixMonth: f?.fixMonth ?? 0, fromSpares: f?.fromSpares ?? true, cableName: f ? (getItem(f.cableId)?.name ?? 'link') : '', spares: f ? (g.spareStock?.[f.cableId] ?? 0) : 0, contracts: g.activeContracts.filter((a) => a.clusterIds.includes(cl.id)).length });
+  }
+  const gb = uplinkGbps(g); const need = totalNeedGbps(g);
+  const unlimited = !Number.isFinite(gb);
+  const pct = unlimited || gb <= 0 ? 0 : need / gb;
+  const bandwidthPct = acc > 0 ? 1 - lossW / acc : 1;
+  const downTotal = clusters.reduce((n, c) => n + c.down, 0);
+  const level: NetHealth['level'] = pct > 1 ? 2 : downTotal > 0 || pct > 0.85 ? 1 : 0;
+  const summary = clusters.length === 0 && need === 0 ? 'No fabric yet' : pct > 1 ? `Internet uplink saturated (${Math.round(pct * 100)}%)` : downTotal > 0 ? `${downTotal} link${downTotal === 1 ? '' : 's'} down, ${Math.round(bandwidthPct * 100)}% bandwidth` : pct > 0.85 ? `Uplink ${Math.round(pct * 100)}% used` : 'All links up';
+  return { clusters, uplink: { gbps: unlimited ? 0 : gb, needGbps: need, pct, unlimited }, level, bandwidthPct, summary };
+}
+
 export interface Need { id: string; level: 'crit' | 'warn' | 'info'; title: string; detail: string; go: string; button: string }
 
 const usd = (x: number) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : `$${Math.round(x / 1e3)}k`);
@@ -88,6 +121,11 @@ export function needsOf(g: GameState): Need[] {
     const d = DILEMMAS.find((x) => x.id === g.story!.open!.id);
     if (d) out.push({ id: 'dilemma', level: 'warn', title: `Decision: ${d.title}`, detail: `Answer within ${Math.max(0, 3 - (g.month - g.story.open.month))} months or the offer lapses.`, go: 'story', button: 'Decide' });
   }
+
+  const nh = netHealth(g);
+  const hurt = nh.clusters.filter((c) => c.down > 0);
+  if (hurt.length) out.push({ id: 'links', level: hurt.some((c) => c.contracts > 0) ? 'warn' : 'info', title: `${hurt.reduce((n, c) => n + c.down, 0)} network link${hurt.reduce((n, c) => n + c.down, 0) === 1 ? '' : 's'} down`, detail: `${hurt.map((c) => `${c.name}: ${c.down} × ${c.cableName}, back in month ${c.fixMonth}`).join('; ')}. ${hurt.every((c) => c.fromSpares) ? 'Swapping from spares.' : 'Spare cables and optics in the warehouse make this a one-month blip.'}`, go: 'network', button: 'Open Supercomputer' });
+  if (nh.uplink.pct > 0.85) out.push({ id: 'uplink', level: nh.uplink.pct > 1 ? 'crit' : 'warn', title: nh.uplink.pct > 1 ? 'Internet uplink is saturated' : 'Internet uplink is nearly full', detail: `Customers need ${nh.uplink.needGbps.toFixed(1)} Gb/s of ${nh.uplink.gbps.toFixed(0)} Gb/s. Over 100% every contract loses availability: buy transit on Build.`, go: 'facility', button: 'Open Build' });
 
   const need = staffNeeded(g);
   if (g.staff < need.needed) out.push({ id: 'staff', level: g.staff < need.needed * 0.6 ? 'crit' : 'warn', title: `Understaffed: ${g.staff} of ${need.needed} operators`, detail: 'A short crew means more failures, slower repairs and lost availability on every contract.', go: 'finance', button: 'Hire staff' });

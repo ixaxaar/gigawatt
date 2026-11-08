@@ -17,6 +17,8 @@ func accent_of(id: String) -> Color:
 	return Kit.CY
 func drawer_w(id := "") -> float:
 	var w := get_viewport().get_visible_rect().size.x
+	if Layout.phone: return w - RAIL_W - 14.0
+	if Layout.handheld: return minf(w * (0.8 if id == "shop" else 0.68), w - 120.0)
 	return minf(clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0), w - 300.0)
 const SECS := [0.0, 4.0, 1.6, 0.6]
 
@@ -46,6 +48,7 @@ var story_ui: StoryOverlay
 var dilemma_dismissed := ""
 var coach: Coach
 var next_btn: Button
+var menu_btn: Button
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
@@ -53,9 +56,12 @@ func _ready() -> void:
 	if Settings.ensure_gpu(): get_tree().quit(); return
 	if OS.has_environment("GW_THEME"): Settings.theme = OS.get_environment("GW_THEME")
 	Kit.set_theme(Settings.theme); Settings.apply(get_window()); Settings.write_log(get_window())
+	Layout.update(get_window()); get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
 	get_window().size_changed.connect(func():
+		var was: String = Layout.kind
 		get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
-		if get("hall") != null and hall != null: hall.apply_scale())
+		if get("hall") != null and hall != null: hall.apply_scale()
+		if was != Layout.kind or true: call_deferred("_on_resized", was))
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
@@ -64,7 +70,7 @@ func _ready() -> void:
 	root = Control.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var th := Theme.new(); th.default_font_size = 17; th.default_font = Fonts.regular; th.set_font("bold_font", "RichTextLabel", Fonts.bold); th.set_font("normal_font", "RichTextLabel", Fonts.regular); root.theme = th
 	ui.add_child(root)
-	_build_shell(); _title(); audio.play("boot")
+	_build_shell(); _relayout(); _title(); audio.play("boot")
 	if Settings.compat and Settings.preset < 0: get_tree().create_timer(1.2).timeout.connect(func(): toast("Running in compatibility mode on %s (no Forward+). Effects are reduced; see the wiki's Performance page." % Settings.adapter, "info"))
 	pad = Pad.new(); pad.app = self; add_child(pad)
 	coach = Coach.new(); coach.app = self; add_child(coach)
@@ -163,20 +169,23 @@ func _fatal(msg: String) -> void:
 func _build_shell() -> void:
 	top = PanelContainer.new(); top.set_anchors_preset(Control.PRESET_TOP_WIDE); top.offset_bottom = 66; top.add_theme_stylebox_override("panel", _top_sb(Kit.CY)); root.add_child(top)
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 16); top.add_child(hb)
-	hb.add_child(Kit.label("GIGAWATT", 26, Color("#ffd23f") if Kit.dark else Kit.AM))
+	lbl.title = Kit.label("GIGAWATT", 26, Color("#ffd23f") if Kit.dark else Kit.AM); hb.add_child(lbl.title)
 	var dv := VBoxContainer.new(); dv.custom_minimum_size = Vector2(110, 0); lbl.date = Kit.label("", 20); bar_month = Kit.bar(0, 1); dv.add_child(lbl.date); dv.add_child(bar_month); hb.add_child(dv)
-	for p in [["CASH", "cash"], ["REVENUE / MO", "rev"], ["BURN / MO", "burn"], ["NET / MO", "net"], ["NET WORTH", "nw"], ["DEBT", "debt"], ["REP", "rep"]]:   # the money line: what used to be the Overview plaques
+	for p in [["CASH", "cash"], ["REVENUE / MO", "rev"], ["BURN / MO", "burn"], ["NET / MO", "net"], ["NET WORTH", "nw"], ["NETWORK", "netw"], ["DEBT", "debt"], ["REP", "rep"]]:   # the money line: what used to be the Overview plaques
 		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 0); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 20); v.add_child(lbl[p[1]]); hb.add_child(v); lbl[p[1] + "_box"] = v
+	lbl.netw_box.mouse_filter = Control.MOUSE_FILTER_STOP; lbl.netw_box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	lbl.netw_box.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT: go("network"))
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
 	lbl.mode = Kit.btn("Operator", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); lbl.mode.custom_minimum_size = Vector2(112, 0); lbl.mode.tooltip_text = "Game mode: Learner (explainers, no bankruptcy), Operator, Tycoon. Click to change."; hb.add_child(lbl.mode)
 	lbl.speed = Kit.btn("⏸ Paused", func(): set_speed((speed + 1) % 4), "", 15); lbl.speed.custom_minimum_size = Vector2(124, 0); lbl.speed.tooltip_text = "Auto-advance speed: click to cycle Paused, 1x, 2x, 3x. Space advances one month."; hb.add_child(lbl.speed)
 	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
-	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
+	menu_btn = Kit.btn("MENU", func(): _menu(), "", 14); hb.add_child(menu_btn)
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
-	dock_box = HBoxContainer.new(); var dock := dock_box; dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -600; dock.offset_right = 600; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
+	dock_scroll = ScrollContainer.new(); dock_scroll.set_anchors_preset(Control.PRESET_BOTTOM_WIDE); dock_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; dock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO; root.add_child(dock_scroll)
+	dock_box = BoxContainer.new(); var dock := dock_box; dock.size_flags_horizontal = Control.SIZE_EXPAND_FILL; dock.add_theme_constant_override("separation", 8); dock_scroll.add_child(dock)
 	for i in DOCK.size():
 		var dk: Array = DOCK[i]
-		var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock.add_child(d); dock_btns[dk[0]] = d
+		var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); _dock_meta(d, dk[1], i); dock.add_child(d); dock_btns[dk[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
 	keynote = KeynoteOverlay.new(); keynote.app = self; keynote.visible = false; root.add_child(keynote)
 	story_ui = StoryOverlay.new(); story_ui.app = self; story_ui.visible = false; root.add_child(story_ui)
@@ -187,7 +196,78 @@ func _build_shell() -> void:
 	banner = Kit.label("", 30, Kit.AM); banner.set_anchors_preset(Control.PRESET_CENTER_TOP); banner.offset_top = 140; banner.offset_left = -400; banner.offset_right = 400; banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; root.add_child(banner)
 	_shell_visible(false)
 
-var dock_box: HBoxContainer
+var dock_box: BoxContainer
+
+## Centre a modal panel of design size (w x h) inside the visible area, shrunk on small screens.
+func _center(pn: Control, w: float, h: float) -> void:
+	var vs := get_viewport().get_visible_rect().size
+	var ww := minf(w, vs.x - 24.0); var hh := minf(h, vs.y - 24.0)
+	pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -ww / 2.0; pn.offset_right = ww / 2.0; pn.offset_top = -hh / 2.0; pn.offset_bottom = hh / 2.0
+
+## The window changed shape: refit the shell; rebuild the open screen when the device class changed.
+func _on_resized(was: String) -> void:
+	_relayout()
+	if started: _on_changed()
+	if was != Layout.kind:
+		for sc in screens.values(): sc.queue_free()
+		screens.clear()
+		if started: show_screen(cur)
+	elif started and screens.has(cur): show_screen(cur)
+
+func vs_h() -> float: return get_viewport().get_visible_rect().size.y
+func vw() -> float: return get_viewport().get_visible_rect().size.x
+
+## Right-hand drawers that leave the hall clickable (Overview, Facility): 520 px on desktops, the full screen on phones.
+func overlay_w() -> float:
+	if Layout.phone: return vw() - RAIL_W - 14.0
+	return minf(520.0 if not Layout.handheld else 470.0, vw() - 240.0)
+
+const RAIL_W := 92.0
+var _net_on := false
+var dock_scroll: ScrollContainer
+var _bar_h := 66.0
+var _dock_h := 84.0
+
+## Fit the shell to the device class: top bar contents and height, dock size, hall margins, toasts.
+const DOCK_SHORT := ["HOME", "CLIENTS", "SUPPLY", "BUILD", "OPS", "DESIGN", "CLUSTER", "CODEX"]
+func _dock_meta(d: Button, full_name: String, i: int) -> void:
+	d.set_meta("full", d.text); d.set_meta("short", DOCK_SHORT[i]); d.set_meta("short_txt", DOCK_SHORT[i])
+	if Layout.phone: d.text = DOCK_SHORT[i]
+
+func _relayout() -> void:
+	if top == null: return
+	var k := Layout.kind
+	var compact := k != "desktop"
+	_bar_h = 66.0 if k == "desktop" else (58.0 if k == "handheld" else 56.0)
+	top.offset_bottom = _bar_h
+	lbl.title.visible = k == "desktop"
+	for key in ["rev", "burn", "nw", "rep"]: lbl[key + "_box"].visible = k == "desktop" or (k == "handheld" and key in ["rev", "burn"])
+	lbl.netw_box.visible = k != "phone" and _net_on
+	lbl.debt_box.visible = k == "desktop" and float(b.g.get("debt", 0.0)) > 0.0
+	lbl.mode.visible = k == "desktop"
+	lbl.speed.custom_minimum_size = Vector2(124 if k == "desktop" else (84 if k == "handheld" else 60), Layout.tap()); _speed_label()
+	next_btn.custom_minimum_size = Vector2(0, Layout.tap()); next_btn.text = "NEXT MONTH ▶" if k != "phone" else "▶"
+	menu_btn.text = "MENU" if k != "phone" else "≡"; menu_btn.custom_minimum_size = Vector2(0 if k != "phone" else 52, Layout.tap())
+	(top.get_child(0) as HBoxContainer).add_theme_constant_override("separation", 16 if k == "desktop" else (12 if k == "handheld" else 8))
+	_dock_h = 84.0 if k == "desktop" else 74.0
+	var rail := k == "phone"   # phones are landscape-only: the dock becomes a rail down the left edge, so the hall keeps its height
+	dock_box.vertical = rail
+	dock_scroll.set_anchors_preset(Control.PRESET_LEFT_WIDE if rail else Control.PRESET_BOTTOM_WIDE)
+	dock_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if rail else ScrollContainer.SCROLL_MODE_DISABLED
+	dock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if rail else ScrollContainer.SCROLL_MODE_AUTO
+	if rail: dock_scroll.offset_left = 6; dock_scroll.offset_right = RAIL_W; dock_scroll.offset_top = _bar_h + 8.0; dock_scroll.offset_bottom = -6
+	else: dock_scroll.offset_top = -_dock_h; dock_scroll.offset_bottom = -8; dock_scroll.offset_left = 10; dock_scroll.offset_right = -10
+	for d in dock_box.get_children():
+		var btn := d as Button
+		btn.custom_minimum_size = Vector2(138 if k == "desktop" else (112 if k == "handheld" else RAIL_W - 6), 58 if k == "desktop" else (60 if k == "handheld" else 56))
+		btn.add_theme_font_size_override("font_size", Kit.fs(14 if k != "phone" else 13)); btn.text = btn.get_meta("short") if rail else btn.get_meta("full", btn.text)
+	dock_box.alignment = BoxContainer.ALIGNMENT_CENTER if not rail else BoxContainer.ALIGNMENT_BEGIN
+	holder.offset_top = _bar_h + 10.0; holder.offset_bottom = -(_dock_h + 8.0) if not rail else -6.0
+	holder.offset_left = 14 if k != "phone" else RAIL_W + 8.0; holder.offset_right = -14 if k != "phone" else -6.0
+	toasts.offset_top = _bar_h + 10.0
+	var tw := minf(460.0, vw() - 28.0); toasts.offset_left = -tw - 14.0
+	banner.offset_top = _bar_h + 74.0
+
 ## Apply the chosen UI theme live: palette, top bar, dock, and every screen (rebuilt on demand).
 func _restyle() -> void:
 	Kit.set_theme(Settings.theme)
@@ -196,8 +276,8 @@ func _restyle() -> void:
 		for c in dock_box.get_children(): c.queue_free()
 		dock_btns.clear()
 		for i in DOCK.size():
-			var dk: Array = DOCK[i]; var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock_box.add_child(d); dock_btns[dk[0]] = d
-		_apply_unlocks()
+			var dk: Array = DOCK[i]; var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); _dock_meta(d, dk[1], i); dock_box.add_child(d); dock_btns[dk[0]] = d
+		_apply_unlocks(); _relayout()
 	for sc in screens.values(): sc.queue_free()
 	screens.clear()
 	if started: show_screen(cur); _on_changed()
@@ -208,7 +288,7 @@ func _restyle() -> void:
 
 func _shell_visible(v: bool) -> void:
 	top.visible = v; holder.visible = v
-	for d in dock_btns.values(): d.get_parent().visible = v
+	dock_scroll.visible = v
 	toasts.visible = v
 
 func _title() -> void:
@@ -217,16 +297,16 @@ func _title() -> void:
 	var gt := GradientTexture2D.new(); var gr := Gradient.new(); gr.colors = PackedColorArray([Kit.SCRIM, Color(Kit.SCRIM.r, Kit.SCRIM.g, Kit.SCRIM.b, 0.0)]); gr.offsets = PackedFloat32Array([0.0, 1.0])
 	gt.gradient = gr; gt.fill_from = Vector2(0, 0); gt.fill_to = Vector2(1, 0); gt.width = 512; gt.height = 8
 	var shade := TextureRect.new(); shade.texture = gt; shade.stretch_mode = TextureRect.STRETCH_SCALE; shade.set_anchors_preset(Control.PRESET_LEFT_WIDE); shade.anchor_right = 0.62; shade.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(shade)
-	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -310; vb.offset_bottom = 310; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
-	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110, Kit.CY))
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90 if not Layout.compact else 24; vb.offset_top = -310 if not Layout.phone else -vs_h() * 0.5 + 16; vb.offset_bottom = 310 if not Layout.phone else vs_h() * 0.5 - 16; vb.offset_right = 780 if not Layout.phone else vw() - 24; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110 if not Layout.phone else 64, Kit.CY))
 	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
 	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
-		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
+		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0), 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	b.act("newGame", [7, "operator"]); _demo_hall()
 	var recent: Array = b.q("saves")
 	if recent.size() > 0:
 		var rs: Dictionary = recent[0]
-		var cont := Kit.btn("CONTINUE\n%s · %s · %d racks" % [Kit.date_of(int(rs.month)), Kit.usd(float(rs.cash)), int(rs.racks)], func(): _load_slot(str(rs.slot), func(): h.queue_free()), "go", 18); cont.custom_minimum_size = Vector2(640, 76); cont.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var cont := Kit.btn("CONTINUE\n%s · %s · %d racks" % [Kit.date_of(int(rs.month)), Kit.usd(float(rs.cash)), int(rs.racks)], func(): _load_slot(str(rs.slot), func(): h.queue_free()), "go", 18); cont.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0), 76); cont.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		vb.add_child(cont); vb.move_child(cont, 3)
 	vb.add_child(Kit.btn("LOAD GAME", func(): _slots("load", func(): h.queue_free()), "", 16))
 	vb.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
@@ -283,7 +363,7 @@ func _on_changed() -> void:
 	var g := b.g
 	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(20, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
-	lbl.debt_box.visible = float(g.debt) > 0.0   # no loans, nothing to show
+	lbl.debt_box.visible = float(g.debt) > 0.0 and Layout.kind == "desktop"   # no loans, nothing to show
 	var pn: Dictionary = b.q("pnl")
 	if not pn.is_empty():
 		lbl.rev.text = Kit.usd(pn.revenue); lbl.rev.label_settings = Kit.ls(20, Kit.GR)
@@ -292,6 +372,15 @@ func _on_changed() -> void:
 		var serving: int = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0).size()
 		lbl.rev_box.tooltip_text = "Monthly revenue: %s serving." % Kit.plural(serving, "contract"); lbl.burn_box.tooltip_text = "Monthly cost: power, staff, support and interest."; lbl.net_box.tooltip_text = "Revenue minus costs, after depreciation."
 		lbl.nw_box.tooltip_text = "Cash plus the value of what you own, minus debt."
+	var nh = b.q("netHealth")
+	_net_on = nh is Dictionary and (nh.clusters.size() > 0 or float(nh.uplink.needGbps) > 0.0)
+	lbl.netw_box.visible = _net_on and Layout.kind != "phone"
+	if _net_on:
+		var lv := int(nh.level); var col: Color = [Kit.GR, Kit.AM, Kit.RD][lv]
+		var down := 0
+		for c in nh.clusters: down += int(c.down)
+		lbl.netw.text = ("%d%%" % int(round(float(nh.bandwidthPct) * 100.0))) if down == 0 and float(nh.uplink.pct) <= 0.85 else ("%d down" % down if down > 0 else "uplink %d%%" % int(float(nh.uplink.pct) * 100.0))
+		lbl.netw.label_settings = Kit.ls(20, col); lbl.netw_box.tooltip_text = "Network: %s. Click to open the Supercomputer screen." % nh.summary
 	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
 	_speed_label()
 	for i in range(_seen_log, g.log.size()):
@@ -332,7 +421,7 @@ func toast(text: String, level := "info") -> void:
 	elif level == "good" and ("deliver" in low or "arrived" in low): cue = "delivery"
 	audio.play(cue)
 	var p := PanelContainer.new(); p.set_meta("txt", text); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
-	p.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
+	p.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(minf(460.0, vw() - 28.0), 0); toasts.add_child(p)
 	while toasts.get_child_count() > 5: toasts.get_child(0).queue_free(); toasts.remove_child(toasts.get_child(0))
 	var tw := create_tween(); tw.tween_interval(6.0); tw.tween_property(p, "modulate:a", 0.0, 1.0); tw.tween_callback(p.queue_free)
 
@@ -435,7 +524,7 @@ func show_screen(id: String) -> void:
 	if top != null: top.add_theme_stylebox_override("panel", _top_sb(Kit.accent))
 	hall.visible = not FULL.has(id)
 	var cover := 0.0
-	if OVERLAY.has(id): cover = 520.0
+	if OVERLAY.has(id): cover = overlay_w()
 	elif not FULL.has(id): cover = drawer_w()
 	hall.set_cover(cover)
 	if not screens.has(id): screens[id] = _make_screen(id); holder.add_child(screens[id])
@@ -484,7 +573,7 @@ func _make_screen(id: String) -> Control:
 
 func set_speed(v: int) -> void: speed = v; clock = 0.0; _on_changed()
 func _speed_label() -> void:
-	lbl.speed.text = ["⏸ Paused", "▶ 1x", "▶▶ 2x", "▶▶▶ 3x"][clampi(speed, 0, 3)]
+	lbl.speed.text = (["⏸", "▶", "▶▶", "▶▶▶"] if Layout.compact else ["⏸ Paused", "▶ 1x", "▶▶ 2x", "▶▶▶ 3x"])[clampi(speed, 0, 3)]
 	lbl.speed.modulate = Color.WHITE if speed == 0 else Color(0.5, 1.0, 0.9)
 
 func next_month() -> void:
@@ -665,7 +754,7 @@ func _settings() -> void:
 	if OS.has_environment("GW_SETTINGS_TAB"): _settings_tab = OS.get_environment("GW_SETTINGS_TAB")
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -400; pn.offset_right = 400; pn.offset_top = -340; pn.offset_bottom = 340
+	var pn := PanelContainer.new(); _center(pn, 800, 680)
 	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
@@ -694,6 +783,8 @@ func _opt_row(parent: Control, title: String, items: Array, selected: int, cb: C
 	o.selected = clampi(selected, 0, items.size() - 1); o.size_flags_horizontal = Control.SIZE_EXPAND_FILL; o.item_selected.connect(cb); r.add_child(o); return o
 
 func _set_display(vb: VBoxContainer) -> void:
+	_opt_row(vb, "Layout", ["Auto (this device)", "Desktop / laptop / console", "Handheld (Steam Deck)", "Phone"], ["auto", "desktop", "handheld", "phone"].find(Settings.layout), func(i): Settings.layout = ["auto", "desktop", "handheld", "phone"][i]; Settings.apply(get_window()); Settings.save_all(); get_window().size_changed.emit())
+	vb.add_child(Kit.label("Running as: %s (%s). The layout changes the top bar, dock and drawers, not the game." % [Layout.kind, "auto" if Settings.layout == "auto" else "forced"], 13, Kit.DIM, true))
 	vb.add_child(Kit.label("UI THEME", 13, Kit.DIM))
 	for dk in [true, false]:
 		var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 6); fl.add_theme_constant_override("v_separation", 6); vb.add_child(fl)
@@ -788,7 +879,7 @@ func _check_end() -> void:
 	var won: bool = rep.reason == "horizon"; var col: Color = Kit.GR if won else Kit.RD
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); end_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.78); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -560; pn.offset_right = 560; pn.offset_top = -330; pn.offset_bottom = 330
+	var pn := PanelContainer.new(); _center(pn, 1120, 660)
 	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), col, 14, 2, 28)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	var head: String = {"horizon": "2028 COMPLETE", "bankrupt": "GAME OVER", "fired": "THE BOARD HAS SPOKEN"}.get(str(rep.reason), "GAME OVER")
@@ -835,7 +926,7 @@ func _load_slot(slot: String, on_loaded: Callable = Callable()) -> void:
 func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h)
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -330; pn.offset_right = 330; pn.offset_top = -230; pn.offset_bottom = 230
+	var pn := PanelContainer.new(); _center(pn, 660, 460)
 	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	vb.add_child(Kit.label("SAVE GAME" if mode == "save" else "LOAD GAME", 30, Kit.CY))
@@ -859,7 +950,7 @@ func _menu() -> void:
 	if menu_ui != null: menu_ui.queue_free(); menu_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); menu_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -220; vb.offset_bottom = 220; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	var vb := VBoxContainer.new(); _center(vb, 440, 440); vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
 	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["Change look", "look"], ["How to play", "guide"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
 		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)

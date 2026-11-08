@@ -31,6 +31,14 @@ GIGAWATT picks graphics settings for your machine the first time it starts and s
 
 The menus and text always draw at your screen's native resolution. Only the 3D hall is scaled, and it is upscaled with FSR, so a weak GPU on a 4K display can render the hall at a fraction of 4K and still look sharp where it matters. Drag the **3D resolution** slider in Graphics; "Preset" hands control back to the preset.
 
+## Device layouts
+
+The game has three layouts, picked automatically from the device and changeable in **Settings ▸ Display ▸ Layout**:
+
+- **Desktop** (monitors, laptops, consoles): the full top bar with the money line, a wide dock, drawers beside the hall.
+- **Handheld** (Steam Deck, 7 to 8 inch tablets, small laptop windows): a compact top bar, a taller dock, wider drawers. Controller navigation works everywhere.
+- **Phone**: a slim top bar (cash, net, speed, next month, menu), the dock as a rail down the left edge, and every drawer full-screen. Phones and tablets stay in landscape. Touch: drag with one finger to pan, tap a rack to select it, pinch to zoom, and drag with two fingers to orbit.
+
 ## Steam Deck and small screens
 
 - The first run on a Deck selects the Low preset and a 40 FPS cap.

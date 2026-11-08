@@ -4,10 +4,20 @@ import { createInterface } from 'node:readline';
 import { useFileStorage } from './engine/headless-shim';
 import { handle } from './engine/protocol';
 
-if (process.argv[2]) useFileStorage(process.argv[2]);   // save directory handed over by the Godot client
+const saveDir = process.argv.slice(2).find((a, i, all) => !a.startsWith('--') && all[i - 1] !== '--port');
+if (saveDir) useFileStorage(saveDir);   // save directory handed over by the Godot client
 
-createInterface({ input: process.stdin }).on('line', (line) => {
-  let req: any;
-  try { req = JSON.parse(line); } catch { return; }
-  process.stdout.write(JSON.stringify(handle(req)) + '\n');
-});
+// stdio (desktop: Godot spawns this process), or `--port N` / GW_ENGINE_PORT: serve the same protocol over a loopback socket.
+// The socket mode is for hosts that cannot spawn processes and pipe their stdio (Android, iOS: the engine runs in-process in an embedded Node).
+const portArg = process.argv.indexOf('--port');
+const port = Number(portArg > 0 ? process.argv[portArg + 1] : process.env.GW_ENGINE_PORT ?? 0);
+const serve = (input: any, write: (s: string) => void) =>
+  createInterface({ input }).on('line', (line) => {
+    let req: any;
+    try { req = JSON.parse(line); } catch { return; }
+    write(JSON.stringify(handle(req)) + '\n');
+  });
+if (port > 0) {
+  const { createServer } = await import('node:net');
+  createServer((sock: any) => { sock.setNoDelay(true); serve(sock, (l) => sock.write(l)); }).listen(port, '127.0.0.1', () => process.stderr.write(`engine listening on 127.0.0.1:${port}\n`));
+} else serve(process.stdin, (l) => process.stdout.write(l));

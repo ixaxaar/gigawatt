@@ -11025,6 +11025,86 @@ const launchesSystem = {
     }
   }
 };
+const LINK_RATE = { optic: 6e-4, aoc: 2e-4, dac: 4e-5, other: 1e-4 };
+const LINK_RMA_MONTHS = 3;
+const classOf = (id) => {
+  const c = getItem(id);
+  return c && c.kind === "cable" ? cableClass(c) : "other";
+};
+function linkRisk(stats) {
+  let lambda = 0;
+  let total = 0;
+  let worst = "";
+  let worstL = -1;
+  for (const [id, n] of Object.entries(stats.cableCounts)) {
+    const l = n * (LINK_RATE[classOf(id)] ?? 1e-4);
+    lambda += l;
+    total += n;
+    if (l > worstL) {
+      worstL = l;
+      worst = id;
+    }
+  }
+  return { lambda, total, worst };
+}
+const linkLoss = (down, total) => down <= 0 || total <= 0 ? 0 : Math.min(0.5, 0.01 * down + 3 * (down / total));
+function applyLinkFaults(cl, stats) {
+  const f = cl.linkFaults;
+  if (!f || f.down <= 0) return stats;
+  const loss = linkLoss(f.down, f.total);
+  const name = getItem(f.cableId)?.name ?? "link";
+  return {
+    ...stats,
+    linkLoss: loss,
+    effScaleOutGBs: Math.round(stats.effScaleOutGBs * (1 - loss) * 1e3) / 1e3,
+    issues: [...stats.issues, { severity: "warn", code: "links-down", message: `${f.down} ${name} link${f.down === 1 ? " is" : "s are"} down; scale-out bandwidth is ${(loss * 100).toFixed(1)}% lower until month ${f.fixMonth}.`, learn: "cables" }]
+  };
+}
+const poisson = (lambda, rng) => {
+  if (lambda <= 0) return 0;
+  if (lambda > 30) {
+    const u = Math.max(rng(), 1e-9);
+    const v2 = rng();
+    return Math.max(0, Math.round(lambda + Math.sqrt(lambda) * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v2)));
+  }
+  const L = Math.exp(-lambda);
+  let k2 = 0;
+  let p = 1;
+  do {
+    k2 += 1;
+    p *= rng();
+  } while (p > L);
+  return k2 - 1;
+};
+const linkFaults = {
+  id: "link-faults",
+  run: (c) => {
+    const { s: s2, log } = c;
+    const mult = staffEffect(s2).failureMult;
+    for (const cl of s2.clusters) {
+      const st2 = cl.stats;
+      if (cl.linkFaults && s2.month >= cl.linkFaults.fixMonth) {
+        log("good", `🔗 ${cl.name}: ${cl.linkFaults.down} failed link${cl.linkFaults.down === 1 ? "" : "s"} replaced, full bandwidth restored.`);
+        cl.linkFaults = void 0;
+      }
+      if (!st2 || st2.accelerators <= 0 || cl.linkFaults) continue;
+      const risk = linkRisk(st2);
+      let h = 2166136261;
+      for (const ch of cl.id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+      const rng = mulberry32((s2.seed ^ Math.imul(s2.month + 7, 2246822507) ^ h) >>> 0);
+      const n = poisson(risk.lambda * mult, rng);
+      if (n <= 0) continue;
+      const have = s2.spareStock?.[risk.worst] ?? 0;
+      const used = Math.min(have, n);
+      const fromSpares = used >= n;
+      if (used > 0) s2.spareStock[risk.worst] = have - used;
+      const name = getItem(risk.worst)?.name ?? "link";
+      cl.linkFaults = { down: n, total: risk.total, cableId: risk.worst, fixMonth: s2.month + (fromSpares ? 1 : LINK_RMA_MONTHS), fromSpares };
+      log(fromSpares ? "info" : "bad", `🔗 ${cl.name}: ${n} ${name} link${n === 1 ? "" : "s"} went down (${(linkLoss(n, risk.total) * 100).toFixed(1)}% of scale-out bandwidth lost). ${fromSpares ? "Swapping from your spares; fixed next month." : `No spares on the shelf: replacements arrive in month ${cl.linkFaults.fixMonth}. Keep spare cables and optics in the warehouse.`}`);
+    }
+    c.refreshStats();
+  }
+};
 const DEFAULT_TICK = {
   accelFailureProbPerMonth: 1 / 8e3,
   commissionFailProb: 0.04,
@@ -11041,6 +11121,7 @@ const PIPELINE = [
   clusterStats,
   staffingCheck,
   failures,
+  linkFaults,
   pue,
   serveContracts,
   rivalsSystem,
@@ -11079,7 +11160,7 @@ function advanceMonth(state2, opts = {}) {
     cluster,
     refreshStats: () => {
       const online = (cl) => cl.rackIds.filter((id) => c.placedById.get(id)?.status === "online");
-      for (const cl of s2.clusters) cl.stats = evaluateCluster({ ...cl, rackIds: online(cl) }, cluster);
+      for (const cl of s2.clusters) cl.stats = applyLinkFaults(cl, evaluateCluster({ ...cl, rackIds: online(cl) }, cluster));
     },
     revenue: 0,
     served: /* @__PURE__ */ new Set(),
@@ -13256,6 +13337,29 @@ function fleetOf(g) {
   for (const h of g.halls) for (const r of h.racks) if (r.status === "online" && !inCluster.has(r.id)) loose += rackAccels(g, r.designId);
   return { clustered, loose, busy: Math.round(busy), utilization: clustered > 0 ? busy / clustered : 0, idleClusters, clusters };
 }
+function netHealth(g) {
+  const clusters = [];
+  let acc = 0;
+  let lossW = 0;
+  for (const cl of g.clusters) {
+    const st2 = cl.stats;
+    if (!st2 || st2.accelerators <= 0) continue;
+    const f = cl.linkFaults;
+    const loss = st2.linkLoss ?? 0;
+    acc += st2.accelerators;
+    lossW += st2.accelerators * loss;
+    clusters.push({ id: cl.id, name: cl.name, accels: st2.accelerators, gbs: st2.effScaleOutGBs, tech: cl.fabric?.scaleOutTech ?? "", topology: cl.fabric?.topology ?? "", oversub: cl.fabric?.oversubscription ?? 1, down: f?.down ?? 0, loss, fixMonth: f?.fixMonth ?? 0, fromSpares: f?.fromSpares ?? true, cableName: f ? getItem(f.cableId)?.name ?? "link" : "", spares: f ? g.spareStock?.[f.cableId] ?? 0 : 0, contracts: g.activeContracts.filter((a) => a.clusterIds.includes(cl.id)).length });
+  }
+  const gb = uplinkGbps(g);
+  const need = totalNeedGbps(g);
+  const unlimited = !Number.isFinite(gb);
+  const pct = unlimited || gb <= 0 ? 0 : need / gb;
+  const bandwidthPct = acc > 0 ? 1 - lossW / acc : 1;
+  const downTotal = clusters.reduce((n, c) => n + c.down, 0);
+  const level = pct > 1 ? 2 : downTotal > 0 || pct > 0.85 ? 1 : 0;
+  const summary = clusters.length === 0 && need === 0 ? "No fabric yet" : pct > 1 ? `Internet uplink saturated (${Math.round(pct * 100)}%)` : downTotal > 0 ? `${downTotal} link${downTotal === 1 ? "" : "s"} down, ${Math.round(bandwidthPct * 100)}% bandwidth` : pct > 0.85 ? `Uplink ${Math.round(pct * 100)}% used` : "All links up";
+  return { clusters, uplink: { gbps: unlimited ? 0 : gb, needGbps: need, pct, unlimited }, level, bandwidthPct, summary };
+}
 const usd = (x) => x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : `$${Math.round(x / 1e3)}k`;
 function needsOf(g) {
   const out = [];
@@ -13285,6 +13389,10 @@ function needsOf(g) {
     const d = DILEMMAS.find((x) => x.id === g.story.open.id);
     if (d) out.push({ id: "dilemma", level: "warn", title: `Decision: ${d.title}`, detail: `Answer within ${Math.max(0, 3 - (g.month - g.story.open.month))} months or the offer lapses.`, go: "story", button: "Decide" });
   }
+  const nh = netHealth(g);
+  const hurt = nh.clusters.filter((c) => c.down > 0);
+  if (hurt.length) out.push({ id: "links", level: hurt.some((c) => c.contracts > 0) ? "warn" : "info", title: `${hurt.reduce((n, c) => n + c.down, 0)} network link${hurt.reduce((n, c) => n + c.down, 0) === 1 ? "" : "s"} down`, detail: `${hurt.map((c) => `${c.name}: ${c.down} × ${c.cableName}, back in month ${c.fixMonth}`).join("; ")}. ${hurt.every((c) => c.fromSpares) ? "Swapping from spares." : "Spare cables and optics in the warehouse make this a one-month blip."}`, go: "network", button: "Open Supercomputer" });
+  if (nh.uplink.pct > 0.85) out.push({ id: "uplink", level: nh.uplink.pct > 1 ? "crit" : "warn", title: nh.uplink.pct > 1 ? "Internet uplink is saturated" : "Internet uplink is nearly full", detail: `Customers need ${nh.uplink.needGbps.toFixed(1)} Gb/s of ${nh.uplink.gbps.toFixed(0)} Gb/s. Over 100% every contract loses availability: buy transit on Build.`, go: "facility", button: "Open Build" });
   const need = staffNeeded(g);
   if (g.staff < need.needed) out.push({ id: "staff", level: g.staff < need.needed * 0.6 ? "crit" : "warn", title: `Understaffed: ${g.staff} of ${need.needed} operators`, detail: "A short crew means more failures, slower repairs and lost availability on every contract.", go: "finance", button: "Hire staff" });
   const f = fleetOf(g);
@@ -13306,6 +13414,7 @@ function offerMoney(g, c) {
 }
 const previewQueries = {
   fleet: () => fleetOf(G$1()),
+  netHealth: () => netHealth(G$1()),
   offerMoney: () => {
     const g = G$1();
     return Object.fromEntries(g.availableContracts.map((c) => [c.id, offerMoney(g, c)]));
@@ -13479,13 +13588,24 @@ function handle(req) {
     return { ...base2, ok: false, error: String(e?.stack ?? e) };
   }
 }
-if (process.argv[2]) useFileStorage(process.argv[2]);
-createInterface({ input: process.stdin }).on("line", (line) => {
+const saveDir = process.argv.slice(2).find((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--port");
+if (saveDir) useFileStorage(saveDir);
+const portArg = process.argv.indexOf("--port");
+const port = Number(portArg > 0 ? process.argv[portArg + 1] : process.env.GW_ENGINE_PORT ?? 0);
+const serve = (input, write) => createInterface({ input }).on("line", (line) => {
   let req;
   try {
     req = JSON.parse(line);
   } catch {
     return;
   }
-  process.stdout.write(JSON.stringify(handle(req)) + "\n");
+  write(JSON.stringify(handle(req)) + "\n");
 });
+if (port > 0) {
+  const { createServer } = await import("node:net");
+  createServer((sock) => {
+    sock.setNoDelay(true);
+    serve(sock, (l) => sock.write(l));
+  }).listen(port, "127.0.0.1", () => process.stderr.write(`engine listening on 127.0.0.1:${port}
+`));
+} else serve(process.stdin, (l) => process.stdout.write(l));

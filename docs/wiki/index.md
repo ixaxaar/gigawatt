@@ -34,7 +34,7 @@ If you are not sure what to do first, read [Getting started](getting-started.md)
 
 **Settings and performance**
 
-- [Performance and settings](performance-and-settings.md) — graphics presets, 3D resolution, Steam Deck, laptops with two GPUs, troubleshooting
+- [Performance and settings](performance-and-settings.md) — graphics presets, device layouts, 3D resolution, Steam Deck, laptops with two GPUs, troubleshooting
 
 **Running the business**
 

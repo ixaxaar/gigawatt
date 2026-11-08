@@ -1,11 +1,11 @@
 #!/bin/zsh
 # Record the guide clips with Godot's movie writer and encode them: docs/gifs/*.gif (README) and site/assets/*.webp (site and wiki).
-# Needs a display and ffmpeg; about 8 minutes. Clips are scripted tours (GW_TOUR in godot/main.gd).
+# Recorded at 2560x1440 (the UI scales to match) and downscaled with Lanczos, so thin lines and text stay crisp after compression. Needs a display and ffmpeg; about 10 minutes. Clips are scripted tours (GW_TOUR in godot/main.gd).
 root=${0:A:h:h}; cd $root/godot || exit 1
 T=$(mktemp -d); mkdir -p $root/docs/gifs
 export GW_NOKEYNOTE=1 GW_NOCOACH=1 GW_NOAUTOSAVE=1 GW_NODISPLAY=1 GW_NOTHROTTLE=1 VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-/usr/share/vulkan/icd.d/nvidia_icd.json}
 [ -e $VK_ICD_FILENAMES ] || unset VK_ICD_FILENAMES
-printf '[display]\nwindow/size/mode=0\nwindow/size/window_width_override=1280\nwindow/size/window_height_override=720\n' > override.cfg
+printf '[display]\nwindow/size/mode=0\nwindow/size/window_width_override=2560\nwindow/size/window_height_override=1440\n' > override.cfg
 rec() { # name, tour, extra env...
   local name=$1 tour=$2; shift 2
   env GW_AUTOSTART=operator GW_AUTOPLAY=operator:40 GW_TOUR=$tour "$@" timeout 240 godot --path . --rendering-driver vulkan --write-movie $T/$name.avi --fixed-fps 24 > /dev/null 2>&1

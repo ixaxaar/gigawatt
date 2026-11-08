@@ -2,6 +2,20 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.8.0] - 2026-11-08
+
+### Added
+- **Networking is part of the game loop.** Scale-out links now flap and die: optics most, AOC less, DACs almost never, more often on bigger fabrics and with a short-staffed crew. A down link cuts the cluster's scale-out bandwidth (a collective is only as fast as its slowest rail) until it is replaced: next month from spares on the shelf, after a 3-month RMA without. Keep spare cables and optics in the Warehouse. The engine has its own random stream for this, so existing contract and failure draws are unchanged.
+- **Network health on screen.** A NETWORK box in the top bar (bandwidth left, links down, or uplink saturation; click to open the Supercomputer screen), a Network card on the Overview (per-cluster fabric, GB/s per GPU, oversubscription, links down, internet uplink use), "links down" and "uplink nearly full" entries in Needs you now, a warning on the Supercomputer screen, and faulted clusters' overhead runs and billboards turn red in the hall.
+- **Device layouts.** The shell now has three layouts, picked automatically and forceable in Settings ▸ Display: desktop (monitors, laptops, consoles), handheld (Steam Deck, 7-8 inch tablets, small laptop windows: compact top bar, bigger dock, wider drawers) and phone (a slim top bar, a dock rail down the left edge, full-screen drawers, 2x scaling). Phones and tablets are locked to landscape. Touch: one finger pans and taps, two fingers pinch to zoom and orbit.
+- **Mobile groundwork.** The engine can serve its protocol over a loopback socket (`bridge.mjs --port N`, or `GW_ENGINE_PORT`), the game connects to it when no process can be spawned, and Android and iOS export presets are in the project. Store builds still need an in-process Node host: see docs/MOBILE.md.
+- Orange cable clips along the overhead cluster runs.
+
+### Changed
+- **Procure showroom** rebuilt: dark studio with a glossy floor and turntable, 4x MSAA and ambient occlusion where the tier allows, smoked-glass door and side panels without the washed-out highlights, rack rails with U markings, rack ears and handles, drive bays, blanking panels over empty units, an accent stripe on every chassis.
+- The top bar no longer clips at 1280x800 (Menu was cut off on the Steam Deck).
+- Screenshots and guide clips are rendered at 3840x2160 and 2560x1440 and downscaled with Lanczos before compression.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added

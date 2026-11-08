@@ -457,7 +457,19 @@ func _build_plant(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 		var l := OmniLight3D.new(); l.light_color = Color(1, 0.3, 0.2); l.light_energy = 1.0; l.omni_range = 8.0; l.position = Vector3(cx, 2.5, cz); dyn.add_child(l)
 
 ## Overhead scale-out cabling: each cluster's racks are strung together by a coloured run above the cable trays.
+var _fault_mats: Array = []
+## cluster id -> links down right now (from the engine's network health).
+func _links_down() -> Dictionary:
+	var out := {}
+	var nh = b.q("netHealth")
+	if nh is Dictionary:
+		for c in nh.clusters:
+			if int(c.down) > 0: out[str(c.id)] = int(c.down)
+	return out
+
 func _build_cables(hall: Dictionary) -> void:
+	_fault_mats.clear()
+	var down := _links_down()
 	if hall.racks.size() > 300 or hall.racks.size() < 2: return
 	var by := {}
 	for r in hall.racks:
@@ -466,19 +478,37 @@ func _build_cables(hall: Dictionary) -> void:
 		if not by.has(cid): by[cid] = []
 		by[cid].append(int(r.slot))
 	var n := 0
+	var clips: Array = []
 	for cid in by:
 		var slots: Array = by[cid]; slots.sort()
 		if slots.size() < 2: continue
-		var col: Color = Kit.cluster_color(b.g, cid); var mat := _emit(col, 1.8, false); var y := 2.8 + float(n % 3) * 0.07; n += 1
+		var col: Color = Kit.cluster_color(b.g, cid); var mat := _emit(col, 1.8, false)
+		var bad: bool = down.has(str(cid))
+		if bad: mat = _emit(Color(1.0, 0.25, 0.2), 2.4, false); _fault_mats.append(mat)
+		var y := 2.8 + float(n % 3) * 0.07; n += 1
+		var poly := PackedVector3Array()
 		for k in slots.size():
 			var p := slot_pos(slots[k])
 			_cyl(dyn, Vector3(p.x, (RH + y) * 0.5, p.z), 0.03, y - RH, mat, "y")
-			if k == 0: continue
+			if k == 0: poly.append(Vector3(p.x, y, p.z)); continue
 			var q := slot_pos(slots[k - 1])
 			if absf(p.z - q.z) < 0.01: _cyl(dyn, Vector3((p.x + q.x) * 0.5, y, p.z), 0.03, absf(p.x - q.x), mat, "x")
 			else:
 				_cyl(dyn, Vector3(q.x, y, (p.z + q.z) * 0.5), 0.03, absf(p.z - q.z), mat, "z")
 				_cyl(dyn, Vector3((p.x + q.x) * 0.5, y, p.z), 0.03, absf(p.x - q.x), mat, "x")
+				poly.append(Vector3(q.x, y, p.z))
+			poly.append(Vector3(p.x, y, p.z))
+		# orange cable clips every ~1.1 m along the run
+		var total := 0.0
+		for i in range(1, poly.size()):
+			var a0 := poly[i - 1]; var a1 := poly[i]; var L := a0.distance_to(a1); total += L
+			var m := int(L / 1.1)
+			for j in range(1, m + 1): if clips.size() < 1600: clips.append(a0.lerp(a1, float(j) / float(m + 1)))
+	if not clips.is_empty():
+		var mm := MultiMesh.new(); mm.transform_format = MultiMesh.TRANSFORM_3D; var bm := BoxMesh.new(); bm.size = Vector3(0.07, 0.07, 0.07); mm.mesh = bm; mm.instance_count = clips.size()
+		for i in clips.size(): mm.set_instance_transform(i, Transform3D(Basis(), clips[i]))
+		var mi := MultiMeshInstance3D.new(); mi.multimesh = mm; mi.material_override = _solid(Color(1.0, 0.45, 0.08), 0.5, 0.0); mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; dyn.add_child(mi)
+
 
 func _build_overhead(sz: Vector2, cx: float, ov: Node3D) -> void:
 	var tray := _pbr("plate", 1.3, Color(1.0, 1.0, 1.05))
@@ -563,8 +593,9 @@ func _build_boards() -> void:
 		var sum := Vector3.ZERO
 		for k in sl: sum += slot_pos(k)
 		var ctr: Vector3 = sum / float(sl.size())
-		var l := Label3D.new(); l.text = "%s · %d racks" % [c.name, sl.size()]
-		l.font_size = 48; l.pixel_size = 0.00024; l.modulate = (c.color as Color).lightened(0.35); l.outline_size = 14; l.outline_modulate = Color(0, 0, 0, 0.95)
+		var dn: int = int(_links_down().get(str(cid), 0))
+		var l := Label3D.new(); l.text = "%s · %d racks%s" % [c.name, sl.size(), (" · %d link%s down" % [dn, "" if dn == 1 else "s"]) if dn > 0 else ""]
+		l.font_size = 48; l.pixel_size = 0.00024; l.modulate = Color(1.0, 0.55, 0.5) if dn > 0 else (c.color as Color).lightened(0.35); l.outline_size = 14; l.outline_modulate = Color(0, 0, 0, 0.95)
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED; l.shaded = false; l.no_depth_test = true; l.fixed_size = true
 		l.position = Vector3(ctr.x, RH + 1.1, ctr.z); dyn.add_child(l); _boards.append(l); l.visible = not _labels_show()
 
@@ -639,6 +670,7 @@ func _process(dt: float) -> void:
 	_t += dt
 	if auto_orbit and not Settings.reduced_motion: yaw += dt * orbit_speed; _update_cam()
 	if _beacon != null: _beacon.light_energy = 1.5 + 1.5 * sin(_t * 6.0)
+	if not _fault_mats.is_empty(): for m in _fault_mats: (m as StandardMaterial3D).emission_energy_multiplier = 1.2 + (0.0 if Settings.reduced_motion else 1.6 * (0.5 + 0.5 * sin(_t * 7.0)))
 	var k := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): k.x -= 1
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): k.x += 1
@@ -682,8 +714,36 @@ func _ray_pick(mp: Vector2) -> int:
 		if absf(g.x - p.x) <= RW * 0.5 and absf(g.z - p.z) <= RD * 0.5: return i
 	return -1
 
+## Touch: one finger pans (tap picks a rack, via the emulated mouse); two fingers pinch to zoom and drag together to orbit.
+var _touches := {}
+var _pinch_d := 0.0
+var _two_down := false
+func _touch_input(e: InputEvent) -> bool:
+	if e is InputEventScreenTouch:
+		var t := e as InputEventScreenTouch
+		if t.pressed: _touches[t.index] = t.position
+		else: _touches.erase(t.index)
+		_two_down = _touches.size() >= 2
+		if _two_down: _lheld = false; _lmoved = true; _pinch_d = (_touches.values()[0] as Vector2).distance_to(_touches.values()[1])
+		return false
+	if e is InputEventScreenDrag:
+		var d := e as InputEventScreenDrag
+		if not _touches.has(d.index): return false
+		var before: Vector2 = _touches.values()[0] if _touches.size() > 0 else Vector2.ZERO
+		_touches[d.index] = d.position
+		if _touches.size() >= 2:
+			var v: Array = _touches.values(); var nd: float = (v[0] as Vector2).distance_to(v[1])
+			if _pinch_d > 8.0 and nd > 8.0: dist = clampf(dist * (_pinch_d / nd), 2.5, 60.0)
+			_pinch_d = nd; auto_orbit = false
+			yaw -= d.relative.x * 0.004; pitch = clampf(pitch + d.relative.y * 0.003, 0.03, 1.45); _update_cam()
+			return true
+		return false
+	return false
+
 func _unhandled_input(e: InputEvent) -> void:
 	if b == null: return
+	if _touch_input(e): return
+	if _two_down and (e is InputEventMouseMotion or e is InputEventMouseButton): return
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
 		if (mb.pressed or mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN) and Kit.over_ui(self): return

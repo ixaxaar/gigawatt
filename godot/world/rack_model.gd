@@ -64,7 +64,7 @@ func build(sp: Dictionary, detail := 2, glass_sides := false) -> void:
 	_counts = {"scale_out": 0, "scale_up": 0, "mgmt": 0}
 	var n: int = spec.n; var acc: Color = spec.accent
 	var shell: Material = Site.rack_material(Site.current); var steel := HallMaterials.get_mat("steel", 1.1, Color(1.5, 1.5, 1.65)); var alu := HallMaterials.get_mat("alu", 1.0, Color(1.2, 1.2, 1.25))
-	var dark := _solid(Color(0.03, 0.035, 0.04), 0.8, 0.2)
+	var dark := _solid(Color(0.05, 0.055, 0.065), 0.7, 0.3); var fascia := _solid(Color(0.13, 0.145, 0.17), 0.62, 0.6)
 	# frame: four posts, top and bottom plates; side panels are separate so the x-ray view can drop them
 	for sx in [-1, 1]:
 		for sz in [-1, 1]: _box(self, Vector3(sx * (RW * 0.5 - 0.02), RH * 0.5, sz * (RD * 0.5 - 0.02)), Vector3(0.04, RH, 0.04), shell)
@@ -72,7 +72,7 @@ func build(sp: Dictionary, detail := 2, glass_sides := false) -> void:
 	sides = Node3D.new(); add_child(sides)
 	var side_mat: Material = steel
 	if glass_sides:   # showroom: see the chassis from any angle
-		var sg := StandardMaterial3D.new(); sg.albedo_color = Color(0.55, 0.7, 0.9, 0.09); sg.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; sg.cull_mode = BaseMaterial3D.CULL_DISABLED; sg.roughness = 0.1; side_mat = sg
+		var sg := StandardMaterial3D.new(); sg.albedo_color = Color(0.04, 0.055, 0.08, 0.5); sg.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; sg.cull_mode = BaseMaterial3D.CULL_DISABLED; sg.roughness = 1.0; sg.metallic = 0.0; sg.metallic_specular = 0.0; side_mat = sg
 	for sx in [-1, 1]: _box(sides, Vector3(sx * (RW * 0.5 - 0.004), RH * 0.5, 0), Vector3(0.008, RH - 0.06, RD - 0.08), side_mat)
 	# ToR switch: 1U at the top, 32 ports front-rear
 	var tor_y := RH - 0.2
@@ -87,7 +87,7 @@ func build(sp: Dictionary, detail := 2, glass_sides := false) -> void:
 		ys.append(cy)
 		var ch := hu * UH - 0.006
 		_box(self, Vector3(0, cy, 0.05), Vector3(0.47, ch, 0.8), steel)
-		_box(self, Vector3(0, cy, 0.458), Vector3(0.45, ch - 0.004, 0.012), dark)   # front fascia
+		_box(self, Vector3(0, cy, 0.458), Vector3(0.45, ch - 0.004, 0.012), fascia)   # front fascia
 		if wafer:
 			_box(self, Vector3(0, cy, 0.466), Vector3(0.3, ch * 0.5, 0.006), _emit(acc, 0.9 + 0.3 * sin(float(i))))
 		else:
@@ -95,8 +95,28 @@ func build(sp: Dictionary, detail := 2, glass_sides := false) -> void:
 			for g in gcount:
 				var gx := -0.19 + (g + 0.5) * 0.38 / float(gcount)
 				_box(self, Vector3(gx, cy + ch * 0.18, 0.468), Vector3(0.38 / float(gcount) * 0.7, ch * 0.28, 0.006), _emit(acc, 1.3))
-			for v in 6: _box(self, Vector3(-0.17 + v * 0.068, cy - ch * 0.22, 0.468), Vector3(0.05, ch * 0.2, 0.004), _solid(Color(0.01, 0.012, 0.015), 0.9, 0.0))
+			for v in 6: _box(self, Vector3(-0.17 + v * 0.068, cy - ch * 0.22, 0.468), Vector3(0.05, ch * 0.2, 0.004), _solid(Color(0.02, 0.025, 0.03), 0.9, 0.0))
 		_box(self, Vector3(0.2, cy + ch * 0.38, 0.47), Vector3(0.016, 0.012, 0.004), _emit(Color(0.2, 1.0, 0.4), 2.0))
+		if detail >= 2:   # rack ears with handles, an accent stripe, vent slots and a bank of drive bays
+			for sx in [-1, 1]:
+				_box(self, Vector3(sx * 0.2425, cy, 0.462), Vector3(0.025, ch, 0.006), alu)
+				_box(self, Vector3(sx * 0.2425, cy, 0.472), Vector3(0.008, minf(ch * 0.5, 0.09), 0.012), alu)
+			_box(self, Vector3(0, cy + ch * 0.5 - 0.004, 0.466), Vector3(0.45, 0.004, 0.008), _emit(acc, 0.8))
+			if not wafer and ch > 0.07:
+				for d in 8: _box(self, Vector3(-0.19 + d * 0.0545, cy - ch * 0.38, 0.468), Vector3(0.046, minf(ch * 0.14, 0.02), 0.005), _solid(Color(0.09, 0.1, 0.12), 0.5, 0.6))
+	# blanking panels over the unused U above the chassis, like a real rack
+	var top_y: float = float(ys.back()) + hu * UH * 0.5 + 0.01; var by_ := top_y
+	while by_ < tor_y - 0.12:
+		var ph := minf(UH * 2.0, tor_y - 0.12 - by_)
+		if ph < UH * 0.9: break
+		_box(self, Vector3(0, by_ + ph * 0.5, 0.455), Vector3(0.45, ph - 0.004, 0.008), _solid(Color(0.075, 0.08, 0.09), 0.55, 0.5))
+		if detail >= 2: for sx in [-1, 1]: _box(self, Vector3(sx * 0.215, by_ + ph * 0.5, 0.461), Vector3(0.008, 0.008, 0.004), alu)
+		by_ += ph + 0.002
+	if detail >= 2:   # mounting rails with a tick every 3U on the front posts
+		for sx in [-1, 1]:
+			_box(self, Vector3(sx * (RW * 0.5 - 0.045), RH * 0.5, RD * 0.5 - 0.03), Vector3(0.016, RH - 0.1, 0.006), alu)
+			var uy := 0.09
+			while uy < RH - 0.14: _box(self, Vector3(sx * (RW * 0.5 - 0.045), uy, RD * 0.5 - 0.024), Vector3(0.012, 0.003, 0.002), dark); uy += UH * 3.0
 	# PDUs on the rear posts
 	for sx in [-1, 1]: _box(self, Vector3(sx * (RW * 0.5 - 0.06), RH * 0.5 - 0.1, -RD * 0.5 + 0.1), Vector3(0.05, RH - 0.5, 0.05), dark)
 	# cooling hardware
@@ -111,7 +131,7 @@ func build(sp: Dictionary, detail := 2, glass_sides := false) -> void:
 		for k in 4: _box(rd, Vector3(0, -0.6 + k * 0.4, -0.055), Vector3(0.38, 0.38, 0.01), dark)
 	# front door, hinged on the left
 	door = Node3D.new(); door.position = Vector3(-RW * 0.5 + 0.01, 0, RD * 0.5 + 0.006); add_child(door)
-	var gm := StandardMaterial3D.new(); gm.albedo_color = Color(0.5, 0.65, 0.8, 0.07); gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; gm.roughness = 0.1; gm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var gm := StandardMaterial3D.new(); gm.albedo_color = Color(0.03, 0.045, 0.07, 0.3); gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; gm.roughness = 1.0; gm.metallic = 0.0; gm.metallic_specular = 0.0; gm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_box(door, Vector3(RW * 0.5 - 0.01, RH * 0.5, 0), Vector3(RW - 0.03, RH - 0.1, 0.012), gm)
 	_box(door, Vector3(0.015, RH * 0.5, 0.004), Vector3(0.025, RH - 0.1, 0.02), shell); _box(door, Vector3(RW - 0.05, RH * 0.5, 0.004), Vector3(0.025, RH - 0.1, 0.02), shell)
 	_box(door, Vector3(RW - 0.08, RH * 0.5, 0.02), Vector3(0.02, 0.2, 0.02), alu)

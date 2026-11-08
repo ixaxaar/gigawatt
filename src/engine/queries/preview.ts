@@ -4,11 +4,12 @@ import { selectMonthlyPnL } from '../selectors';
 import { staffNeeded } from '../../sim/staffing';
 import { policyOf, maintenanceUSD } from '../../sim/policy';
 import { G } from './shared';
-import { fleetOf, needsOf, offerMoney } from '../needs';
+import { fleetOf, needsOf, offerMoney, netHealth } from '../needs';
 import { CHAPTERS, DILEMMAS } from '../../sim/story-data';
 
 export const previewQueries: Record<string, (...a: any[]) => any> = {
   fleet: () => fleetOf(G()),
+  netHealth: () => netHealth(G()),
   offerMoney: () => { const g = G(); return Object.fromEntries(g.availableContracts.map((c) => [c.id, offerMoney(g, c)])); },
   needs: () => needsOf(G()),
   board: () => { const g = G(); return g.board ?? null; },

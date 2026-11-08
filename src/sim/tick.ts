@@ -21,6 +21,7 @@ import { story } from './systems/story';
 import { rivalsSystem } from './systems/rivals';
 import { vendorsSystem } from './systems/vendors';
 import { launchesSystem } from './systems/launches';
+import { linkFaults, applyLinkFaults } from './systems/links';
 
 export type { TickOptions } from './systems/types';
 
@@ -44,7 +45,7 @@ export const rackFailureProb = (
 
 /** The month, in order. Add new dynamics by inserting a System here. */
 export const PIPELINE: readonly System[] = [
-  deliveries, vendorsSystem, floorSpace, commissioning, clusterStats, staffingCheck, failures, pue,
+  deliveries, vendorsSystem, floorSpace, commissioning, clusterStats, staffingCheck, failures, linkFaults, pue,
   serveContracts, rivalsSystem, contractMarket, worldEvents, launchesSystem, spotAndPower, finances, history, story, board, endgame,
 ];
 
@@ -71,7 +72,7 @@ export function advanceMonth(state: GameState, opts: TickOptions = {}): GameStat
     placed: [], placedById: new Map(), cluster,
     refreshStats: () => {
       const online = (cl: GameState['clusters'][number]) => cl.rackIds.filter((id) => c.placedById.get(id)?.status === 'online');
-      for (const cl of s.clusters) cl.stats = evaluateCluster({ ...cl, rackIds: online(cl) }, cluster);
+      for (const cl of s.clusters) cl.stats = applyLinkFaults(cl, evaluateCluster({ ...cl, rackIds: online(cl) }, cluster));
     },
     revenue: 0, served: new Set(), opexUSD: 0, depreciation: 0, interest: 0,
   };

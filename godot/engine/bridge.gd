@@ -3,7 +3,34 @@ extends Node
 ## Client for the headless TypeScript engine (sidecar/bridge.mjs). All game rules live there.
 
 signal changed
-var _io: FileAccess
+var _io   # FileAccess (a spawned Node process) or EngineSocket (an engine that is already running)
+
+## The same line protocol over a loopback socket, for hosts that cannot spawn Node: on Android and iOS an in-process Node
+## (nodejs-mobile) runs sidecar/bridge.mjs with `--port N`; on desktop GW_ENGINE_PORT=N connects to a hand-started engine.
+class EngineSocket extends RefCounted:
+	var peer := StreamPeerTCP.new()
+	var _buf := ""
+	func open(port: int, timeout_s := 8.0) -> bool:
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < int(timeout_s * 1000.0):
+			peer = StreamPeerTCP.new()
+			if peer.connect_to_host("127.0.0.1", port) == OK:
+				while peer.get_status() == StreamPeerTCP.STATUS_CONNECTING: peer.poll(); OS.delay_msec(5)
+				if peer.get_status() == StreamPeerTCP.STATUS_CONNECTED: peer.set_no_delay(true); return true
+			OS.delay_msec(100)
+		return false
+	func store_line(l: String) -> void: peer.put_data((l + "\n").to_utf8_buffer())
+	func flush() -> void: pass
+	func get_line() -> String:
+		while true:
+			var i := _buf.find("\n")
+			if i >= 0: var out := _buf.substr(0, i); _buf = _buf.substr(i + 1); return out
+			peer.poll()
+			if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED: return ""
+			var n := peer.get_available_bytes()
+			if n > 0: _buf += peer.get_utf8_string(n)
+			else: OS.delay_usec(200)
+		return ""
 var _pid := -1
 var _id := 0
 var g: Dictionary = {}
@@ -31,9 +58,15 @@ func start() -> bool:
 	if node == "": node = "node"                                                       # fall back to system Node
 	var saves := ProjectSettings.globalize_path("user://saves")   # saves live in the user data folder so they survive quitting
 	DirAccess.make_dir_recursive_absolute(saves)
-	var p := OS.execute_with_pipe(node, [path, saves])
-	if p.is_empty(): last_error = "Could not start the engine (%s). Install Node.js 18+ or use the packaged release." % node; return false
-	_io = p.stdio; _pid = p.pid
+	var port := int(OS.get_environment("GW_ENGINE_PORT")) if OS.has_environment("GW_ENGINE_PORT") else (int(ProjectSettings.get_setting("gigawatt/engine_port", 47820)) if OS.has_feature("android") or OS.has_feature("ios") else 0)
+	if port > 0:
+		var sk := EngineSocket.new()
+		if not sk.open(port): last_error = "Could not reach the engine on port %d." % port; return false
+		_io = sk
+	else:
+		var p := OS.execute_with_pipe(node, [path, saves])
+		if p.is_empty(): last_error = "Could not start the engine (%s). Install Node.js 18+ or use the packaged release." % node; return false
+		_io = p.stdio; _pid = p.pid
 	var r := _req({"fn": "init"})
 	if not r.get("ok", false): last_error = str(r.get("error", "engine init failed")); return false
 	var res: Dictionary = r.result
@@ -52,7 +85,7 @@ func _req(d: Dictionary) -> Dictionary:
 	_id += 1; d["id"] = _id
 	var t0 := Time.get_ticks_usec()
 	_io.store_line(JSON.stringify(d)); _io.flush()
-	var line := _io.get_line()
+	var line: String = _io.get_line()
 	var t1 := Time.get_ticks_usec()
 	var r = JSON.parse_string(line)
 	req_n += 1; req_us += Time.get_ticks_usec() - t0

@@ -10,6 +10,8 @@ static var music_mode := "auto"
 ## UI scale on top of the automatic window stretch. 0 = auto (handhelds and small laptops are scaled up to native size).
 static var ui_scale := 0.0
 static var text_boost := 1.0
+## Layout class: "auto" picks desktop, handheld or phone from the device; or force one.
+static var layout := "auto"
 static var colorblind := false
 static var reduced_motion := false
 static var high_contrast := false
@@ -142,7 +144,7 @@ static func load_all() -> void:
 	if c.get_value("a", "ui_scale_auto", true): ui_scale = 0.0
 	text_boost = clampf(float(c.get_value("a", "text_boost", 1.0)), 1.0, 1.5)
 	colorblind = bool(c.get_value("a", "colorblind", false)); reduced_motion = bool(c.get_value("a", "reduced_motion", false)); high_contrast = bool(c.get_value("a", "high_contrast", false))
-	theme = str(c.get_value("a", "theme", "midnight"))
+	theme = str(c.get_value("a", "theme", "midnight")); layout = str(c.get_value("a", "layout", "auto")); if not layout in ["auto", "desktop", "handheld", "phone"]: layout = "auto"
 	gpu = str(c.get_value("a", "gpu", "auto")); if not gpu in ["auto", "dgpu", "igpu"]: gpu = "auto"
 	site_seen = bool(c.get_value("a", "site_seen", false)); var sl = c.get_value("a", "site_last", {}); site_last = sl if sl is Dictionary else {}
 	preset = int(c.get_value("a", "preset", -1)); render_scale = float(c.get_value("a", "render_scale", 0.0))
@@ -154,18 +156,17 @@ static func save_all() -> void:
 	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode)
 	c.set_value("a", "ui_scale", ui_scale); c.set_value("a", "ui_scale_auto", ui_scale <= 0.0); c.set_value("a", "text_boost", text_boost)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "high_contrast", high_contrast)
-	c.set_value("a", "theme", theme); c.set_value("a", "gpu", gpu); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
+	c.set_value("a", "theme", theme); c.set_value("a", "layout", layout); c.set_value("a", "gpu", gpu); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
 	c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)
 	c.save(PATH)
 
 ## UI scale actually used: the explicit choice, or auto (undo the window stretch on small windows so text stays native-size).
 static func effective_ui_scale(window: Window) -> float:
-	var s := ui_scale
-	if s <= 0.0:
-		var sz := window.size
-		var s0 := minf(float(sz.x) / 1920.0, float(sz.y) / 1080.0)
-		s = clampf(1.0 / maxf(s0, 0.01), 1.0, 1.75) if s0 < 1.0 else 1.0
-	return s * text_boost
+	if ui_scale > 0.0: return ui_scale * text_boost
+	Layout.update(window)
+	var sz := Vector2(window.size)
+	var s0 := maxf(minf(sz.x / 1920.0, sz.y / 1080.0), 0.01)   # the project's canvas_items stretch scale
+	return clampf(Layout.total_scale(window) / s0, 0.3, 6.0) * text_boost
 
 ## Push the current values into the engine (call after load and after every change).
 static func apply(window: Window) -> void:

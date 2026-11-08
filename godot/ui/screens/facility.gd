@@ -37,7 +37,7 @@ func _rebuild() -> void:
 	var hi: int = clampi(app.hall.hall_i, 0, g.halls.size() - 1); var hall: Dictionary = g.halls[hi]
 	var hs: Dictionary = b.q("hallStats", [hall.id])
 	# ---- right column
-	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -500; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
+	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -app.overlay_w() + 20.0; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var rv := VBoxContainer.new(); rv.add_theme_constant_override("separation", 8); rp.add_child(rv)
 	rv.add_child(app.tab_strip("facility"))
 	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 6); rv.add_child(hd); hd.add_child(Kit.label("BUILD", 22, Kit.CY))

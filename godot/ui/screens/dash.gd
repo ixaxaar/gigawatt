@@ -57,6 +57,24 @@ func _do_need(n: Dictionary) -> void:
 func _fold(title: String, key: String, col: Control, default_collapsed := true) -> Array:
 	return Kit.fold_panel(title, key, folds, func(): refresh(), false, col, default_collapsed)
 
+## The fabric at a glance: bandwidth per cluster, links down, and the internet uplink. Click through to the Supercomputer screen.
+func _net_card(col: Control, nh) -> void:
+	if not (nh is Dictionary) or (nh.clusters.is_empty() and float(nh.uplink.needGbps) <= 0.0): return
+	var lv := int(nh.level); var tint: Color = [Kit.GR, Kit.AM, Kit.RD][lv]
+	var np := _fold("Network · %s" % nh.summary, "net", col, lv == 0)
+	for c in nh.clusters:
+		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 8); np[1].add_child(r)
+		var tv := VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(tv)
+		tv.add_child(Kit.label("%s · %s accelerators" % [c.name, Kit.num(c.accels)], 13, Kit.TX, true))
+		tv.add_child(Kit.label("%s %s%s · %.1f GB/s per GPU" % [str(c.tech).to_upper(), str(c.topology).replace("-", " "), (" · %d:1" % int(c.oversub)) if float(c.oversub) > 1.0 else "", float(c.gbs)], 12, Kit.DIM, true))
+		if int(c.down) > 0: tv.add_child(Kit.label("🔗 %d × %s down (-%.1f%% bandwidth), fixed in %s%s" % [int(c.down), c.cableName, float(c.loss) * 100.0, Kit.date_of(int(c.fixMonth)), "" if c.fromSpares else " · no spares on the shelf"], 12, Kit.RD, true))
+		r.add_child(Kit.chip("DOWN" if int(c.down) > 0 else "OK", Kit.RD if int(c.down) > 0 else Kit.GR, 12))
+	var up: Dictionary = nh.uplink
+	if not up.unlimited and float(up.gbps) > 0.0:
+		np[1].add_child(Kit.label("Internet uplink: %.1f of %.0f Gb/s used (%d%%)" % [float(up.needGbps), float(up.gbps), int(float(up.pct) * 100.0)], 12, tint if lv == 2 or float(up.pct) > 0.85 else Kit.DIM, true))
+		np[1].add_child(Kit.bar(float(up.pct), 1.0, float(up.pct) > 0.85))
+	np[1].add_child(Kit.link("Open Supercomputer →", func(): app.go("network"), 12))
+
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
 func _rebuild() -> void:
@@ -65,7 +83,7 @@ func _rebuild() -> void:
 	var p: Dictionary = b.q("pnl"); var hist: Array = g.history.slice(maxi(0, g.history.size() - 24))
 	var accels: float = 0.0; for c in g.clusters: accels += c.stats.accelerators if c.get("stats") != null else 0.0
 	var serving: int = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0).size()
-	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -500; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
+	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -app.overlay_w() + 20.0; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var col := Kit.column(rp, 0, true)
 	_needs(col, b.q("needs"))
 	_preview(col, b.q("preview"))
@@ -96,6 +114,7 @@ func _rebuild() -> void:
 		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 8); mp[1].add_child(r)
 		var tv := VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(tv); tv.add_child(Kit.label("%s  +%s" % [m.title, Kit.usd(m.reward)], 13, Kit.TX, true)); tv.add_child(Kit.label(m.hint, 11, Kit.DIM, true))
 		r.add_child(Kit.btn("Go →", func(): app.go(m.go if m.go != "finance" else "dash"), "", 12))
+	_net_card(col, b.q("netHealth"))
 	var cp := _fold("Customers (%d)" % g.activeContracts.size(), "customers", col, g.activeContracts.size() > 4)
 	if g.activeContracts.is_empty(): cp[1].add_child(Kit.label("None yet — open Customers.", 13, Kit.DIM))
 	for a in g.activeContracts:

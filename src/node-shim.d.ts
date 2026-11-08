@@ -9,7 +9,8 @@ declare module 'node:fs' {
   export function unlinkSync(p: string): void;
 }
 declare module 'node:path' { export function join(...p: string[]): string; }
-declare const process: { argv: string[]; stdin: any; stdout: { write(s: string): void }; env: Record<string, string | undefined> };
+declare module 'node:net' { export function createServer(cb: (sock: any) => void): { listen(port: number, host: string, cb: () => void): void }; }
+declare const process: { argv: string[]; stdin: any; stdout: { write(s: string): void }; stderr: { write(s: string): void }; env: Record<string, string | undefined> };
 declare const console: { log(...a: unknown[]): void; warn(...a: unknown[]): void; error(...a: unknown[]): void };
 declare const localStorage: { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void };
 declare const performance: { now(): number };

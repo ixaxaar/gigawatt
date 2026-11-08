@@ -368,6 +368,17 @@ export interface Cluster {
   fabric: FabricDesign;
   /** Derived at evaluation time. */
   stats?: ClusterStats;
+  /** Scale-out links that are down right now (flapping optics, dirty fibre, dead cables). Repaired from spares next month, or after an RMA. */
+  linkFaults?: LinkFaults;
+}
+export interface LinkFaults {
+  down: number;
+  /** Links of every kind in the fabric when the fault happened (for the share that is down). */
+  total: number;
+  cableId: string;
+  fixMonth: number;
+  /** Fixed from the shelf (true) or waiting on a replacement order (false). */
+  fromSpares: boolean;
 }
 export interface ClusterStats {
   accelerators: number;
@@ -382,6 +393,8 @@ export interface ClusterStats {
   effScaleOutGBs: number;
   switchCounts: Record<string, number>;
   cableCounts: Record<string, number>;
+  /** Share of the fabric's scale-out bandwidth lost to down links (0 when healthy). */
+  linkLoss?: number;
   issues: ValidationIssue[];
 }
 
