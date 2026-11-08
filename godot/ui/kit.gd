@@ -250,6 +250,8 @@ static func panel(title := "", glow := false, parent: Control = null) -> Array:
 
 ## Two-column screens become ONE column inside a drawer (both names point at the same scrolling list): left content first, then right.
 static func cols2(root: Control) -> Array:
+	if Layout.touch and _wrapped(root):   # one scroller per screen: this column just flows inside it
+		var fv := VBoxContainer.new(); fv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; fv.add_theme_constant_override("separation", 10); root.add_child(fv); return [fv, fv]
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if Layout.phone else ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); root.add_child(sc)
 	return [v, v]
@@ -277,8 +279,16 @@ static func fit_split(cols: Container, app, pref: Array) -> void:
 		c.custom_minimum_size.x = (avail - gap) * float(pref[mini(i, pref.size() - 1)]) / sum if fits else avail
 		c.size_flags_horizontal = Control.SIZE_FILL
 
-static func column(parent: Control, min_w := 0.0, expand := true, flat := false) -> VBoxContainer:
-	if flat and Layout.touch:   # the whole screen already scrolls: no scroll area of its own
+## True when the node sits inside a touch screen's single scroller (ScreenScroll): nested scroll areas are then flattened into it.
+static func _wrapped(n: Node) -> bool:
+	var p := n
+	while p != null:
+		if p is ScreenScroll: return true
+		p = p.get_parent()
+	return false
+
+static func column(parent: Control, min_w := 0.0, expand := true, flat := false, own_scroll := false) -> VBoxContainer:
+	if Layout.touch and not own_scroll and (flat or _wrapped(parent)):   # the whole screen already scrolls: no scroll area of its own
 		var fv := VBoxContainer.new(); fv.add_theme_constant_override("separation", 10); fv.custom_minimum_size = Vector2(min_w, 0)
 		if expand: fv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		parent.add_child(fv); return fv

@@ -71,7 +71,7 @@ func _rebuild() -> void:
 		cols = HBoxContainer.new(); cols.add_theme_constant_override("separation", 12); cols.size_flags_vertical = Control.SIZE_EXPAND_FILL; hs.add_child(cols)
 	else:
 		cols = Kit.cols_row(); root.add_child(cols)
-	var c1 := Kit.column(cols, colw if touch else 380, false)
+	var c1 := Kit.column(cols, colw if touch else 380, false, false, true)
 	c1.add_child(Kit.tip("A cluster is racks + a network. Scale-up (NVLink, purple boxes) links GPUs inside a rack at TB/s; scale-out (InfiniBand/Ethernet, green/gold) links racks. Training needs both; inference mostly needs memory and tokens/s."))
 	var p1 := Kit.panel("1 · Pick racks", true, c1)
 	if free.is_empty(): p1[1].add_child(Kit.label("No free online racks — deploy racks in Warehouse and wait for commissioning. (You can also serve a customer straight from racks in Customers.)", 12, Kit.DIM, true))
@@ -118,7 +118,7 @@ func _rebuild() -> void:
 		p3[1].add_child(Kit.hsep())
 	# center: topology + stat strip
 	var cc: VBoxContainer
-	if touch: cc = Kit.column(cols, colw, false)
+	if touch: cc = Kit.column(cols, colw, false, false, true)
 	else: cc = VBoxContainer.new(); cc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; cc.add_theme_constant_override("separation", 10); cols.add_child(cc)
 	var tp := Kit.panel("Topology", true, cc); tp[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var tv := TopoView.new(); tv.size_flags_vertical = Control.SIZE_EXPAND_FILL; tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tv.f = f; tv.stats = stats
@@ -136,7 +136,7 @@ func _rebuild() -> void:
 		var sp := Kit.panel("", false, cc)
 		sp[1].add_child(Kit.stats([["Accelerators", Kit.num(stats.accelerators)], ["Scale-up domain", str(int(stats.scaleUpDomain))], ["FP8 compute", "%s PF" % Kit.num(stats.peakPFLOPSFp8, 1)], ["Memory", "%s TB" % Kit.num(stats.totalMemGB / 1000.0, 1)], ["Power", "%s kW" % Kit.num(stats.powerKW)], ["Scale-out / GPU", "%.1f GB/s" % stats.effScaleOutGBs, Kit.GR if stats.effScaleOutGBs >= tier else Kit.AM], ["Bisection", "%s Tb/s" % Kit.num(stats.bisectionTbps)], ["Network capex", Kit.usd(cap)]], 4))
 	# right: what can it do + checks
-	var c3 := Kit.column(cols, colw if touch else 420, false)
+	var c3 := Kit.column(cols, colw if touch else 420, false, false, true)
 	var wp := Kit.panel("3 · What can this machine do?", true, c3)
 	if stats == null: wp[1].add_child(Kit.label("Select racks to see which models it can train and serve.", 13, Kit.DIM, true))
 	else:
