@@ -12,8 +12,12 @@ All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepa
 - **UI themes.** Four dark (Midnight, Graphite, Ember, High contrast) and three light (Paper, Sand, Mist), switchable live in Settings ▸ Display.
 - **Guide clips.** Scripted looping clips (the loop, the showroom, the cabling, the looks, the themes) in the README, the wiki's "See it in action" page and the website, recorded by `scripts/gifs.sh`; `scripts/shots.sh` retakes the screenshots, now with close-ups.
 - Wiki pages "See it in action" and "Make it yours".
+- **Money line in the top bar.** Cash, revenue, burn and net per month, net worth, debt (only when you have a loan) and reputation sit in the top bar with tooltips; the bottom cards on the Overview are gone.
 
 ### Changed
+- **Font.** Chakra Petch (OFL) replaces Fira Code in the game, website and wiki: narrower and sharper at small sizes.
+- **Start-up sound** is a soft low swell instead of a bright chime, about 6 dB quieter with almost nothing above 2 kHz.
+- Website restyled: darker stat strip with coloured numbers, new Watch and Make-it-yours sections.
 - README, website and wiki screenshots retaken with the textured hall.
 
 ## [0.6.0] - 2026-11-08

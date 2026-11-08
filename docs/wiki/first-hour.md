@@ -51,7 +51,7 @@ Open **Facility → Energy**. Compare plant offers (solar, gas, hydro, nuclear, 
 
 ## 10 · Earn revenue
 
-Advance a month with an active contract. Revenue minus power, staff, support, depreciation and interest is your profit — the plaques at the bottom of the Overview screen show revenue, burn and net per month. Utilization is everything: an idle rack still costs money, so put spare capacity on the spot market.
+Advance a month with an active contract. Revenue minus power, staff, support, depreciation and interest is your profit — the top bar shows revenue, burn and net per month. Utilization is everything: an idle rack still costs money, so put spare capacity on the spot market.
 
 ## After the first hour
 

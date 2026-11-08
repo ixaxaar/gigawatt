@@ -2,7 +2,7 @@
 
 *Cash, loans and interest, depreciation, staffing, hardware lifecycle and resale — everything on the Operations screen.*
 
-The core equation, visible on the Overview plaques: **revenue − burn = net**, where burn is power + staff + support + interest, and the net figure is stated after depreciation. Utilization is everything — an idle rack earns nothing while it still draws power and depreciates. **Net worth = cash − debt + assets at residual value**: only profitable months compound, borrowed scale does not.
+The core equation, visible in the top bar (revenue, burn and net per month): **revenue − burn = net**, where burn is power + staff + support + interest, and the net figure is stated after depreciation. Utilization is everything — an idle rack earns nothing while it still draws power and depreciates. **Net worth = cash − debt + assets at residual value**: only profitable months compound, borrowed scale does not.
 
 ## Cash, loans and bankruptcy
 

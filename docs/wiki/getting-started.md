@@ -46,7 +46,7 @@ Press the number key or click the dock. Pressing the key of the open drawer agai
 
 | Key | Drawer | What's inside |
 |---|---|---|
-| 1 | **Overview** (Datacenter) | The 3D hall, cash plaques, a next-month preview, Learning-path missions, Easy-path projects, customers and the event log |
+| 1 | **Overview** (Datacenter) | The 3D hall, the money line in the top bar, a next-month preview, Learning-path missions, Easy-path projects, customers and the event log |
 | 2 | **Customers** | Market offers with live fit verdicts, contracts, assignment |
 | 3 | **Supply** | **Procure** (guided planner, parts bin, roadmap) and **Warehouse** (assembly, deploy, spares, ledger) |
 | 4 | **Facility** | **Build** (power, cooling, floor space, internet, halls) and **Energy** (PPAs, spot market) |

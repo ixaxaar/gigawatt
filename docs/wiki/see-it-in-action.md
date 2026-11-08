@@ -7,7 +7,7 @@ New to the game? These clips show the main moves in about ten seconds each. The 
 ## The loop in one clip
 
 ![The drawers and the monthly loop](img/tour-basics.webp)
-*Open the drawers from the dock, look at the hall in thermal view, then let months pass and watch the revenue, burn and cash plaques move.*
+*Open the drawers from the dock, look at the hall in thermal view, then let months pass and watch the revenue, burn and cash in the top bar move.*
 
 ## Picking a rack in the Supply drawer
 

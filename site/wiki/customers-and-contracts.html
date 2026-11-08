@@ -14,7 +14,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="../assets/FiraCode-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
@@ -33,7 +33,7 @@
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html" aria-current="page">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html" aria-current="page">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
   </aside>
   <main id="main" class="doc">
     <h1>Customers and contracts</h1>
@@ -44,6 +44,7 @@
 <p>Each offer also shows its archetype (startup, lab, enterprise, sovereign), the model, the duration in months, an <strong>SLA availability</strong> target, and a deadline by which you must sign or the offer disappears.</p>
 <figure><img loading="lazy" src="img/customers.webp" alt="Customers and contracts"><figcaption>Market offers with live fit verdicts and what you still lack.</figcaption></figure>
 <figure><img loading="lazy" src="img/contract-offers.webp" alt="Offers lead with what they pay: monthly revenue, total value"><figcaption>Offers lead with what they pay: monthly revenue, total value and profit after power. The requirements fold open when you want the detail.</figcaption></figure>
+<p>Every customer has its own logo, drawn from its name: you will see the same badge on its offers and contracts, on the Overview, on the rack inspector, on the end screen's best deal, and on the rack tops in the hall when you are close.</p>
 <h2 id="fit-verdicts">Fit verdicts</h2>
 <p>Every offer carries a live verdict computed against your actual fleet:</p>
 <ul><li><strong>✓ CAN SERVE NOW</strong> — an existing cluster meets every check. Sign and go live immediately.</li><li><strong>◔ CAN BUILD IN TIME</strong> — you can buy and commission hardware before the ramp window closes.</li><li><strong>✗ NEED MORE / DIFFERENT HARDWARE</strong> — below, the <em>What you need to buy</em> box names the exact racks (template, quantity, tier) that would cover the contract, when they would be ready, and whether that fits the ramp window — plus any hall gaps (power, cooling, floor) you'd need to close first. If nothing on the market can meet it, it says so: wait for a later GPU generation.</li><li><strong>✗ NO CLUSTER YET</strong> — build one on the Supercomputer screen.</li></ul>
