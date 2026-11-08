@@ -735,7 +735,7 @@ func _touch_input(e: InputEvent) -> bool:
 			var v: Array = _touches.values(); var nd: float = (v[0] as Vector2).distance_to(v[1])
 			if _pinch_d > 8.0 and nd > 8.0: dist = clampf(dist * (_pinch_d / nd), 2.5, 60.0)
 			_pinch_d = nd; auto_orbit = false
-			yaw -= d.relative.x * 0.002; pitch = clampf(pitch - d.relative.y * 0.0015, 0.03, 1.45); _update_cam()
+			yaw -= d.relative.x * 0.002; pitch = clampf(pitch + d.relative.y * 0.0015, 0.03, 1.45); _update_cam()
 			return true
 		return false
 	return false
