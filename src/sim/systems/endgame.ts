@@ -45,6 +45,7 @@ export function finish(c: TickCtx, reason: EndReport['reason']): void {
   const usdM = (x: number) => `$${(x / 1e6).toFixed(1)}M`;
   const hist = s.history; const step = Math.max(1, Math.floor(hist.length / 40));
   s.endReport.timeline = hist.filter((_, i) => i % step === 0 || i === hist.length - 1).map((h) => ({ month: h.month, revenue: Math.round(h.revenue), cash: Math.round(h.cash) }));
+  if (stats.bestDeal) s.endReport.bestDealCustomer = stats.bestDeal.customer;
   if (stats.bestDeal) s.endReport.bestDeal = `${stats.bestDeal.customer} (${stats.bestDeal.model}) paid ${usdM(stats.bestDeal.revenue)} over its term.`;
   if (stats.worstIncident) s.endReport.worstIncident = stats.worstIncident.text;
   const rivals = s.rivals ?? []; const mine = onlineAccels(s); const top = [...rivals].sort((a, b) => b.accels - a.accels)[0];

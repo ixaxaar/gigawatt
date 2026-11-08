@@ -1,4 +1,4 @@
-import { CoolingClass, FabricDesign, GameMode, GameState, Project, RackDesign, TrayDesign, ValidationIssue } from '../types';
+import { CoolingClass, FabricDesign, GameMode, GameState, Project, RackDesign, SiteStyle, TrayDesign, ValidationIssue } from '../types';
 import { ok, usd } from './actions/consts';
 import { FLOOR_UNIT_SLOTS } from './pricing';
 
@@ -54,6 +54,8 @@ export interface GameStore {
   ackNews: () => void;
   /** Dismiss the oldest pending chapter card. */
   ackStory: () => void;
+  /** Set the hall's cosmetic look (floor, walls, light, accent colour, region name). */
+  setSite: (site: Partial<SiteStyle>) => void;
   /** Answer the open decision with choice 0 or 1. */
   resolveDilemma: (choice: number) => ActionResult;
   /** Sell a placed rack (must be unclustered) for its residual value; frees the slot. */

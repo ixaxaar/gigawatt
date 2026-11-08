@@ -49,7 +49,8 @@ var next_btn: Button
 
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
-	Settings.load_all(); Settings.apply(get_window()); Settings.write_log(get_window())
+	Settings.load_all(); if OS.has_environment("GW_THEME"): Settings.theme = OS.get_environment("GW_THEME")
+	Kit.set_theme(Settings.theme); Settings.apply(get_window()); Settings.write_log(get_window())
 	get_window().size_changed.connect(func():
 		get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
 		if get("hall") != null and hall != null: hall.apply_scale())
@@ -70,11 +71,18 @@ func _ready() -> void:
 	var auto := OS.get_environment("GW_AUTOSTART")
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
 	if OS.get_environment("GW_SMOKE") != "": _smoke(); return
+	if OS.get_environment("GW_SITE") != "" and started:   # screenshots: GW_SITE="floor:checker,walls:brick,light:warm,accent:cyan"
+		var st := {}; for kv in OS.get_environment("GW_SITE").split(","): var pr := kv.split(":"); if pr.size() == 2: st[pr[0]] = pr[1]
+		b.act("setSite", [st])
+	if OS.get_environment("GW_TOUR") != "" and started: _tour(OS.get_environment("GW_TOUR"))
+	if OS.get_environment("GW_SITE_SCREEN") != "": _pick_site("operator", root.get_node("title")) if root.has_node("title") else _change_look()
 	if OS.get_environment("GW_SETTINGS") != "": _settings()
 	if OS.get_environment("GW_AUTOPLAY") != "": quiet = true; var ap := OS.get_environment("GW_AUTOPLAY").split(":"); b.env("autoplay", [ap[0], int(ap[1])]);; quiet = false   # screenshots: "tycoon:48"
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
 	if OS.get_environment("GW_CONTINUE") != "" and b.q("saves").size() > 0: _load_slot(str(b.q("saves")[0].slot))   # tests: press CONTINUE
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
+	if OS.get_environment("GW_CAM") != "" and OS.get_environment("GW_SCENARIO") == "" and started:   # screenshots: explicit camera on a normal game
+		var cc := OS.get_environment("GW_CAM").split_floats(","); if cc.size() >= 5: hall.yaw = cc[0]; hall.pitch = cc[1]; hall.dist = cc[2]; hall.target = Vector3(cc[3], 0.8, cc[4]); hall.auto_orbit = false; hall._update_cam()
 	if OS.get_environment("GW_SCREEN") != "": show_screen(OS.get_environment("GW_SCREEN")); if OS.get_environment("GW_DBG") != "": get_tree().create_timer(0.6).timeout.connect(_dbg)
 	if OS.get_environment("GW_GUIDE") != "": get_tree().create_timer(0.6).timeout.connect(func(): guide.visible = true; guide.open())
 	if OS.get_environment("GW_INSPECT") != "": get_tree().create_timer(0.8).timeout.connect(func(): _inspect(int(OS.get_environment("GW_INSPECT"))))
@@ -95,6 +103,53 @@ func _ready() -> void:
 	if OS.get_environment("GW_SHOT") != "":   # docs/tests: save the window to a PNG after GW_SHOT_AT seconds (default 6) and quit
 		get_tree().create_timer(float(OS.get_environment("GW_SHOT_AT")) if OS.get_environment("GW_SHOT_AT") != "" else 6.0).timeout.connect(func(): get_viewport().get_texture().get_image().save_png(OS.get_environment("GW_SHOT")); get_tree().quit())
 
+## New game step: choose the hall's surroundings, then start. Back returns to the title.
+func _pick_site(mode: String, title_h: Control) -> void:
+	title_h.visible = false
+	var sc := SiteScreen.new(); sc.name = "site"; root.add_child(sc)
+	sc.open(self, Site.DEFAULT, "CHOOSE YOUR SITE", "Start game ▶", func(st): title_h.queue_free(); _new_game(mode); b.act("setSite", [st]), func(): title_h.visible = true)
+
+## Pause menu: change the look of a running game.
+func _change_look() -> void:
+	var sc := SiteScreen.new(); sc.name = "site"; root.add_child(sc)
+	sc.open(self, Site.style_of(b.g), "CHANGE LOOK", "Apply", func(st): b.act("setSite", [st]); hall.rebuild(), func(): pass)
+
+## Scripted tours for recording the guide GIFs (GW_TOUR=basics|showroom|cables|looks|themes; see scripts/gifs.sh). Ends by quitting.
+func _wait(sec: float) -> void: await get_tree().create_timer(sec).timeout
+
+func _fly(yaw: float, pitch: float, dist: float, target: Vector3, sec: float) -> void:
+	hall.auto_orbit = false
+	var y0: float = hall.yaw; var p0: float = hall.pitch; var d0: float = hall.dist; var t0: Vector3 = hall.target
+	var tw := create_tween(); tw.tween_method(func(k: float): hall.yaw = lerpf(y0, yaw, k); hall.pitch = lerpf(p0, pitch, k); hall.dist = lerpf(d0, dist, k); hall.target = t0.lerp(target, k); hall._update_cam(), 0.0, 1.0, sec).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+
+func _tour(name: String) -> void:
+	quiet = true; await _wait(0.8)
+	var hl: Dictionary = b.g.halls[0]; var ctr: Vector2 = hall._wall_rect(hl).get_center()
+	match name:
+		"basics":   # the loop in one clip: drawers, thermal view, then months passing
+			for id in ["dash", "contracts", "shop", "facility", "ops", "design"]: _dock(id); await _wait(1.5)
+			show_screen("dash"); await _wait(0.6); hall.thermal = true; hall.rebuild(); await _wait(1.6); hall.thermal = false; hall.rebuild()
+			quiet = false
+			for i in 6: next_month(); await _wait(0.7)
+		"showroom":   # pick a platform, open the door, show the cabling
+			show_screen("shop"); var ps = screens["shop"]; await _wait(1.8)
+			var plats := []; for t in b.templates: if not plats.has(t.platform): plats.append(t.platform)
+			for k in 4: ps.plat = plats[k]; ps.tier_sel = ""; ps.refresh(); await _wait(1.9)
+			if ps.showroom != null: ps.showroom.set_cables(true); ps.refresh(); await _wait(2.6); ps.showroom.set_door(false); ps.refresh(); await _wait(1.6)
+		"cables":   # from the whole hall down to the rear of a rack
+			_shell_visible(false); hall.top_view(); await _wait(1.0)
+			await _fly(0.5, 0.7, 12.0, Vector3(3.0, 0.8, 2.0), 2.4); await _fly(0.0, 0.35, 3.0, Vector3(2.4, 0.8, 0.3), 2.8); await _fly(0.0, 0.3, 1.6, Vector3(1.4, 1.0, 0.3), 2.0); await _fly(0.0, 0.3, 1.6, Vector3(3.6, 1.0, 0.3), 3.0); await _wait(0.6)
+		"looks":   # floors, racks, walls and light moods
+			_shell_visible(false); hall.target = Vector3(ctr.x, 0.8, ctr.y); hall.dist = 20.0; hall.pitch = 0.5; hall.auto_orbit = true; hall.orbit_speed = 0.22; hall.set_cover(0.0)
+			for st in [{"floor": "tile", "rack": "black", "walls": "block", "light": "neutral", "accent": "red"}, {"floor": "white", "rack": "white", "walls": "block", "light": "neutral", "accent": "cyan"}, {"floor": "black", "rack": "steel", "walls": "steel", "light": "cool", "accent": "magenta"},
+					{"floor": "parquet", "rack": "graphite", "walls": "brick", "light": "warm", "accent": "orange"}, {"floor": "walnut", "rack": "black", "walls": "stone", "light": "warm", "accent": "yellow"}, {"floor": "steel", "rack": "white", "walls": "glass", "light": "neutral", "accent": "green"}, {"floor": "concrete", "rack": "steel", "walls": "block", "light": "night", "accent": "cyan"}]:
+				b.act("setSite", [st]); await _wait(1.8)
+		"themes":   # every UI theme on the Overview
+			show_screen("dash"); await _wait(0.8)
+			for t in Kit.THEMES: Settings.theme = t.id; _restyle(); await _wait(1.3)
+	await _wait(0.4); get_tree().quit()
+
 func _fatal(msg: String) -> void:
 	var l := Label.new(); l.text = "GIGAWATT engine failed to start:\n" + msg; l.position = Vector2(60, 60); add_child(l)
 
@@ -102,7 +157,7 @@ func _fatal(msg: String) -> void:
 func _build_shell() -> void:
 	top = PanelContainer.new(); top.set_anchors_preset(Control.PRESET_TOP_WIDE); top.offset_bottom = 66; top.add_theme_stylebox_override("panel", _top_sb(Kit.CY)); root.add_child(top)
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 20); top.add_child(hb)
-	hb.add_child(Kit.label("GIGAWATT", 26, Color("#ffd23f")))
+	hb.add_child(Kit.label("GIGAWATT", 26, Color("#ffd23f") if Kit.dark else Kit.AM))
 	var dv := VBoxContainer.new(); dv.custom_minimum_size = Vector2(110, 0); lbl.date = Kit.label("", 20); bar_month = Kit.bar(0, 1); dv.add_child(lbl.date); dv.add_child(bar_month); hb.add_child(dv)
 	for p in [["CASH", "cash"], ["DEBT", "debt"], ["NET WORTH", "nw"], ["REPUTATION", "rep"]]:
 		var v := VBoxContainer.new(); v.add_child(Kit.label(p[0], 10, Kit.DIM)); lbl[p[1]] = Kit.label("", 22); v.add_child(lbl[p[1]]); hb.add_child(v)
@@ -112,19 +167,38 @@ func _build_shell() -> void:
 	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
 	hb.add_child(Kit.btn("MENU", func(): _menu(), "", 14))
 	holder = Control.new(); holder.set_anchors_preset(Control.PRESET_FULL_RECT); holder.offset_top = 76; holder.offset_bottom = -92; holder.offset_left = 14; holder.offset_right = -14; holder.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(holder)
-	var dock := HBoxContainer.new(); dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -600; dock.offset_right = 600; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
+	dock_box = HBoxContainer.new(); var dock := dock_box; dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM); dock.offset_top = -84; dock.offset_bottom = -10; dock.offset_left = -600; dock.offset_right = 600; dock.add_theme_constant_override("separation", 8); root.add_child(dock)
 	for i in DOCK.size():
 		var dk: Array = DOCK[i]
 		var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock.add_child(d); dock_btns[dk[0]] = d
 	guide = GuideOverlay.new(); guide.app = self; guide.visible = false; root.add_child(guide)
 	keynote = KeynoteOverlay.new(); keynote.app = self; keynote.visible = false; root.add_child(keynote)
 	story_ui = StoryOverlay.new(); story_ui.app = self; story_ui.visible = false; root.add_child(story_ui)
-	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1, 0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
+	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Kit.field(0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
 	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
 	hall.hover_changed.connect(_on_rack_hover)
 	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
 	banner = Kit.label("", 30, Kit.AM); banner.set_anchors_preset(Control.PRESET_CENTER_TOP); banner.offset_top = 140; banner.offset_left = -400; banner.offset_right = 400; banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; root.add_child(banner)
 	_shell_visible(false)
+
+var dock_box: HBoxContainer
+## Apply the chosen UI theme live: palette, top bar, dock, and every screen (rebuilt on demand).
+func _restyle() -> void:
+	Kit.set_theme(Settings.theme)
+	if top != null: top.add_theme_stylebox_override("panel", _top_sb(Kit.accent))
+	if dock_box != null:
+		for c in dock_box.get_children(): c.queue_free()
+		dock_btns.clear()
+		for i in DOCK.size():
+			var dk: Array = DOCK[i]; var d := Kit.dock_btn(dk[1], str((i + 1) % 10), dk[2], func(): _dock(dk[0])); dock_box.add_child(d); dock_btns[dk[0]] = d
+		_apply_unlocks()
+	for sc in screens.values(): sc.queue_free()
+	screens.clear()
+	if started: show_screen(cur); _on_changed()
+	else:
+		var t := root.get_node_or_null("title")
+		if t != null: t.queue_free(); _title()
+	if settings_ui != null: settings_ui.queue_free(); settings_ui = null; _settings()
 
 func _shell_visible(v: bool) -> void:
 	top.visible = v; holder.visible = v
@@ -134,14 +208,14 @@ func _shell_visible(v: bool) -> void:
 func _title() -> void:
 	started = false; _shell_visible(false); hall.b = b; audio.set_mood("title")
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); h.name = "title"; root.add_child(h)
-	var gt := GradientTexture2D.new(); var gr := Gradient.new(); gr.colors = PackedColorArray([Color(0.01, 0.02, 0.04, 0.88), Color(0.01, 0.02, 0.04, 0.0)]); gr.offsets = PackedFloat32Array([0.0, 1.0])
+	var gt := GradientTexture2D.new(); var gr := Gradient.new(); gr.colors = PackedColorArray([Kit.SCRIM, Color(Kit.SCRIM.r, Kit.SCRIM.g, Kit.SCRIM.b, 0.0)]); gr.offsets = PackedFloat32Array([0.0, 1.0])
 	gt.gradient = gr; gt.fill_from = Vector2(0, 0); gt.fill_to = Vector2(1, 0); gt.width = 512; gt.height = 8
 	var shade := TextureRect.new(); shade.texture = gt; shade.stretch_mode = TextureRect.STRETCH_SCALE; shade.set_anchors_preset(Control.PRESET_LEFT_WIDE); shade.anchor_right = 0.62; shade.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(shade)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER_LEFT); vb.offset_left = 90; vb.offset_top = -310; vb.offset_bottom = 310; vb.offset_right = 780; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110, Kit.CY))
 	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
 	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
-		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): h.queue_free(); _new_game(m[0]), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
+		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(640, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	b.act("newGame", [7, "operator"]); _demo_hall()
 	var recent: Array = b.q("saves")
 	if recent.size() > 0:
@@ -241,7 +315,7 @@ func toast(text: String, level := "info") -> void:
 	elif level == "good" and ("deliver" in low or "arrived" in low): cue = "delivery"
 	audio.play(cue)
 	var p := PanelContainer.new(); p.set_meta("txt", text); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
-	p.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.08, 0.12, 0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
+	p.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(460, 0); toasts.add_child(p)
 	while toasts.get_child_count() > 5: toasts.get_child(0).queue_free(); toasts.remove_child(toasts.get_child(0))
 	var tw := create_tween(); tw.tween_interval(6.0); tw.tween_property(p, "modulate:a", 0.0, 1.0); tw.tween_callback(p.queue_free)
 
@@ -271,7 +345,9 @@ func _inspect(slot: int) -> void:
 	inspector = PanelContainer.new(); inspector.add_theme_stylebox_override("panel", Kit.card_sb(acc, Kit.PANEL_FILL, 3, 14))
 	inspector.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); inspector.offset_left = 18; inspector.offset_bottom = -98; inspector.offset_top = -300; inspector.offset_right = 400; inspector.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); inspector.add_child(v)
-	var hb := HBoxContainer.new(); v.add_child(hb); hb.add_child(Kit.chip("RACK " + str(m.serial), acc, 14))
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); v.add_child(hb)
+	if m.get("customer") != null: hb.add_child(Logo.make(str(m.customer), 30.0))
+	hb.add_child(Kit.chip("RACK " + str(m.serial), acc, 14))
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
 	hb.add_child(Kit.btn("✕", func(): inspector.queue_free(); inspector = null, "", 12))
 	v.add_child(Kit.label(str(m.design), 15, Kit.TX, true))
@@ -303,8 +379,8 @@ func modal() -> Control:
 	return null
 
 func _top_sb(acc: Color) -> StyleBoxFlat:
-	var t := Kit.sb(Color(0.03, 0.045, 0.07, 0.97), Color(0.02, 0.03, 0.05), 0, 0, 14); t.border_width_bottom = 5; t.border_color = acc
-	t.shadow_color = Color(0, 0, 0, 0.5); t.shadow_size = 8; t.shadow_offset = Vector2(0, 4); return t
+	var t := Kit.sb(Kit.deep(0.97), Kit.OUTL, 0, 0, 14); t.border_width_bottom = 5; t.border_color = acc
+	t.shadow_color = Color(Kit.SHADOW.r, Kit.SHADOW.g, Kit.SHADOW.b, Kit.SHADOW.a * 0.7); t.shadow_size = 8; t.shadow_offset = Vector2(0, 4); return t
 
 ## Progressive disclosure: a fresh game shows Overview, Customers and Supply; the rest appear as the player needs them.
 ## Tycoon mode (no hand-holding) and loaded campaigns that already have a hall see everything.
@@ -495,6 +571,20 @@ func _smoke() -> void:
 	quiet = true; _load_scenario("stress-campus")
 	for sc in SCREENS:
 		show_screen(sc[0]); await get_tree().process_frame; await get_tree().process_frame
+	for t in b.templates:   # every purchasable rack builds, with one scale-out cable per modelled NIC
+		var f: Dictionary = b.q("templateFacts", [t.id]); var rm := RackModel.new(); add_child(rm); var sp: Dictionary = RackModel.spec_from_template(b, t, f); rm.build(sp, 2)
+		assert(int(rm.cable_count().scale_out) == int(sp.n) * int(sp.nics), "cable count for %s" % t.id)
+		rm.queue_free()
+	for fl in Site.FLOORS:   # every floor x wall pair builds
+		for wl in Site.WALLS: b.act("setSite", [{"floor": fl[0], "walls": wl[0]}]); hall.rebuild()
+	b.act("setSite", [Site.DEFAULT])
+	for t in Kit.THEMES:   # every theme restyles the shell and rebuilds the screens
+		Settings.theme = t.id; _restyle()
+		for sc in SCREENS: show_screen(sc[0])
+	Settings.theme = "midnight"; _restyle()
+	var seen := {}
+	for nm in Logo.KNOWN:
+		var k: Array = Logo.KNOWN[nm]; var key: int = int(k[0]) * 8 + int(k[1]); assert(not seen.has(key), "two companies share a logo colour and mark: %s and %s" % [nm, seen.get(key)]); seen[key] = nm
 	var small := 0
 	for scr in screens.values(): small += _small_fonts(scr)
 	print("FONTS below %d px: %d" % [Kit.MIN_FONT, small]); assert(small == 0, "text smaller than the readable minimum")
@@ -559,7 +649,7 @@ func _settings() -> void:
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -400; pn.offset_right = 400; pn.offset_top = -340; pn.offset_bottom = 340
-	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
+	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	vb.add_child(Kit.label("SETTINGS", 30, Kit.CY))
 	var tabs := HBoxContainer.new(); tabs.add_theme_constant_override("separation", 6); vb.add_child(tabs)
@@ -587,6 +677,14 @@ func _opt_row(parent: Control, title: String, items: Array, selected: int, cb: C
 	o.selected = clampi(selected, 0, items.size() - 1); o.size_flags_horizontal = Control.SIZE_EXPAND_FILL; o.item_selected.connect(cb); r.add_child(o); return o
 
 func _set_display(vb: VBoxContainer) -> void:
+	vb.add_child(Kit.label("UI THEME", 13, Kit.DIM))
+	for dk in [true, false]:
+		var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 6); fl.add_theme_constant_override("v_separation", 6); vb.add_child(fl)
+		fl.add_child(Kit.label("Dark" if dk else "Light", 15, Kit.DIM))
+		for t in Kit.THEMES:
+			if bool(t.dark) != dk: continue
+			var id: String = t.id
+			fl.add_child(Kit.btn(str(t.name), func(): Settings.theme = id; Settings.save_all(); audio.play("click"); _restyle(), "pri" if Settings.theme == id else "", 14))
 	_opt_row(vb, "Window mode", ["Windowed", "Fullscreen (borderless)", "Exclusive fullscreen"], Settings.window_mode, func(i): Settings.window_mode = i; Settings.save_all(); Settings.apply(get_window()))
 	_opt_row(vb, "V-Sync", ["Off", "On", "Adaptive"], Settings.vsync, func(i): Settings.vsync = i; Settings.save_all(); Settings.apply(get_window()))
 	var caps := [0, 30, 40, 60, 90, 120, 144, 1000]
@@ -670,7 +768,7 @@ func _check_end() -> void:
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); end_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.78); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -560; pn.offset_right = 560; pn.offset_top = -330; pn.offset_bottom = 330
-	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), col, 14, 2, 28)); h.add_child(pn)
+	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), col, 14, 2, 28)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	var head: String = {"horizon": "2028 COMPLETE", "bankrupt": "GAME OVER", "fired": "THE BOARD HAS SPOKEN"}.get(str(rep.reason), "GAME OVER")
 	vb.add_child(Kit.label(head, 18, Kit.DIM))
@@ -688,7 +786,11 @@ func _check_end() -> void:
 	for kv in [["SCORE", Kit.num(rep.score)], ["NET WORTH", Kit.usd(rep.netWorth)], ["LIFETIME REVENUE", Kit.usd(rep.revenueTotal)], ["PEAK ACCELERATORS", Kit.num(rep.peakAccels)], ["CONTRACTS COMPLETED", str(int(rep.contractsCompleted))], ["REPUTATION", "★ %d" % int(rep.reputation)]]:
 		var c := VBoxContainer.new(); c.add_child(Kit.label(kv[0], 11, Kit.DIM)); c.add_child(Kit.label(str(kv[1]), 24, Kit.TX)); grid.add_child(c)
 	for k in [["BEST DEAL", "bestDeal", Kit.GR], ["WORST INCIDENT", "worstIncident", Kit.RD], ["VS THE RIVALS", "rivalLine", Kit.CY]]:
-		if rep.get(k[1]) != null and str(rep[k[1]]) != "": vb.add_child(Kit.rich("[color=#%s][b]%s[/b][/color]  %s" % [k[2].to_html(false), k[0], str(rep[k[1]])], 14))
+		if rep.get(k[1]) != null and str(rep[k[1]]) != "":
+			var line := Kit.rich("[color=#%s][b]%s[/b][/color]  %s" % [k[2].to_html(false), k[0], str(rep[k[1]])], 14)
+			if k[1] == "bestDeal" and rep.get("bestDealCustomer") != null:
+				var lr := HBoxContainer.new(); lr.add_theme_constant_override("separation", 12); lr.add_child(Logo.make(str(rep.bestDealCustomer), 48.0)); lr.add_child(line); vb.add_child(lr)
+			else: vb.add_child(line)
 	var sp2 := Control.new(); sp2.size_flags_vertical = Control.SIZE_EXPAND_FILL; vb.add_child(sp2)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); vb.add_child(row)
 	row.add_child(Kit.btn("Look around the hall", func(): end_ui.queue_free(); end_ui = null; end_seen = true, "", 18))
@@ -713,7 +815,7 @@ func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h)
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -330; pn.offset_right = 330; pn.offset_top = -230; pn.offset_bottom = 230
-	pn.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
+	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	vb.add_child(Kit.label("SAVE GAME" if mode == "save" else "LOAD GAME", 30, Kit.CY))
 	var info := {}
@@ -738,7 +840,7 @@ func _menu() -> void:
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_CENTER); vb.offset_left = -220; vb.offset_right = 220; vb.offset_top = -220; vb.offset_bottom = 220; vb.add_theme_constant_override("separation", 12); h.add_child(vb)
 	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
-	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["How to play", "guide"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
+	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["Change look", "look"], ["How to play", "guide"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
 		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
 
 func _menu_do(a: String) -> void:
@@ -747,6 +849,7 @@ func _menu_do(a: String) -> void:
 		"save": _menu(); _slots("save")
 		"load": _menu(); _slots("load")
 		"settings": _menu(); _settings()
+		"look": _menu(); if started: _change_look()
 		"coach": _menu(); if started: coach.start()
 		"guide": _menu(); guide.visible = true; guide.open()
 		"mute": audio.toggle_mute()

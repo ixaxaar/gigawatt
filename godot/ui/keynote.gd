@@ -18,7 +18,7 @@ static func body(parent: Control, k: Dictionary, with_parts := true) -> void:
 	for t in k.tech: parent.add_child(Kit.label("•  " + str(t), 14, Kit.TX, true))
 	tag(parent, "WHAT IT CHANGES FOR YOU", Kit.AM)
 	for t in k.impact: parent.add_child(Kit.label("•  " + str(t), 14, Kit.TX, true))
-	var tk := PanelContainer.new(); tk.add_theme_stylebox_override("panel", Kit.sb(Color(0.12, 0.1, 0.03), Kit.AM, 8, 1, 10)); tk.add_child(Kit.label("★ " + str(k.takeaway), 14, Kit.AM, true)); parent.add_child(tk)
+	var tk := PanelContainer.new(); tk.add_theme_stylebox_override("panel", Kit.sb(Kit.tint(Kit.AM, 0.16), Kit.AM, 8, 1, 10)); tk.add_child(Kit.label("★ " + str(k.takeaway), 14, Kit.AM, true)); parent.add_child(tk)
 	if with_parts and k.items.size() > 0:
 		tag(parent, "PARTS", Kit.GR)
 		for it in k.items:

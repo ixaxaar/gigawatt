@@ -47,6 +47,6 @@ static func get_mat(name: String, per_m := 1.0, tint := Color.WHITE, rough := 1.
 	if name == "alu": m.anisotropy_enabled = tier.aniso; m.anisotropy = 0.6
 	_mats[k] = m; return m
 
-static func floor_textures() -> Dictionary:
+static func floor_textures(set_name := "floor") -> Dictionary:
 	var t := Settings.tier()
-	return {"c": _load("floor", "c"), "n": _load("floor", "n") if t.normal_maps else null, "r": _load("floor", "r") if t.full_maps else null}
+	return {"c": _load(set_name, "c"), "n": _load(set_name, "n") if t.normal_maps else null, "r": _load(set_name, "r") if t.full_maps else null}

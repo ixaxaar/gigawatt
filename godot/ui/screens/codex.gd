@@ -55,7 +55,7 @@ func _rebuild() -> void:
 			for i in arr:
 				var on: bool = sel == i.id
 				var card := PanelContainer.new(); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				card.add_theme_stylebox_override("panel", Kit.sb(Color(0.08, 0.16, 0.22) if on else Color(0.05, 0.08, 0.11), Kit.CY if on else Kit.LINE, 8, 1, 8))
+				card.add_theme_stylebox_override("panel", Kit.sb(Kit.SEL if on else Kit.field(), Kit.CY if on else Kit.LINE, 8, 1, 8))
 				var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); hb.mouse_filter = Control.MOUSE_FILTER_IGNORE; card.add_child(hb)
 				var st := ColorRect.new(); st.color = Kit.vendor_color(str(i.vendor)); st.custom_minimum_size = Vector2(4, 0); st.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(st)
 				var vb := VBoxContainer.new(); vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vb.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(vb)

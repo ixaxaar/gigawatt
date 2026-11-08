@@ -13,6 +13,8 @@ static var text_boost := 1.0
 static var colorblind := false
 static var reduced_motion := false
 static var high_contrast := false
+## UI colour theme id (see Kit.THEMES).
+static var theme := "midnight"
 ## Graphics preset: -1 = auto-detect, else 0 Potato, 1 Low, 2 Balanced, 3 High, 4 Ultra.
 static var preset := -1
 ## 3D render scale override (0 = the preset's own value). The UI always renders at native resolution.
@@ -93,6 +95,7 @@ static func load_all() -> void:
 	if c.get_value("a", "ui_scale_auto", true): ui_scale = 0.0
 	text_boost = clampf(float(c.get_value("a", "text_boost", 1.0)), 1.0, 1.5)
 	colorblind = bool(c.get_value("a", "colorblind", false)); reduced_motion = bool(c.get_value("a", "reduced_motion", false)); high_contrast = bool(c.get_value("a", "high_contrast", false))
+	theme = str(c.get_value("a", "theme", "midnight"))
 	preset = int(c.get_value("a", "preset", -1)); render_scale = float(c.get_value("a", "render_scale", 0.0))
 	window_mode = clampi(int(c.get_value("a", "window_mode", 1)), 0, 2); vsync = clampi(int(c.get_value("a", "vsync", 1)), 0, 2); fps_cap = int(c.get_value("a", "fps_cap", 0))
 	tutorial = str(c.get_value("a", "tutorial", "on")); tutorial_step = int(c.get_value("a", "tutorial_step", 0))
@@ -102,7 +105,7 @@ static func save_all() -> void:
 	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode)
 	c.set_value("a", "ui_scale", ui_scale); c.set_value("a", "ui_scale_auto", ui_scale <= 0.0); c.set_value("a", "text_boost", text_boost)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "high_contrast", high_contrast)
-	c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
+	c.set_value("a", "theme", theme); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
 	c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)
 	c.save(PATH)
 

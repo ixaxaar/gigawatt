@@ -505,6 +505,8 @@ export interface GameState {
   /** Investor board: yearly revenue targets, three missed years in a row and you are out. */
   board?: BoardState;
   story?: StoryState;
+  /** Cosmetic look of the hall, chosen before the game starts (defaults apply when absent). */
+  site?: SiteStyle;
   /** Consecutive months with negative cash (bankruptcy at 3). */
   negCashMonths?: number;
   /** Save schema version, bumped by engine/persistence migrations. */
@@ -542,7 +544,7 @@ export type EndingId = 'ipo' | 'acquired' | 'steady' | 'fire-sale' | 'bankrupt' 
 export interface BoardReview { month: number; target: number; actual: number; ok: boolean }
 export interface BoardState { baseNW: number; startMonth: number; strikes: number; reviews: BoardReview[] }
 export interface EndTimelinePoint { month: number; revenue: number; cash: number }
-export interface EndReport { timeline?: EndTimelinePoint[]; bestDeal?: string; worstIncident?: string; rivalLine?: string; shareText?: string; reason: 'bankrupt' | 'horizon' | 'fired'; ending?: EndingId; epilogue?: string; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
+export interface EndReport { timeline?: EndTimelinePoint[]; bestDeal?: string; bestDealCustomer?: string; worstIncident?: string; rivalLine?: string; shareText?: string; reason: 'bankrupt' | 'horizon' | 'fired'; ending?: EndingId; epilogue?: string; month: number; score: number; netWorth: number; rating: string; revenueTotal: number; peakAccels: number; contractsCompleted: number; reputation: number; summary: string }
 export type GameMode = 'learner' | 'operator' | 'tycoon';
 export interface Project {
   id: string; contractId: string; templateId: string; racks: number; hallId: string; name: string;
@@ -571,6 +573,9 @@ export interface ActiveContract { contract: Contract; clusterIds: string[]; star
   /** Net revenue this contract has paid so far. */
   revenueEarned?: number;
 }
+/** Purely cosmetic surroundings. Ids index the option lists in godot/world/site.gd. */
+export interface SiteStyle { floor: string; walls: string; light: string; accent: string; rack: string }
+export const SITE_DEFAULT: SiteStyle = { floor: 'tile', walls: 'block', light: 'neutral', accent: 'red', rack: 'black' };
 export interface LogEntry { month: number; level: 'info' | 'good' | 'bad'; text: string; }
 
 export const MONTHS_PER_YEAR = 12;

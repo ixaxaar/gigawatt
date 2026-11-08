@@ -5,6 +5,7 @@ import { advanceMonth } from '../../sim/tick';
 import { fail, ok } from './consts';
 import { DILEMMAS } from '../../sim/story-data';
 import { applyEffect, storyOf } from '../../sim/systems/story';
+import { SITE_DEFAULT } from '../../types';
 import { DEFAULT_SLOT, readSlot, writeSlot } from '../persistence';
 import { newGameState } from '../state';
 import type { Ctx } from './ctx';
@@ -21,6 +22,8 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
     },
 
     ackNews: () => set(s => ({ game: { ...s.game, news: (s.game.news ?? []).slice(1) } })),
+
+    setSite: (site) => set(s => ({ game: { ...s.game, site: { ...SITE_DEFAULT, ...(s.game.site ?? {}), ...site } } })),
 
     ackStory: () => set(s => (s.game.story ? { game: { ...s.game, story: { ...s.game.story, cards: s.game.story.cards.slice(1) } } } : s)),
 

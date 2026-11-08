@@ -7,9 +7,9 @@ var pick := {}
 var rack_pick := {}
 var folds := {}
 var money := {}
-const VERDICT := {
-	"ready": [Kit.GR, "✓ CAN SERVE NOW"], "building": [Kit.AM, "◔ CAN BUILD IN TIME"],
-	"short": [Kit.RD, "✗ NEED MORE / DIFFERENT HARDWARE"], "none": [Kit.RD, "✗ NO CLUSTER YET"]}
+static func _verdict() -> Dictionary:
+	return {"ready": [Kit.GR, "✓ CAN SERVE NOW"], "building": [Kit.AM, "◔ CAN BUILD IN TIME"],
+		"short": [Kit.RD, "✗ NEED MORE / DIFFERENT HARDWARE"], "none": [Kit.RD, "✗ NO CLUSTER YET"]}
 
 func _say(r: Dictionary) -> String:
 	var t: String = str(r.get("message", ""))
@@ -58,7 +58,7 @@ func _rebuild() -> void:
 
 func _checks(parent: Control, c: Dictionary) -> Dictionary:
 	var b: Bridge = app.b; var f: Dictionary = b.q("contractFit", [c.id]); var p: Dictionary = b.q("pipeline")
-	var v: Array = VERDICT[f.verdict]
+	var v: Array = _verdict()[f.verdict]
 	parent.add_child(Kit.label(v[1], 13, v[0]))
 	if f.get("best") != null:
 		var rows := []
@@ -72,7 +72,7 @@ func _checks(parent: Control, c: Dictionary) -> Dictionary:
 func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 	var b: Bridge = app.b; var opts: Array = b.q("buildOptions", [c.id, signed_at])
 	if opts.is_empty(): parent.add_child(Kit.label("No purchasable platform on the market today can meet this (hardware not shipped yet or too big). Wait for newer GPUs or skip it.", 12, Kit.AM, true)); return
-	var box := PanelContainer.new(); box.add_theme_stylebox_override("panel", Kit.sb(Color(0.04, 0.07, 0.1), Kit.LINE, 8, 1, 10)); parent.add_child(box)
+	var box := PanelContainer.new(); box.add_theme_stylebox_override("panel", Kit.sb(Kit.field(), Kit.LINE, 8, 1, 10)); parent.add_child(box)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); box.add_child(v)
 	v.add_child(Kit.label("WHAT YOU NEED TO BUY", 12, Kit.CY))
 	for o in opts:
@@ -99,9 +99,9 @@ func _offer(parent: Control, c: Dictionary) -> void:
 	if not m.is_empty():
 		mline = "+%s/mo · %s total" % [Kit.usd(float(m.monthly)), Kit.usd(float(m.total))]
 		if absf(float(m.profitMo) - float(m.monthly)) > 0.05 * absf(float(m.monthly)): mline += " · ~%s/mo after power" % Kit.usd(float(m.profitMo))
-	var pn := Kit.fold_panel(("↻ " if renew else "") + "%s · %s%s" % [c.customer, c.model.name, ("  ·  " + mline) if mline != "" else ""], "o" + str(c.id), folds, refresh, true, parent, not renew); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel(("↻ " if renew else "") + "%s · %s%s" % [c.customer, c.model.name, ("  ·  " + mline) if mline != "" else ""], "o" + str(c.id), folds, refresh, true, parent, not renew, str(c.customer)); var v: VBoxContainer = pn[1]
 	if bool(folds.get("o" + str(c.id), not renew)): return   # collapsed: don't build the (expensive) body until it is opened
-	if renew: v.add_child(Kit.label("↻ %s liked your last contract and wants a bigger one — priced +5%%." % c.renewalOf, 13, Color("#ffd166"), true))
+	if renew: v.add_child(Kit.label("↻ %s liked your last contract and wants a bigger one — priced +5%%." % c.renewalOf, 13, Kit.AM, true))
 	var t: bool = c.kind == "training"
 	if mline != "": v.add_child(Kit.label(mline, 17, Kit.GR, true))
 	v.add_child(Kit.rich("[b]%s[/b]  [color=#8fb0c8]%sB%s · %s[/color]" % [c.model.name, Kit.num(c.model.paramsB, 1), (" (%sB active)" % Kit.num(c.model.activeParamsB, 1)) if c.model.activeParamsB != c.model.paramsB else "", c.kind], 15))
@@ -142,7 +142,7 @@ func _rack_assign(parent: Control, contract_id: String) -> void:
 func _pending(parent: Control, a: Dictionary) -> void:
 	var b: Bridge = app.b; var c: Dictionary = a.contract
 	var left: int = int(a.get("deployBy", a.startMonth + 4)) - int(b.g.month)
-	var pn := Kit.fold_panel("%s · %s · awaiting deployment" % [c.customer, c.kind], "p" + str(c.id), folds, refresh, true, parent, true); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · awaiting deployment" % [c.customer, c.kind], "p" + str(c.id), folds, refresh, true, parent, true, str(c.customer)); var v: VBoxContainer = pn[1]
 	v.add_child(Kit.label("deploy by %s · %d mo left" % [Kit.date_of(a.get("deployBy", a.startMonth + 4)), maxi(0, left)], 13, Kit.RD if left <= 1 else Kit.AM))
 	v.add_child(Kit.label(c.model.name, 15))
 	var f := _checks(v, c)
@@ -160,7 +160,7 @@ func _pending(parent: Control, a: Dictionary) -> void:
 
 func _serving(parent: Control, a: Dictionary) -> void:
 	var b: Bridge = app.b; var c: Dictionary = a.contract
-	var pn := Kit.fold_panel("%s · %s · serving" % [c.customer, c.kind], "s" + str(c.id), folds, refresh, false, parent, true); var v: VBoxContainer = pn[1]
+	var pn := Kit.fold_panel("%s · %s · serving" % [c.customer, c.kind], "s" + str(c.id), folds, refresh, false, parent, true, str(c.customer)); var v: VBoxContainer = pn[1]
 	v.add_child(Kit.tag("serving", Kit.GR)); v.add_child(Kit.label(c.model.name, 15))
 	v.add_child(Kit.label("%d/%d mo · SLA misses %d" % [int(a.monthsServed), int(c.durationMonths), int(a.slaMisses)], 13))
 	var names := []; for id in a.clusterIds:

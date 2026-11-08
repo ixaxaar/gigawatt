@@ -8,7 +8,7 @@ export GW_NOKEYNOTE=1 GW_NOCOACH=1 GW_NOAUTOSAVE=1 GW_NODISPLAY=1 GW_NOTHROTTLE=
 printf '[display]\nwindow/size/mode=0\nwindow/size/window_width_override=1920\nwindow/size/window_height_override=1080\n' > override.cfg
 shot() { # name, env assignments...
   local name=$1; shift
-  env "$@" GW_SHOT=$T/$name.png GW_SHOT_AT=8 timeout 120 godot --path . --rendering-driver vulkan > /dev/null 2>&1
+  env GW_SHOT_AT=8 "$@" GW_SHOT=$T/$name.png timeout 120 godot --path . --rendering-driver vulkan > /dev/null 2>&1
   [ -f $T/$name.png ] || { echo "MISSING $name"; return; }
   magick $T/$name.png -resize 1920x $root/docs/screenshots/$name.png 2>/dev/null
   magick $T/$name.png -resize 1600x -quality 80 $root/site/wiki/img/$name.webp 2>/dev/null
@@ -30,7 +30,20 @@ shot campus-rdhx "${S[@]}" GW_HALL=1
 shot campus-dlc "${S[@]}" GW_HALL=2
 shot campus-thermal "${S[@]}" GW_HALL=2 GW_THERMAL=1
 shot campus-aisle "${S[@]}" GW_HALL=0
+# close-ups: rack rear cabling, the showroom, floor texture, and the Site screen with a few looks
+shot rack-cabling "${A[@]}" GW_CLEAN=1 GW_CAM=0,0.3,1.5,2.0,0.3
+shot rack-rear "${A[@]}" GW_CLEAN=1 GW_CAM=0,0.35,3.0,2.4,0.3
+shot showroom "${A[@]}" GW_SCREEN=shop GW_SHOT_AT=3
+shot showroom-cables "${A[@]}" GW_SCREEN=shop GW_SR_CABLES=1 GW_SHOT_AT=3
+shot floor-closeup "${S[@]}" GW_HALL=2 GW_CAM=0.7,0.25,3.2,4.5,2
+shot site-screen GW_SITE_SCREEN=1 GW_SHOT_AT=5
+shot site-white "${A[@]}" GW_CLEAN=1 GW_CAM=0.6,0.45,9,2.6,3 GW_SITE="floor:white,rack:white,light:neutral,accent:cyan"
+shot site-marble "${A[@]}" GW_CLEAN=1 GW_CAM=0.6,0.45,9,2.6,3 GW_SITE="floor:black,rack:steel,light:cool,accent:magenta"
+shot site-parquet "${A[@]}" GW_CLEAN=1 GW_CAM=0.6,0.45,9,2.6,3 GW_SITE="floor:parquet,rack:graphite,light:warm,accent:orange,walls:brick"
+shot theme-paper "${A[@]}" GW_THEME=paper GW_SCREEN=contracts
+shot theme-ember "${A[@]}" GW_THEME=ember
+shot theme-contrast "${A[@]}" GW_THEME=contrast GW_SCREEN=shop GW_SHOT_AT=4
 rm -f override.cfg
-for n in hall procure design supercomputer customers build-ledger campus-thermal; do magick $root/docs/screenshots/$n.png -resize 1600x -quality 80 $root/site/assets/$n.webp; done
+for n in hall procure design supercomputer customers build-ledger campus-thermal rack-cabling rack-rear showroom site-screen site-white site-marble site-parquet theme-paper; do magick $root/docs/screenshots/$n.png -resize 1600x -quality 80 $root/site/assets/$n.webp; done
 rm -rf $T
 echo done

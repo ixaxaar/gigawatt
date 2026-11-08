@@ -7345,6 +7345,7 @@ function inferenceCapacity(stats, accel, model, opts = {}) {
     issues
   };
 }
+const SITE_DEFAULT = { floor: "tile", walls: "block", light: "neutral", accent: "red", rack: "black" };
 const MONTHS_PER_YEAR = 12;
 const BASE_YEAR$1 = 2020;
 const monthToYear = (m2) => BASE_YEAR$1 + m2 / MONTHS_PER_YEAR;
@@ -10902,6 +10903,7 @@ function finish(c, reason) {
   const hist = s2.history;
   const step2 = Math.max(1, Math.floor(hist.length / 40));
   s2.endReport.timeline = hist.filter((_, i) => i % step2 === 0 || i === hist.length - 1).map((h) => ({ month: h.month, revenue: Math.round(h.revenue), cash: Math.round(h.cash) }));
+  if (stats.bestDeal) s2.endReport.bestDealCustomer = stats.bestDeal.customer;
   if (stats.bestDeal) s2.endReport.bestDeal = `${stats.bestDeal.customer} (${stats.bestDeal.model}) paid ${usdM(stats.bestDeal.revenue)} over its term.`;
   if (stats.worstIncident) s2.endReport.worstIncident = stats.worstIncident.text;
   const rivals = s2.rivals ?? [];
@@ -11937,6 +11939,7 @@ const sessionActions = (c) => {
       set({ game: g });
     },
     ackNews: () => set((s2) => ({ game: { ...s2.game, news: (s2.game.news ?? []).slice(1) } })),
+    setSite: (site) => set((s2) => ({ game: { ...s2.game, site: { ...SITE_DEFAULT, ...s2.game.site ?? {}, ...site } } })),
     ackStory: () => set((s2) => s2.game.story ? { game: { ...s2.game, story: { ...s2.game.story, cards: s2.game.story.cards.slice(1) } } } : s2),
     resolveDilemma: (choice) => {
       const g0 = get().game;

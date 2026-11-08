@@ -1,15 +1,59 @@
 class_name Kit
 ## Shared UI toolkit: the game's visual language + the building blocks every screen uses.
 
-const BG := Color(0.035, 0.05, 0.075, 0.97)
-const PANEL := Color(0.055, 0.08, 0.115, 0.96)
-const LINE := Color(0.16, 0.27, 0.38)
-const CY := Color(0.3, 0.82, 1.0)
-const GR := Color(0.25, 0.9, 0.6)
-const AM := Color(1.0, 0.72, 0.2)
-const RD := Color(1.0, 0.36, 0.42)
-const DIM := Color(0.58, 0.68, 0.78)
-const TX := Color(0.9, 0.95, 1.0)
+## Palette. Dynamic so the player can pick a theme (set_theme); screens rebuild to pick the new values up.
+static var BG := Color(0.035, 0.05, 0.075, 0.97)
+static var PANEL := Color(0.055, 0.08, 0.115, 0.96)
+static var LINE := Color(0.16, 0.27, 0.38)
+static var CY := Color(0.3, 0.82, 1.0)
+static var GR := Color(0.25, 0.9, 0.6)
+static var AM := Color(1.0, 0.72, 0.2)
+static var RD := Color(1.0, 0.36, 0.42)
+static var DIM := Color(0.58, 0.68, 0.78)
+static var TX := Color(0.9, 0.95, 1.0)
+static var PANEL_FILL := Color(0.07, 0.095, 0.135, 0.98)
+static var PANEL_EDGE := Color(0.2, 0.3, 0.42)
+static var DEEP := Color(0.03, 0.045, 0.07)
+static var FIELD := Color(0.045, 0.075, 0.105)
+static var OUTL := Color(0.02, 0.03, 0.05)
+static var INK := Color(0.04, 0.05, 0.09)
+static var BTN_BASE := Color(0.1, 0.15, 0.21)
+static var BTN_EDGE := Color(0.3, 0.42, 0.55)
+static var BTN_INK := Color(0.88, 0.94, 1.0)
+static var BTN_OFF := Color(0.07, 0.1, 0.14)
+static var BTN_DIS := Color(0.06, 0.08, 0.1)
+static var SEL := Color(0.08, 0.17, 0.24)
+static var TIPF := Color(0.13, 0.12, 0.07)
+static var TIPX := Color(0.95, 0.92, 0.8)
+static var OUTLINE := Color(0.01, 0.015, 0.03)
+static var SHADOW := Color(0, 0, 0, 0.7)
+static var SCRIM := Color(0.01, 0.02, 0.04, 0.88)
+static var dark := true
+static var theme_id := "midnight"
+const THEMES := [
+	{"id": "midnight", "name": "Midnight", "dark": true, "BG": Color(0.035, 0.05, 0.075, 0.97), "PANEL": Color(0.055, 0.08, 0.115, 0.96), "LINE": Color(0.16, 0.27, 0.38), "CY": Color(0.3, 0.82, 1.0), "GR": Color(0.25, 0.9, 0.6), "AM": Color(1.0, 0.72, 0.2), "RD": Color(1.0, 0.36, 0.42), "DIM": Color(0.58, 0.68, 0.78), "TX": Color(0.9, 0.95, 1.0), "FILL": Color(0.07, 0.095, 0.135, 0.98), "EDGE": Color(0.2, 0.3, 0.42), "DEEP": Color(0.03, 0.045, 0.07), "FIELD": Color(0.045, 0.075, 0.105), "OUTL": Color(0.02, 0.03, 0.05), "INK": Color(0.04, 0.05, 0.09), "BTN_BASE": Color(0.1, 0.15, 0.21), "BTN_EDGE": Color(0.3, 0.42, 0.55), "BTN_INK": Color(0.88, 0.94, 1.0), "BTN_OFF": Color(0.07, 0.1, 0.14), "BTN_DIS": Color(0.06, 0.08, 0.1), "SEL": Color(0.08, 0.17, 0.24), "TIPF": Color(0.13, 0.12, 0.07), "TIPX": Color(0.95, 0.92, 0.8), "OUTLINE": Color(0.01, 0.015, 0.03), "SHADOW": Color(0, 0, 0, 0.7), "SCRIM": Color(0.01, 0.02, 0.04, 0.88)},
+	{"id": "graphite", "name": "Graphite", "dark": true, "BG": Color(0.07, 0.07, 0.075, 0.97), "PANEL": Color(0.11, 0.11, 0.12, 0.96), "LINE": Color(0.28, 0.28, 0.3), "CY": Color(0.95, 0.74, 0.28), "GR": Color(0.4, 0.85, 0.55), "AM": Color(1.0, 0.62, 0.2), "RD": Color(1.0, 0.4, 0.4), "DIM": Color(0.66, 0.66, 0.69), "TX": Color(0.94, 0.94, 0.95), "FILL": Color(0.14, 0.14, 0.15, 0.98), "EDGE": Color(0.32, 0.32, 0.34), "DEEP": Color(0.05, 0.05, 0.055), "FIELD": Color(0.09, 0.09, 0.1), "OUTL": Color(0.02, 0.02, 0.02), "INK": Color(0.06, 0.05, 0.03), "BTN_BASE": Color(0.18, 0.18, 0.2), "BTN_EDGE": Color(0.4, 0.4, 0.43), "BTN_INK": Color(0.93, 0.93, 0.95), "BTN_OFF": Color(0.11, 0.11, 0.12), "BTN_DIS": Color(0.09, 0.09, 0.1), "SEL": Color(0.22, 0.19, 0.1), "TIPF": Color(0.16, 0.14, 0.08), "TIPX": Color(0.95, 0.92, 0.8), "OUTLINE": Color(0.02, 0.02, 0.02), "SHADOW": Color(0, 0, 0, 0.7), "SCRIM": Color(0.02, 0.02, 0.02, 0.88)},
+	{"id": "ember", "name": "Ember", "dark": true, "BG": Color(0.07, 0.045, 0.04, 0.97), "PANEL": Color(0.11, 0.07, 0.06, 0.96), "LINE": Color(0.33, 0.2, 0.16), "CY": Color(1.0, 0.5, 0.25), "GR": Color(0.5, 0.9, 0.5), "AM": Color(1.0, 0.8, 0.3), "RD": Color(1.0, 0.35, 0.4), "DIM": Color(0.74, 0.62, 0.57), "TX": Color(1.0, 0.95, 0.92), "FILL": Color(0.14, 0.09, 0.075, 0.98), "EDGE": Color(0.4, 0.25, 0.2), "DEEP": Color(0.055, 0.035, 0.03), "FIELD": Color(0.095, 0.06, 0.05), "OUTL": Color(0.03, 0.015, 0.01), "INK": Color(0.07, 0.035, 0.02), "BTN_BASE": Color(0.2, 0.12, 0.09), "BTN_EDGE": Color(0.5, 0.32, 0.25), "BTN_INK": Color(1.0, 0.93, 0.88), "BTN_OFF": Color(0.12, 0.07, 0.06), "BTN_DIS": Color(0.09, 0.06, 0.05), "SEL": Color(0.26, 0.14, 0.08), "TIPF": Color(0.16, 0.12, 0.06), "TIPX": Color(0.95, 0.9, 0.78), "OUTLINE": Color(0.03, 0.015, 0.01), "SHADOW": Color(0, 0, 0, 0.7), "SCRIM": Color(0.04, 0.02, 0.01, 0.88)},
+	{"id": "contrast", "name": "High contrast", "dark": true, "BG": Color(0, 0, 0, 1.0), "PANEL": Color(0.04, 0.04, 0.04, 1.0), "LINE": Color(0.8, 0.8, 0.8), "CY": Color(1.0, 0.9, 0.1), "GR": Color(0.2, 1.0, 0.4), "AM": Color(1.0, 0.65, 0.0), "RD": Color(1.0, 0.3, 0.3), "DIM": Color(0.84, 0.84, 0.84), "TX": Color(1, 1, 1), "FILL": Color(0.02, 0.02, 0.02, 1.0), "EDGE": Color(0.9, 0.9, 0.9), "DEEP": Color(0, 0, 0), "FIELD": Color(0.06, 0.06, 0.06), "OUTL": Color(0.9, 0.9, 0.9), "INK": Color(0, 0, 0), "BTN_BASE": Color(0.1, 0.1, 0.1), "BTN_EDGE": Color(1, 1, 1), "BTN_INK": Color(1, 1, 1), "BTN_OFF": Color(0.05, 0.05, 0.05), "BTN_DIS": Color(0.05, 0.05, 0.05), "SEL": Color(0.25, 0.22, 0.0), "TIPF": Color(0.12, 0.1, 0.0), "TIPX": Color(1, 0.95, 0.7), "OUTLINE": Color(0, 0, 0), "SHADOW": Color(0, 0, 0, 0.0), "SCRIM": Color(0, 0, 0, 0.9)},
+	{"id": "paper", "name": "Paper", "dark": false, "BG": Color(0.95, 0.96, 0.98, 0.97), "PANEL": Color(0.9, 0.92, 0.95, 0.97), "LINE": Color(0.7, 0.76, 0.83), "CY": Color(0.05, 0.5, 0.8), "GR": Color(0.05, 0.56, 0.33), "AM": Color(0.72, 0.42, 0.0), "RD": Color(0.82, 0.17, 0.27), "DIM": Color(0.35, 0.42, 0.5), "TX": Color(0.08, 0.11, 0.16), "FILL": Color(0.99, 0.99, 1.0, 0.98), "EDGE": Color(0.62, 0.7, 0.78), "DEEP": Color(0.88, 0.91, 0.95), "FIELD": Color(0.93, 0.95, 0.97), "OUTL": Color(0.2, 0.26, 0.34), "INK": Color(0.04, 0.07, 0.12), "BTN_BASE": Color(0.85, 0.88, 0.92), "BTN_EDGE": Color(0.45, 0.52, 0.6), "BTN_INK": Color(0.08, 0.11, 0.16), "BTN_OFF": Color(0.86, 0.89, 0.93), "BTN_DIS": Color(0.9, 0.91, 0.93), "SEL": Color(0.8, 0.9, 0.98), "TIPF": Color(1.0, 0.96, 0.82), "TIPX": Color(0.3, 0.25, 0.1), "OUTLINE": Color(1, 1, 1, 0.0), "SHADOW": Color(0.15, 0.2, 0.3, 0.3), "SCRIM": Color(0.97, 0.98, 1.0, 0.88)},
+	{"id": "sand", "name": "Sand", "dark": false, "BG": Color(0.97, 0.95, 0.9, 0.97), "PANEL": Color(0.93, 0.9, 0.84, 0.97), "LINE": Color(0.78, 0.72, 0.62), "CY": Color(0.78, 0.4, 0.05), "GR": Color(0.2, 0.5, 0.25), "AM": Color(0.7, 0.45, 0.0), "RD": Color(0.78, 0.2, 0.2), "DIM": Color(0.42, 0.37, 0.3), "TX": Color(0.15, 0.12, 0.08), "FILL": Color(1.0, 0.985, 0.95, 0.98), "EDGE": Color(0.7, 0.62, 0.5), "DEEP": Color(0.92, 0.89, 0.82), "FIELD": Color(0.95, 0.93, 0.88), "OUTL": Color(0.3, 0.25, 0.18), "INK": Color(0.1, 0.07, 0.03), "BTN_BASE": Color(0.9, 0.86, 0.78), "BTN_EDGE": Color(0.55, 0.48, 0.38), "BTN_INK": Color(0.15, 0.12, 0.08), "BTN_OFF": Color(0.9, 0.87, 0.8), "BTN_DIS": Color(0.92, 0.9, 0.86), "SEL": Color(0.98, 0.9, 0.72), "TIPF": Color(1.0, 0.95, 0.8), "TIPX": Color(0.3, 0.22, 0.08), "OUTLINE": Color(1, 1, 1, 0.0), "SHADOW": Color(0.25, 0.2, 0.1, 0.3), "SCRIM": Color(0.98, 0.96, 0.9, 0.88)},
+	{"id": "mist", "name": "Mist", "dark": false, "BG": Color(0.93, 0.95, 0.95, 0.97), "PANEL": Color(0.88, 0.91, 0.91, 0.97), "LINE": Color(0.65, 0.72, 0.72), "CY": Color(0.0, 0.52, 0.56), "GR": Color(0.1, 0.55, 0.3), "AM": Color(0.7, 0.45, 0.0), "RD": Color(0.8, 0.2, 0.25), "DIM": Color(0.35, 0.43, 0.43), "TX": Color(0.07, 0.12, 0.12), "FILL": Color(0.97, 0.98, 0.98, 0.98), "EDGE": Color(0.55, 0.65, 0.65), "DEEP": Color(0.85, 0.89, 0.89), "FIELD": Color(0.91, 0.94, 0.94), "OUTL": Color(0.18, 0.27, 0.27), "INK": Color(0.03, 0.08, 0.08), "BTN_BASE": Color(0.82, 0.88, 0.88), "BTN_EDGE": Color(0.4, 0.52, 0.52), "BTN_INK": Color(0.07, 0.12, 0.12), "BTN_OFF": Color(0.84, 0.89, 0.89), "BTN_DIS": Color(0.89, 0.92, 0.92), "SEL": Color(0.78, 0.92, 0.92), "TIPF": Color(1.0, 0.96, 0.82), "TIPX": Color(0.3, 0.25, 0.1), "OUTLINE": Color(1, 1, 1, 0.0), "SHADOW": Color(0.1, 0.2, 0.2, 0.3), "SCRIM": Color(0.95, 0.97, 0.97, 0.88)},
+]
+
+## Switch the whole palette. Callers rebuild their screens afterwards.
+static func set_theme(id: String) -> void:
+	var t: Dictionary = THEMES[0]
+	for x in THEMES:
+		if x.id == id: t = x
+	theme_id = str(t.id); dark = bool(t.dark)
+	BG = t.BG; PANEL = t.PANEL; LINE = t.LINE; CY = t.CY; GR = t.GR; AM = t.AM; RD = t.RD; DIM = t.DIM; TX = t.TX; PANEL_FILL = t.FILL; PANEL_EDGE = t.EDGE; DEEP = t.DEEP; FIELD = t.FIELD; OUTL = t.OUTL; INK = t.INK
+	BTN_BASE = t.BTN_BASE; BTN_EDGE = t.BTN_EDGE; BTN_INK = t.BTN_INK; BTN_OFF = t.BTN_OFF; BTN_DIS = t.BTN_DIS; SEL = t.SEL; TIPF = t.TIPF; TIPX = t.TIPX; OUTLINE = t.OUTLINE; SHADOW = t.SHADOW; SCRIM = t.SCRIM
+	accent = CY; _ls_cache.clear(); _lsb_cache.clear(); _btn_styles.clear()
+
+static func deep(a := 1.0) -> Color: return Color(DEEP.r, DEEP.g, DEEP.b, a)
+static func field(a := 1.0) -> Color: return Color(FIELD.r, FIELD.g, FIELD.b, a)
+## A panel fill tinted toward a colour (warnings, takeaways).
+static func tint(c: Color, k := 0.14) -> Color: return PANEL_FILL.lerp(c, k)
 const VENDOR := {"nvidia": "#76b900", "amd": "#ed1c24", "tenstorrent": "#8a5cf6", "cerebras": "#ff7a1a", "intel": "#0071c5", "groq": "#f5d90a"}
 
 ## Smallest font used anywhere (px at 1080p). Handheld screens scale the UI up, so this stays readable on a Steam Deck.
@@ -34,8 +78,8 @@ static func ls(size: int, col: Color) -> LabelSettings:
 	if _ls_cache.has(k): return _ls_cache[k]
 	size = fs(size); var s := LabelSettings.new(); s.font_size = size; s.font_color = col
 	if size >= 20:   # headlines and big numbers: bold with a dark outline and hard shadow, like a comic caption
-		s.font = Fonts.bold; s.outline_size = 5; s.outline_color = Color(0.01, 0.015, 0.03)
-		s.shadow_size = 1; s.shadow_color = Color(0, 0, 0, 0.85); s.shadow_offset = Vector2(3, 3)
+		s.font = Fonts.bold; s.outline_size = 5 if dark else 0; s.outline_color = OUTLINE
+		s.shadow_size = 1; s.shadow_color = Color(SHADOW.r, SHADOW.g, SHADOW.b, 0.85 if dark else 0.25); s.shadow_offset = Vector2(3, 3)
 	_ls_cache[k] = s; return s
 
 static func label(t: String, size := 16, col: Color = TX, wrap := false) -> Label:
@@ -57,9 +101,9 @@ static func focus_sb() -> StyleBoxFlat:
 static var accent := CY          # colour of the drawer being built (set by the app shell before a screen rebuilds)
 ## Frame for a drawer / workshop: thick accent edge on the side facing the hall, hard offset shadow.
 static func drawer_sb(acc: Color, full: bool) -> StyleBoxFlat:
-	var s := sb(Color(0.035, 0.05, 0.075, 0.985), Color(0.02, 0.03, 0.045), 4, 3, 14)
+	var s := sb(deep(0.985), OUTL, 4, 3, 14)
 	if not full: s.border_width_left = 8; s.border_color = acc
-	s.shadow_color = Color(0, 0, 0, 0.55); s.shadow_size = 18; s.shadow_offset = Vector2(-8, 0) if not full else Vector2.ZERO
+	s.shadow_color = Color(SHADOW.r, SHADOW.g, SHADOW.b, SHADOW.a * 0.8); s.shadow_size = 18; s.shadow_offset = Vector2(-8, 0) if not full else Vector2.ZERO
 	return s
 
 ## Dock button: chunky tab with a coloured underline and a hotkey badge.
@@ -70,23 +114,23 @@ static func dock_btn(t: String, key: String, col: Color, cb: Callable) -> Button
 
 static func dock_set(b: Button, on: bool) -> void:
 	var col: Color = b.get_meta("col")
-	var base := col if on else Color(0.07, 0.1, 0.14)
+	var base := col if on else BTN_OFF
 	for st in ["normal", "hover", "pressed"]:
-		var s := sb(base if st != "hover" else base.lightened(0.12), Color(0.02, 0.03, 0.05), 4, 3, 8)
-		s.border_width_bottom = 8; s.border_color = col if not on else Color(0.02, 0.03, 0.05)
-		s.shadow_color = Color(0, 0, 0, 0.6); s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
+		var s := sb(base if st != "hover" else base.lightened(0.12), OUTL, 4, 3, 8)
+		s.border_width_bottom = 8; s.border_color = col if not on else OUTL
+		s.shadow_color = SHADOW; s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
 		b.add_theme_stylebox_override(st, s)
-	b.add_theme_color_override("font_color", Color(0.05, 0.06, 0.1) if on else TX); b.add_theme_color_override("font_hover_color", Color(0.05, 0.06, 0.1) if on else Color.WHITE)
-	b.add_theme_color_override("font_pressed_color", Color(0.05, 0.06, 0.1) if on else Color.WHITE)
+	b.add_theme_color_override("font_color", INK if on else TX); b.add_theme_color_override("font_hover_color", INK if on else TX)
+	b.add_theme_color_override("font_pressed_color", INK if on else TX)
 
 ## Tab inside a drawer header.
 static func tab_btn(t: String, on: bool, col: Color, cb: Callable) -> Button:
 	var b := Button.new(); b.text = t.to_upper(); b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
-	var base := col if on else Color(0.07, 0.1, 0.14)
+	var base := col if on else BTN_OFF
 	for st in ["normal", "hover", "pressed"]:
-		var s := sb(base if st != "hover" else base.lightened(0.12), Color(0.02, 0.03, 0.05), 3, 3, 10); s.shadow_color = Color(0, 0, 0, 0.6); s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
+		var s := sb(base if st != "hover" else base.lightened(0.12), OUTL, 3, 3, 10); s.shadow_color = SHADOW; s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
 		b.add_theme_stylebox_override(st, s)
-	var fc := Color(0.05, 0.06, 0.1) if on else TX
+	var fc := INK if on else TX
 	b.add_theme_color_override("font_color", fc); b.add_theme_color_override("font_hover_color", fc); b.add_theme_color_override("font_pressed_color", fc)
 	b.pressed.connect(cb); return b
 
@@ -94,14 +138,14 @@ static var _btn_styles := {}
 ## Button StyleBoxes depend only on the kind, so they are built once and shared (hundreds of buttons per screen).
 static func _styles(kind: String) -> Dictionary:
 	if _btn_styles.has(kind): return _btn_styles[kind]
-	var base := Color(0.1, 0.15, 0.21); var edge := Color(0.3, 0.42, 0.55); var ink := Color(0.88, 0.94, 1.0)
-	if kind == "pri": base = Color(0.16, 0.62, 0.86); edge = Color(0.02, 0.03, 0.05); ink = Color(0.03, 0.05, 0.09)
-	elif kind == "go": base = Color(0.2, 0.82, 0.52); edge = Color(0.02, 0.03, 0.05); ink = Color(0.02, 0.07, 0.04)
-	elif kind == "danger": base = Color(0.9, 0.28, 0.36); edge = Color(0.02, 0.03, 0.05); ink = Color(0.1, 0.02, 0.03)
+	var base := BTN_BASE; var edge := BTN_EDGE; var ink := BTN_INK
+	if kind == "pri": base = Color(0.16, 0.62, 0.86); edge = OUTL; ink = Color(0.03, 0.05, 0.09)
+	elif kind == "go": base = Color(0.2, 0.82, 0.52); edge = OUTL; ink = Color(0.02, 0.07, 0.04)
+	elif kind == "danger": base = Color(0.9, 0.28, 0.36); edge = OUTL; ink = Color(0.1, 0.02, 0.03)
 	var mk := func(bg: Color, off: Vector2) -> StyleBoxFlat:
-		var s := sb(bg, edge, 4, 2, 10); s.shadow_color = Color(0, 0, 0, 0.7); s.shadow_size = 1; s.shadow_offset = off; return s
-	var st := {"normal": mk.call(base, Vector2(3, 3)), "hover": mk.call(base.lightened(0.14), Vector2(3, 3)), "pressed": mk.call(base.darkened(0.12), Vector2(1, 1)), "disabled": mk.call(Color(0.06, 0.08, 0.1), Vector2(0, 0)), "ink": ink, "focus": focus_sb()}
-	st.disabled.border_color = Color(0.12, 0.16, 0.2)
+		var s := sb(bg, edge, 4, 2, 10); s.shadow_color = SHADOW; s.shadow_size = 1; s.shadow_offset = off; return s
+	var st := {"normal": mk.call(base, Vector2(3, 3)), "hover": mk.call(base.lightened(0.14), Vector2(3, 3)), "pressed": mk.call(base.darkened(0.12), Vector2(1, 1)), "disabled": mk.call(BTN_DIS, Vector2(0, 0)), "ink": ink, "focus": focus_sb()}
+	st.disabled.border_color = LINE
 	_btn_styles[kind] = st; return st
 
 static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
@@ -111,7 +155,7 @@ static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
 	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
 	b.add_theme_stylebox_override("pressed", st.pressed); b.add_theme_stylebox_override("disabled", st.disabled)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, st.ink)
-	b.add_theme_color_override("font_disabled_color", Color(0.4, 0.45, 0.5)); b.set_meta("kind", kind); b.pressed.connect(cb); return b
+	b.add_theme_color_override("font_disabled_color", DIM.darkened(0.2) if dark else DIM.lightened(0.25)); b.set_meta("kind", kind); b.pressed.connect(cb); return b
 
 ## Re-skin a button as one of the kinds ("", "pri", "go", "danger").
 static func skin(b: Button, kind: String) -> void:
@@ -165,17 +209,17 @@ static func tabs(parent: Control, names: Array, current: String, cb: Callable) -
 	parent.add_child(h); return h
 
 ## A titled panel; returns [panel, body_vbox].
-const PANEL_FILL := Color(0.07, 0.095, 0.135, 0.98)
-const PANEL_EDGE := Color(0.2, 0.3, 0.42)
 ## A panel in the game's sticker style: solid fill, 2px edge, hard offset shadow, title on an accent chip.
-static func card_sb(edge: Color = PANEL_EDGE, fill: Color = PANEL_FILL, bw := 2, pad := 14) -> StyleBoxFlat:
-	var s := sb(fill, edge, 5, bw, pad); s.shadow_color = Color(0, 0, 0, 0.75); s.shadow_size = 1; s.shadow_offset = Vector2(4, 4); return s
+static func card_sb(edge := Color(0, 0, 0, 0), fill := Color(0, 0, 0, 0), bw := 2, pad := 14) -> StyleBoxFlat:
+	if edge.a == 0.0: edge = PANEL_EDGE
+	if fill.a == 0.0: fill = PANEL_FILL
+	var s := sb(fill, edge, 5, bw, pad); s.shadow_color = SHADOW; s.shadow_size = 1; s.shadow_offset = Vector2(4, 4); return s
 
 ## Small filled label (dark text on a colour).
 static func chip(t: String, col: Color, size := 13) -> PanelContainer:
-	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(col, Color(0.02, 0.03, 0.05), 3, 2, 7))
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(col, OUTL, 3, 2, 7))
 	var s := p.get_theme_stylebox("panel") as StyleBoxFlat; s.content_margin_top = 1; s.content_margin_bottom = 1
-	var l := Label.new(); l.text = t; l.label_settings = ls_bold(size, Color(0.04, 0.05, 0.09)); p.add_child(l); return p
+	var l := Label.new(); l.text = t; l.label_settings = ls_bold(size, INK); p.add_child(l); return p
 
 static var _lsb_cache := {}
 static func ls_bold(size: int, col: Color) -> LabelSettings:
@@ -215,7 +259,7 @@ static func stats(items: Array, cols := 4) -> GridContainer:
 static func bar(v: float, mx: float, warn := false) -> ProgressBar:
 	var p := ProgressBar.new(); p.show_percentage = false; p.custom_minimum_size = Vector2(0, 10); p.max_value = 1.0; p.value = clampf(v / maxf(1e-9, mx), 0.0, 1.0)
 	var col := RD if v > mx else (AM if warn or v > mx * 0.85 else GR)
-	var bg := sb(Color(0.08, 0.11, 0.15), Color(0, 0, 0, 0), 5, 0, 0); var fg := sb(col, Color(0, 0, 0, 0), 5, 0, 0)
+	var bg := sb(FIELD.lerp(LINE, 0.25), Color(0, 0, 0, 0), 5, 0, 0); var fg := sb(col, Color(0, 0, 0, 0), 5, 0, 0)
 	for s in [bg, fg]: s.content_margin_top = 0; s.content_margin_bottom = 0
 	p.add_theme_stylebox_override("background", bg); p.add_theme_stylebox_override("fill", fg); return p
 
@@ -223,10 +267,10 @@ static func tag(t: String, col: Color = CY) -> Control:
 	return chip(t, col, 11)
 
 static func tip(text: String) -> PanelContainer:
-	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(Color(0.9, 0.78, 0.25), Color(0.13, 0.12, 0.07), 2, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(AM, TIPF, 2, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 10); p.add_child(hb)
 	var c := chip("TIP", Color(1.0, 0.82, 0.25), 12); c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; hb.add_child(c)
-	hb.add_child(label(text, 13, Color(0.95, 0.92, 0.8), true)); return p
+	hb.add_child(label(text, 13, TIPX, true)); return p
 
 static func issue(sev: String, head: String, msg: String) -> PanelContainer:
 	var col := RD if sev == "error" else (AM if sev == "warn" else CY)
@@ -321,11 +365,11 @@ static func specs_of(i: Dictionary) -> Array:
 	return []
 
 static func codex_card(parent: Control, codex: Dictionary, name := "") -> void:
-	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(Color(0.04, 0.07, 0.1), Color(0.14, 0.24, 0.34), 8, 1, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(field(), LINE, 8, 1, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 5); p.add_child(v)
 	if name != "": v.add_child(label(name, 15, TX, true))
 	v.add_child(label(codex.summary, 14, TX, true)); v.add_child(label(codex.explain, 13, DIM, true))
-	for t in codex.tradeoffs: v.add_child(label("•  " + t, 13, Color(0.85, 0.9, 0.95), true))
+	for t in codex.tradeoffs: v.add_child(label("•  " + t, 13, TX, true))
 	parent.add_child(p)
 
 
@@ -343,12 +387,15 @@ static func refresh_keep(node: Control) -> void:
 	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
 
 ## Collapsible panel. `folds` is a persistent Dictionary (key -> bool collapsed); toggling calls `on_toggle`.
-static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle: Callable, glow := false, parent: Control = null, default_collapsed := false) -> Array:
+static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle: Callable, glow := false, parent: Control = null, default_collapsed := false, logo := "") -> Array:
 	var collapsed: bool = folds.get(key, default_collapsed)
 	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(accent if glow else PANEL_EDGE, PANEL_FILL, 3 if glow else 2, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); p.add_child(v)
 	var hb := btn(("▸ " if collapsed else "▾ ") + title.to_upper(), func(): folds[key] = not collapsed; on_toggle.call(), "pri" if not collapsed else "", 13)
-	hb.alignment = HORIZONTAL_ALIGNMENT_LEFT; v.add_child(hb)
+	hb.alignment = HORIZONTAL_ALIGNMENT_LEFT; hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if logo != "":   # company logo to the left of the header
+		var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 8); hr.add_child(Logo.make(logo, 30.0)); hr.add_child(hb); v.add_child(hr)
+	else: v.add_child(hb)
 	var body := VBoxContainer.new(); body.add_theme_constant_override("separation", 7); body.visible = not collapsed; v.add_child(body)
 	if parent: parent.add_child(p)
 	return [p, body]
@@ -369,7 +416,7 @@ static func confirm(host: Node, text: String, on_yes: Callable, yes_label := "Co
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); layer.add_child(h)
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.55); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -260; pn.offset_right = 260; pn.offset_top = -90; pn.offset_bottom = 90
-	pn.add_theme_stylebox_override("panel", sb(Color(0.03, 0.05, 0.08, 0.99), CY, 12, 2, 20)); h.add_child(pn)
+	pn.add_theme_stylebox_override("panel", sb(deep(0.99), CY, 12, 2, 20)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 14); pn.add_child(vb)
 	vb.add_child(label(text, 17, TX, true))
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); vb.add_child(row)

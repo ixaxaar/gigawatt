@@ -8,7 +8,7 @@ const STAGE_LBL := {"building": "Order & build", "commissioning": "Burn-in", "cl
 func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _plaque(parent: Control, label: String, value: String, col: Color, trend: Array, sub: String) -> void:
-	var p := PanelContainer.new(); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; p.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.05, 0.08, 0.92), col, 10, 2, 12)); parent.add_child(p)
+	var p := PanelContainer.new(); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; p.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.92), col, 10, 2, 12)); parent.add_child(p)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 3); p.add_child(v)
 	v.add_child(Kit.label(label, 11, Kit.DIM)); v.add_child(Kit.label(value, 26, col))
 	var sp := Spark.new(); sp.values = trend; sp.color = col; v.add_child(sp); v.add_child(Kit.label(sub, 11, Kit.DIM, true))
@@ -77,7 +77,7 @@ func _rebuild() -> void:
 	_plaque(pl, "BURN / MO", Kit.usd(p.opex), Color("#ff7a59"), hist.map(func(h): return h.opex), "power · staff · support · interest")
 	_plaque(pl, "NET / MO", Kit.usd(p.net), Kit.CY if p.net >= 0 else Kit.RD, hist.map(func(h): return h.revenue - h.opex), "after depreciation")
 	_plaque(pl, "NET WORTH", Kit.usd(float(b.q("netWorth"))), Color("#c792ea"), hist.map(func(h): return h.cash), "capex %s · %s GPUs clustered" % [Kit.usd(float(b.q("capexBasis"))), Kit.num(accels)])
-	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -500; rp.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
+	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -500; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var col := Kit.column(rp, 0, true)
 	_needs(col, b.q("needs"))
 	_preview(col, b.q("preview"))
@@ -112,7 +112,9 @@ func _rebuild() -> void:
 	if g.activeContracts.is_empty(): cp[1].add_child(Kit.label("None yet — open Customers.", 13, Kit.DIM))
 	for a in g.activeContracts:
 		var sub := ("%d/%d mo · SLA misses %d" % [int(a.monthsServed), int(a.contract.durationMonths), int(a.slaMisses)]) if a.clusterIds.size() > 0 else "awaiting deployment (by %s)" % Kit.date_of(a.get("deployBy", a.startMonth + 4))
-		cp[1].add_child(Kit.rich("[b]%s[/b] · %s  [color=#8fb0c8]%s · %s[/color]" % [a.contract.customer, a.contract.model.name, a.contract.kind, sub], 12))
+		var cr := HBoxContainer.new(); cr.add_theme_constant_override("separation", 8); cp[1].add_child(cr)
+		cr.add_child(Logo.make(str(a.contract.customer), 24.0))
+		cr.add_child(Kit.rich("[b]%s[/b] · %s  [color=#8fb0c8]%s · %s[/color]" % [a.contract.customer, a.contract.model.name, a.contract.kind, sub], 12))
 	var lp := _fold("Log", "log", col, true)
 	var logs: Array = g.log.duplicate(); logs.reverse()
 	for e in logs.slice(0, 40): lp[1].add_child(Kit.label("%s — %s" % [Kit.date_of(e.month), e.text], 12, Kit.GR if e.level == "good" else (Kit.RD if e.level == "bad" else Kit.DIM), true))

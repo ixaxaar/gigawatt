@@ -76,7 +76,7 @@ func open() -> void:
 		var pn := Kit.panel(m[0], false, two); pn[1].add_child(Kit.label(m[1], 13, Kit.DIM, true))
 	for i in steps.size():
 		var s: Array = steps[i]; var done: bool = s[2]
-		var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", Kit.sb(Color(0.05, 0.14, 0.1) if done else (Color(0.08, 0.2, 0.3) if i == now else Kit.PANEL), Kit.GR if done else (Kit.CY if i == now else Kit.LINE), 8, 1, 10)); v.add_child(card)
+		var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", Kit.sb(Kit.tint(Kit.GR, 0.18) if done else (Kit.SEL if i == now else Kit.PANEL), Kit.GR if done else (Kit.CY if i == now else Kit.LINE), 8, 1, 10)); v.add_child(card)
 		var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 12); card.add_child(h)
 		h.add_child(Kit.label("✓" if done else str(i + 1), 22, Kit.GR if done else Kit.CY))
 		var tv := VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(tv); tv.add_child(Kit.label(s[0], 16)); tv.add_child(Kit.label(s[1], 13, Kit.DIM, true))

@@ -9,6 +9,10 @@ uniform sampler2D tex_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_
 uniform sampler2D tex_r : hint_roughness_r, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform bool use_tex = false;
 uniform bool use_normal = false;
+uniform bool full_albedo = false;      // the texture IS the floor (concrete, terrazzo, checker, green) instead of grain over tiles
+uniform float tex_scale = 1.2;
+uniform float seam_k = 1.0;
+uniform vec3 tint = vec3(1.0);
 varying vec3 wpos;
 void vertex() { wpos = VERTEX; }
 float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -31,9 +35,16 @@ void fragment() {
 	if (use_tex) {
 		// anti-static vinyl / steel grain, one texture repeat per 1.2 m (two tiles), tinted per tile so no two tiles match
 		vec2 tuv = p / 1.2 + vec2(h(tile) * 0.37, h(tile + 7.0) * 0.41);
+		if (full_albedo) tuv = p / tex_scale;
 		vec3 d = texture(tex_c, tuv).rgb;
-		base *= mix(0.6, 1.35, dot(d, vec3(0.333)));
-		base *= 0.92 + 0.16 * h(tile + 3.0);
+		if (full_albedo) {
+			vec3 full = d * tint * (0.94 + 0.12 * h(tile + 3.0));
+			base = mix(full * mix(0.12, 1.0, edge), vec3(0.06), clamp(seam, 0.0, 1.0) * 0.7 * seam_k);
+			base = mix(base, vec3(0.02), hole * 0.9);
+		} else {
+			base *= mix(0.6, 1.35, dot(d, vec3(0.333)));
+			base *= 0.92 + 0.16 * h(tile + 3.0);
+		}
 		rough = clamp(rough * (0.6 + 1.1 * texture(tex_r, tuv).r), 0.12, 0.95);
 		if (use_normal) NORMAL_MAP = mix(vec3(0.5, 0.5, 1.0), texture(tex_n, tuv).rgb, 0.8 * (1.0 - clamp(seam, 0.0, 1.0)));
 		// scuffed aisles: slightly glossier worn strip along every tile row centre line
