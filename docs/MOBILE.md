@@ -3,7 +3,7 @@
 What is in the project, what works, and what is missing before a store build.
 
 ## Done
-- **Layout.** `godot/game/layout.gd` picks the phone layout on Android and iOS (screens under 3.6 inches on the short side) and the handheld layout on tablets. The phone layout is landscape-only (`display/window/handheld/orientation=6`, iOS preset: landscape left and right). Touch input: one-finger pan and tap, two-finger pinch and orbit (`world/hall_view.gd`). Check any layout on a desktop with `GW_LAYOUT=phone` and a 2400x1080 window.
+- **Layout.** `godot/game/layout.gd` picks the phone layout on Android and iOS (screens under 3.6 inches on the short side) and the handheld layout on tablets. The phone layout is landscape-only (`display/window/handheld/orientation=4`, sensor landscape; 6 would mean any orientation, iOS preset: landscape left and right). Touch input: one-finger pan and tap, two-finger pinch and orbit (`world/hall_view.gd`). Check any layout on a desktop with `GW_LAYOUT=phone` and a 2400x1080 window.
 - **Engine transport.** `src/bridge.ts` serves the engine over a loopback socket with `--port N` (or `GW_ENGINE_PORT`), and `godot/engine/bridge.gd` connects to it when it cannot spawn a process (Android, iOS; port from the `gigawatt/engine_port` project setting, default 47820). Verified on desktop: start `node godot/sidecar/bridge.mjs <save dir> --port 47823`, then `GW_ENGINE_PORT=47823 godot --path godot`.
 - **Export presets** for Android (arm64, Gradle build, package `ing.gigawatt.game`) and iOS (project export, same bundle id) in `godot/export_presets.cfg`; `sidecar/*` is included in the package.
 
@@ -13,8 +13,7 @@ What is in the project, what works, and what is missing before a store build.
 - **Testing on devices.** Nothing has run on a real phone or tablet; the phone layout has only been checked in desktop windows at 2400x1080.
 - **Performance.** Mobile GPUs need the Potato or Low tier by default; the tier auto-detect has not been tuned for them.
 
-## Android build (v0.8.1 work in progress)
+## Android build (v0.8.1)
 `scripts/build-android-native.sh` installs the Gradle template, fetches nodejs-mobile, builds the JNI shim (`godot/android/native/gwnode.cpp`) and copies the Java `NodeRunner` in; then `godot --headless --path godot --export-debug Android build/android/GIGAWATT-debug.apk` produces an APK (arm64-v8a; set `architectures/x86_64=true` for an emulator).
-- **Verified (x86_64 emulator, API 33):** the APK builds and installs, Node starts in-process and `bridge.mjs` logs "engine listening on 127.0.0.1:47820", the game connects and reaches the title scene.
-- **Not working yet:** a few seconds later the app dies with SIGSEGV inside `libgodot_android.so` (same address with the Vulkan or the Compatibility renderer, with or without the audio low-pass filter), so no gameplay screenshot exists. The emulator only has SwiftShader graphics. Next step: reproduce on a real arm64 phone, or get a symbolised template build for the stack.
-- The Compatibility renderer fails on the emulator's GLES (scene shaders exceed fragment uniform limits), so the Vulkan Mobile path stays the default.
+- **Verified on a Pixel 9a (Android, Mali-G715, Vulkan Mobile):** the APK installs, Node starts in-process (`engine listening on 127.0.0.1:47820`), the game connects, and the Home screen renders in landscape (activity orientation `USER_LANDSCAPE`) at 2424x1080.
+- **Emulator:** the x86_64 emulator (SwiftShader graphics) crashes inside Godot's native library a few seconds after start; the phone does not, so treat that as an emulator problem.
