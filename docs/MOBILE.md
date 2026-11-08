@@ -23,4 +23,4 @@ What is in the project, what works, and what is missing before a store build.
 - **Drawers resize.** Every drawer has a divider with a pill grip on its edge (`ui/drawer_grip.gd`): drag it to size the drawer (phones start at 30% of the width, the choice is saved), tap it to fold the drawer away. Works on every layout, not only phones.
 - **Responsive text.** `game/wrap_guard.gd` wraps any label or button inside a scrolling screen that is wider than the screen's visible width; header rows flow onto several lines (`Kit.head_row`), and every touch screen sits in a `ScreenScroll` so nothing is cut off (it scrolls).
 - `GW_AUDIT=1` prints controls that are squeezed to a sliver and stretched tall; `GW_LAYOUT=phone` with a 2424x1080 window previews the phone layout on a desktop.
-- New games start with walls off (open plan).
+- Halls have no walls at all (open plan); the Walls option was removed from the site picker.

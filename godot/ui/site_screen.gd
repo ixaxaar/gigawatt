@@ -24,7 +24,7 @@ func open(app_, start: Dictionary, heading: String, go_label: String, done: Call
 	var body := HBoxContainer.new(); body.add_theme_constant_override("separation", 24); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; root.add_child(body)
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size = Vector2(470, 0); body.add_child(sc)
 	var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 12); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(col)
-	_option(col, "Floor", "floor", Site.FLOORS); _option(col, "Rack finish", "rack", Site.RACKS); _option(col, "Walls", "walls", Site.WALLS); _option(col, "Lighting", "light", Site.LIGHTS)
+	_option(col, "Floor", "floor", Site.FLOORS); _option(col, "Rack finish", "rack", Site.RACKS); _option(col, "Lighting", "light", Site.LIGHTS)
 	_option(col, "Accent colour", "accent", Site.ACCENTS)
 	preview = SitePreview.new(); preview.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_child(preview); preview.set_style(style)
 	var bar := HBoxContainer.new(); bar.add_theme_constant_override("separation", 12); root.add_child(bar)

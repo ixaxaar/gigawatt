@@ -50,8 +50,11 @@ static func apply_floor(sm: ShaderMaterial, style: Dictionary) -> void:
 	if ft.n != null: sm.set_shader_parameter("tex_n", ft.n)
 	sm.set_shader_parameter("seam_k", float(fs[4])); sm.set_shader_parameter("full_albedo", bool(fs[1])); sm.set_shader_parameter("tex_scale", float(fs[2])); sm.set_shader_parameter("tint", Vector3(fs[3].r, fs[3].g, fs[3].b))
 
-## Wall material, or null for open plan.
+## Halls have no walls (open plan): this is always null, whatever an old save or style says.
 static func wall_material(style: Dictionary) -> Material:
+	return null
+
+static func _old_wall_material(style: Dictionary) -> Material:
 	match style.walls:
 		"brick": return HallMaterials.get_mat("brick", 0.35, Color(1.0, 0.95, 0.95), 1.0, 0.0)
 		"stone": return HallMaterials.get_mat("stone", 0.3, Color(0.9, 0.92, 1.0), 1.0, 0.0)
