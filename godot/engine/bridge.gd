@@ -59,6 +59,8 @@ func start() -> bool:
 	var saves := ProjectSettings.globalize_path("user://saves")   # saves live in the user data folder so they survive quitting
 	DirAccess.make_dir_recursive_absolute(saves)
 	var port := int(OS.get_environment("GW_ENGINE_PORT")) if OS.has_environment("GW_ENGINE_PORT") else (int(ProjectSettings.get_setting("gigawatt/engine_port", 47820)) if OS.has_feature("android") or OS.has_feature("ios") else 0)
+	if port > 0 and OS.has_feature("android") and not OS.has_environment("GW_ENGINE_PORT"):
+		if not _start_android_node(saves, port): return false
 	if port > 0:
 		var sk := EngineSocket.new()
 		if not sk.open(port): last_error = "Could not reach the engine on port %d." % port; return false
@@ -73,6 +75,18 @@ func start() -> bool:
 	for it in res.items: items[it.id] = it
 	templates = res.templates; vendors = res.vendors; models = res.models; missions = res.missions; concepts = res.concepts
 	g = r.game
+	return true
+
+## Android: unpack the engine from the package and run it in the in-process Node (ing.gigawatt.NodeRunner, nodejs-mobile).
+func _start_android_node(saves: String, port: int) -> bool:
+	var src := FileAccess.open("res://sidecar/bridge.mjs", FileAccess.READ)
+	if src == null: last_error = "The engine is missing from the package."; return false
+	var dir := ProjectSettings.globalize_path("user://engine"); DirAccess.make_dir_recursive_absolute(dir)
+	var dst := FileAccess.open(dir.path_join("bridge.mjs"), FileAccess.WRITE)
+	dst.store_buffer(src.get_buffer(src.get_length())); dst.close()
+	var runner = JavaClassWrapper.wrap("ing.gigawatt.NodeRunner")
+	if runner == null or not runner.start(dir.path_join("bridge.mjs"), saves, port):
+		last_error = "Could not start the engine on this device (Node runtime missing)."; return false
 	return true
 
 func stop() -> void:

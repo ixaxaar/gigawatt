@@ -7,3 +7,5 @@ godot/.godot/
 godot/build/
 dist/
 __pycache__/
+godot/android/build/
+godot/android/.build_version

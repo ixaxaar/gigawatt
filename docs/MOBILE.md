@@ -12,3 +12,9 @@ What is in the project, what works, and what is missing before a store build.
 - **Signing and stores.** An Android keystore, Play Console listing, an Apple developer account, provisioning and TestFlight.
 - **Testing on devices.** Nothing has run on a real phone or tablet; the phone layout has only been checked in desktop windows at 2400x1080.
 - **Performance.** Mobile GPUs need the Potato or Low tier by default; the tier auto-detect has not been tuned for them.
+
+## Android build (v0.8.1 work in progress)
+`scripts/build-android-native.sh` installs the Gradle template, fetches nodejs-mobile, builds the JNI shim (`godot/android/native/gwnode.cpp`) and copies the Java `NodeRunner` in; then `godot --headless --path godot --export-debug Android build/android/GIGAWATT-debug.apk` produces an APK (arm64-v8a; set `architectures/x86_64=true` for an emulator).
+- **Verified (x86_64 emulator, API 33):** the APK builds and installs, Node starts in-process and `bridge.mjs` logs "engine listening on 127.0.0.1:47820", the game connects and reaches the title scene.
+- **Not working yet:** a few seconds later the app dies with SIGSEGV inside `libgodot_android.so` (same address with the Vulkan or the Compatibility renderer, with or without the audio low-pass filter), so no gameplay screenshot exists. The emulator only has SwiftShader graphics. Next step: reproduce on a real arm64 phone, or get a symbolised template build for the stack.
+- The Compatibility renderer fails on the emulator's GLES (scene shaders exceed fragment uniform limits), so the Vulkan Mobile path stays the default.
