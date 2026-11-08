@@ -19,7 +19,7 @@ var _ring: MeshInstance3D
 var _sil: StandardMaterial3D
 
 func _init() -> void:
-	stretch = true; custom_minimum_size = Vector2(0, 400 if not Layout.compact else 280); mouse_filter = Control.MOUSE_FILTER_STOP; size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stretch = true; custom_minimum_size = Vector2(0, 400 if not Layout.compact else (190 if Layout.phone else 280)); mouse_filter = Control.MOUSE_FILTER_STOP; size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vp = SubViewport.new(); vp.own_world_3d = true; vp.transparent_bg = false; vp.handle_input_locally = false; vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS; add_child(vp)
 	vp.msaa_3d = Viewport.MSAA_4X if Settings.quality >= 2 else (Viewport.MSAA_2X if Settings.quality == 1 else Viewport.MSAA_DISABLED); vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if Settings.quality <= 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	var env := Environment.new(); env.background_mode = Environment.BG_SKY

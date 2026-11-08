@@ -9,7 +9,7 @@ const WALLS := [["block", "Painted block"], ["brick", "Red brick"], ["stone", "R
 const LIGHTS := [["neutral", "Neutral white"], ["cool", "Cool blue"], ["warm", "Warm amber"], ["night", "Night shift"]]
 const ACCENTS := [["red", "Red", Color(0.9, 0.08, 0.06)], ["orange", "Orange", Color(1.0, 0.45, 0.05)], ["yellow", "Yellow", Color(1.0, 0.82, 0.1)], ["green", "Green", Color(0.1, 0.85, 0.35)], ["cyan", "Cyan", Color(0.1, 0.75, 1.0)], ["magenta", "Magenta", Color(1.0, 0.2, 0.7)]]
 const REGIONS := [["virginia", "Northern Virginia"], ["oregon", "Oregon"], ["frankfurt", "Frankfurt"], ["singapore", "Singapore"], ["reykjavik", "Reykjavik"]]
-const DEFAULT := {"floor": "tile", "walls": "block", "light": "neutral", "accent": "red", "rack": "black"}
+const DEFAULT := {"floor": "tile", "walls": "open", "light": "neutral", "accent": "red", "rack": "black"}
 ## The style the hall (and the showroom) is currently using, so the rack models can read the finish without being handed it.
 static var current: Dictionary = DEFAULT.duplicate()
 ## floor id -> [material set, full albedo?, metres per texture repeat, tint, seam strength (the 600 mm panel joints)]

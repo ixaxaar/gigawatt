@@ -588,7 +588,7 @@ export interface ActiveContract { contract: Contract; clusterIds: string[]; star
 }
 /** Purely cosmetic surroundings. Ids index the option lists in godot/world/site.gd. */
 export interface SiteStyle { floor: string; walls: string; light: string; accent: string; rack: string }
-export const SITE_DEFAULT: SiteStyle = { floor: 'tile', walls: 'block', light: 'neutral', accent: 'red', rack: 'black' };
+export const SITE_DEFAULT: SiteStyle = { floor: 'tile', walls: 'open', light: 'neutral', accent: 'red', rack: 'black' };
 export interface LogEntry { month: number; level: 'info' | 'good' | 'bad'; text: string; }
 
 export const MONTHS_PER_YEAR = 12;

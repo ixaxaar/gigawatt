@@ -17,7 +17,7 @@ func accent_of(id: String) -> Color:
 	return Kit.CY
 func drawer_w(id := "") -> float:
 	var w := get_viewport().get_visible_rect().size.x
-	if Layout.phone: return w - RAIL_W - 14.0
+	if Layout.phone: return clampf(w * 0.68, 560.0, w - RAIL_W - 14.0)   # leaves a strip of the hall visible beside the sheet
 	if Layout.handheld: return minf(w * (0.8 if id == "shop" else 0.68), w - 120.0)
 	return minf(clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0), w - 300.0)
 const SECS := [0.0, 4.0, 1.6, 0.6]
@@ -62,6 +62,7 @@ func _ready() -> void:
 		get_window().content_scale_factor = Settings.effective_ui_scale(get_window())
 		if get("hall") != null and hall != null: hall.apply_scale()
 		if was != Layout.kind or true: call_deferred("_on_resized", was))
+	if Layout.touch: add_child(TouchScroll.new())   # finger scrolling from anywhere, no scrollbars
 	b = Bridge.new(); add_child(b)
 	if not b.start(): push_error(b.last_error); _fatal(b.last_error); return
 	hall = HallView.new(); add_child(hall); hall.b = b
@@ -219,7 +220,7 @@ func vw() -> float: return get_viewport().get_visible_rect().size.x
 
 ## Right-hand drawers that leave the hall clickable (Overview, Facility): 520 px on desktops, the full screen on phones.
 func overlay_w() -> float:
-	if Layout.phone: return vw() - RAIL_W - 14.0
+	if Layout.phone: return clampf(vw() * 0.62, 520.0, vw() - RAIL_W - 14.0)
 	return minf(520.0 if not Layout.handheld else 470.0, vw() - 240.0)
 
 const RAIL_W := 92.0
@@ -234,8 +235,29 @@ func _dock_meta(d: Button, full_name: String, i: int) -> void:
 	d.set_meta("full", d.text); d.set_meta("short", DOCK_SHORT[i]); d.set_meta("short_txt", DOCK_SHORT[i])
 	if Layout.phone: d.text = DOCK_SHORT[i]
 
+## Small screens: a tab on the drawer's edge folds every drawer away so the hall fills the screen, and brings it back.
+var drawer_hidden := false
+var drawer_tab: Button
+func _cover_of(id: String) -> float:
+	if OVERLAY.has(id): return overlay_w()
+	return 0.0 if FULL.has(id) else drawer_w(id)
+func toggle_drawer() -> void:
+	drawer_hidden = not drawer_hidden; holder.visible = not drawer_hidden
+	hall.set_cover(0.0 if drawer_hidden else _cover_of(cur)); _place_tab(); sfx("click")
+func _place_tab_deferred() -> void: call_deferred("_place_tab")
+func _place_tab() -> void:
+	if drawer_tab == null: return
+	drawer_tab.visible = Layout.compact and started and not FULL.has(cur) and cur != ""
+	drawer_tab.text = "◀" if drawer_hidden else "▶"
+	var vh := get_viewport().get_visible_rect().size.y
+	drawer_tab.position = Vector2(vw() - (0.0 if drawer_hidden else _cover_of(cur)) - 50.0, vh * 0.5 - 52.0)
+
 func _relayout() -> void:
 	if top == null: return
+	if drawer_tab == null:
+		drawer_tab = Button.new(); drawer_tab.custom_minimum_size = Vector2(50, 104); drawer_tab.focus_mode = Control.FOCUS_NONE
+		drawer_tab.add_theme_font_size_override("font_size", 22); drawer_tab.pressed.connect(toggle_drawer); root.add_child(drawer_tab)
+	_place_tab_deferred()
 	var k := Layout.kind
 	var compact := k != "desktop"
 	_bar_h = 66.0 if k == "desktop" else (58.0 if k == "handheld" else 56.0)
@@ -253,7 +275,7 @@ func _relayout() -> void:
 	var rail := k == "phone"   # phones are landscape-only: the dock becomes a rail down the left edge, so the hall keeps its height
 	dock_box.vertical = rail
 	dock_scroll.set_anchors_preset(Control.PRESET_LEFT_WIDE if rail else Control.PRESET_BOTTOM_WIDE)
-	dock_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if rail else ScrollContainer.SCROLL_MODE_DISABLED
+	dock_scroll.vertical_scroll_mode = (ScrollContainer.SCROLL_MODE_SHOW_NEVER if Layout.touch else ScrollContainer.SCROLL_MODE_AUTO) if rail else ScrollContainer.SCROLL_MODE_DISABLED
 	dock_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if rail else ScrollContainer.SCROLL_MODE_AUTO
 	if rail: dock_scroll.offset_left = 6; dock_scroll.offset_right = RAIL_W; dock_scroll.offset_top = _bar_h + 8.0; dock_scroll.offset_bottom = -6
 	else: dock_scroll.offset_top = -_dock_h; dock_scroll.offset_bottom = -8; dock_scroll.offset_left = 10; dock_scroll.offset_right = -10
@@ -517,6 +539,7 @@ func _dock(key: String) -> void:
 
 func show_screen(id: String) -> void:
 	var prev := cur
+	drawer_hidden = false; holder.visible = true
 	for sc in screens.values(): sc.visible = false
 	cur = id; last_tab[dock_key(id)] = id
 	if coach != null: coach.visited(dock_key(id))
@@ -538,6 +561,7 @@ func show_screen(id: String) -> void:
 	if scr.has_method("refresh"): scr.refresh()
 	if started and prev != id and not quiet and not OS.has_environment("GW_SHOT") and not OS.has_environment("GW_SMOKE"): Kit.appear(scr, not (FULL.has(id) or FULL.has(prev)), 0.18)
 	for k in dock_btns: Kit.dock_set(dock_btns[k], k == dock_key(id))
+	_place_tab()
 
 ## Tab strip for a drawer that groups several screens (Procure|Warehouse, Build|Energy).
 func tab_strip(id: String) -> Control:
@@ -950,10 +974,12 @@ func _menu() -> void:
 	if menu_ui != null: menu_ui.queue_free(); menu_ui = null; return
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); menu_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var vb := VBoxContainer.new(); _center(vb, 440, 440); vb.add_theme_constant_override("separation", 12); h.add_child(vb)
-	vb.add_child(Kit.label("PAUSED", 44, Kit.CY))
+	var vb := VBoxContainer.new(); _center(vb, 440 if not Layout.phone else 780, 440 if not Layout.phone else 520); vb.add_theme_constant_override("separation", 12); h.add_child(vb)
+	vb.add_child(Kit.label("PAUSED", 44 if not Layout.phone else 32, Kit.CY))
+	var tgt: Control = vb   # phones are short: two columns of buttons so the menu fits without scrolling
+	if Layout.phone: var gr := GridContainer.new(); gr.columns = 2; gr.add_theme_constant_override("h_separation", 10); gr.add_theme_constant_override("v_separation", 10); vb.add_child(gr); tgt = gr
 	for a in [["Resume", "resume"], ["Save game", "save"], ["Load game", "load"], ["Settings", "settings"], ["Change look", "look"], ["How to play", "guide"], ["Restart tutorial", "coach"], ["Toggle sound", "mute"], ["Save & quit to title", "title"], ["Save & quit game", "quit"]]:
-		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, 52); vb.add_child(bt)
+		var bt := Kit.btn(a[0], func(): _menu_do(a[1]), "pri" if a[1] == "resume" else "", 20); bt.custom_minimum_size = Vector2(0, maxf(52.0, Layout.tap())); bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tgt.add_child(bt)
 
 func _menu_do(a: String) -> void:
 	match a:

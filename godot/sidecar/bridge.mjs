@@ -7345,7 +7345,7 @@ function inferenceCapacity(stats, accel, model, opts = {}) {
     issues
   };
 }
-const SITE_DEFAULT = { floor: "tile", walls: "block", light: "neutral", accent: "red", rack: "black" };
+const SITE_DEFAULT = { floor: "tile", walls: "open", light: "neutral", accent: "red", rack: "black" };
 const MONTHS_PER_YEAR = 12;
 const BASE_YEAR$1 = 2020;
 const monthToYear = (m2) => BASE_YEAR$1 + m2 / MONTHS_PER_YEAR;

@@ -125,7 +125,7 @@ static func dock_set(b: Button, on: bool) -> void:
 
 ## Tab inside a drawer header.
 static func tab_btn(t: String, on: bool, col: Color, cb: Callable) -> Button:
-	var b := Button.new(); b.text = t.to_upper(); b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
+	var b := Button.new(); b.text = t.to_upper(); b.custom_minimum_size.y = Layout.tap(); b.focus_mode = focus_mode(); b.add_theme_stylebox_override("focus", focus_sb()); b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
 	var base := col if on else BTN_OFF
 	for st in ["normal", "hover", "pressed"]:
 		var s := sb(base if st != "hover" else base.lightened(0.12), OUTL, 3, 3, 10); s.shadow_color = SHADOW; s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
@@ -149,7 +149,7 @@ static func _styles(kind: String) -> Dictionary:
 	_btn_styles[kind] = st; return st
 
 static func btn(t: String, cb: Callable, kind := "", size := 15) -> Button:
-	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", fs(size)); b.custom_minimum_size.y = 36; b.add_theme_font_override("font", Fonts.bold); b.focus_mode = focus_mode()
+	var b := Button.new(); b.text = t; b.add_theme_font_size_override("font_size", fs(size)); b.custom_minimum_size.y = maxf(36.0, Layout.tap()); b.add_theme_font_override("font", Fonts.bold); b.focus_mode = focus_mode()
 	var st := _styles(kind)
 	b.add_theme_stylebox_override("focus", st.focus)
 	b.add_theme_stylebox_override("normal", st.normal); b.add_theme_stylebox_override("hover", st.hover)
@@ -169,7 +169,7 @@ static func skin(b: Button, kind: String) -> void:
 static func toggle(text: String, on: bool, cb: Callable) -> HBoxContainer:
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 14)
 	var l := label(text, 16, TX); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(l)
-	var b := Button.new(); b.toggle_mode = true; b.button_pressed = on; b.focus_mode = focus_mode(); b.custom_minimum_size = Vector2(92, 38)
+	var b := Button.new(); b.toggle_mode = true; b.button_pressed = on; b.focus_mode = focus_mode(); b.custom_minimum_size = Vector2(92, maxf(38.0, Layout.tap()))
 	b.add_theme_font_size_override("font_size", 15); b.add_theme_font_override("font", Fonts.bold)
 	var paint := func(v: bool): b.text = "ON" if v else "OFF"; skin(b, "go" if v else "")
 	paint.call(on)
@@ -238,12 +238,12 @@ static func panel(title := "", glow := false, parent: Control = null) -> Array:
 
 ## Two-column screens become ONE column inside a drawer (both names point at the same scrolling list): left content first, then right.
 static func cols2(root: Control) -> Array:
-	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if Layout.phone else ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); root.add_child(sc)
 	return [v, v]
 
 static func column(parent: Control, min_w := 0.0, expand := true) -> VBoxContainer:
-	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if Layout.phone else ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.follow_focus = true
 	if expand: sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.custom_minimum_size = Vector2(min_w, 0)
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); parent.add_child(sc); return v
