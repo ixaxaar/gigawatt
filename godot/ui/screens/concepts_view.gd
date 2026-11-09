@@ -22,7 +22,7 @@ static func build(app, parent: Control, only: Array = [], on_toggle: Callable = 
 		var nm := VBoxContainer.new(); nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(nm)
 		nm.add_child(Kit.label(c.name, 14, Kit.TX, true)); nm.add_child(Kit.label(c.status.text, 12, col, true))
 		h.add_child(Kit.tag(LBL[c.status.level], col))
-		var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Control.FOCUS_NONE
+		var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Kit.focus_mode()
 		click.pressed.connect(func(): open_id = "" if open_id == c.id else c.id; if on_toggle.is_valid(): on_toggle.call()); p.add_child(click); p.move_child(click, 0)
 		for n in [v, h, nm]: n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if open_id == c.id:

@@ -121,12 +121,13 @@ func _planner(root: Control) -> void:
 	# --- column 2: description, how many, how to buy
 	var c2: VBoxContainer = lr[0]
 	c2.add_child(Kit.tip("Pick a platform (a GPU generation, pre-engineered), say how many accelerators you want, then choose DIY (cheapest, you integrate), an OEM rack, or a turnkey one (priciest, fastest). Check the hall can feed and cool it before you order."))
+	c2.add_child(Kit.terms_tip(app))
 	var pa := Kit.panel(plat, false, c2); pa[1].add_child(Kit.label(t.codex.explain, 14, Kit.TX, true))
 	pa[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]]))
 	var ph := Kit.panel("2 · How many accelerators?", false, c2)
 	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 14); ph[1].add_child(hr)
 	var sl := Kit.slider(maxf(f.accels, racks * f.accels), f.accels, f.accels * 64, f.accels, func(_v): pass)
-	sl.drag_ended.connect(func(ch): if ch: want = int(sl.value); app.sfx("click"); refresh())
+	Kit.on_set(sl, func(v): want = int(v); app.sfx("click"); refresh())
 	sl.value_changed.connect(func(v): want = int(v); lbl_hint.text = "%s" % Kit.num(v))
 	hr.add_child(sl); lbl_hint = Kit.label(Kit.num(racks * f.accels), 28, Kit.CY); hr.add_child(lbl_hint)
 	var pf: float = f.tflopsFp8 if f.tflopsFp8 > 0 else f.tflopsBf16
@@ -141,7 +142,7 @@ func _planner(root: Control) -> void:
 		var tname: String = x.name if x.tier == "turnkey" else (("%s rack" % x.integrator.capitalize()) if x.tier == "oem" else TIER[x.tier][1])
 		tv.add_child(Kit.label(tname, 14, Kit.TX, true)); tv.add_child(Kit.label(Kit.usd(qq.cost), 18, Kit.CY))
 		tv.add_child(Kit.label("%d mo lead · +%d%%" % [qq.lead, int(round(x.premium * 100.0))], 12, Kit.DIM)); tv.add_child(Kit.label(x.tagline, 12, Kit.TX, true))
-		var tb := Button.new(); tb.flat = true; tb.set_anchors_preset(Control.PRESET_FULL_RECT); tb.focus_mode = Control.FOCUS_NONE; tb.pressed.connect(func(): tier_sel = x.id; app.sfx("click"); refresh()); tc.add_child(tb)
+		var tb := Button.new(); tb.flat = true; tb.set_anchors_preset(Control.PRESET_FULL_RECT); tb.focus_mode = Kit.focus_mode(); tb.pressed.connect(func(): tier_sel = x.id; app.sfx("click"); refresh()); tc.add_child(tb)
 		tg.add_child(tc)
 	pt[1].add_child(Kit.label("⚖  " + t.codex.tradeoffs[0], 13, Kit.DIM, true))
 	# --- column 3: hall check, BOM, order

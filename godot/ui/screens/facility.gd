@@ -20,9 +20,10 @@ func focus_concept(cid: String) -> void:
 
 func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func on_slot(_slot: int) -> void:
-	if design == "": return
+func on_slot(slot: int) -> void:
 	var b: Bridge = app.b; var h: Dictionary = b.g.halls[app.hall.hall_i]
+	var taken: bool = h.racks.any(func(r): return int(r.slot) == slot)
+	if design == "" or taken: app._inspect(slot); return   # a rack is there (or nothing is chosen to place): inspect it instead of buying another
 	msg = b.act("placeRack", [h.id, design]).message; app.sfx("rack_place"); refresh()
 
 func _gauge(parent: Control, label: String, v: float, mx: float, unit: String) -> void:
@@ -132,9 +133,9 @@ func _rebuild() -> void:
 	nr.add_child(Kit.option(["air", "rdhx", "dlc", "immersion"], nh_cool, func(v): nh_cool = v)); nr.add_child(Kit.spin(nh_slots, 4, 200, 1, func(v): nh_slots = int(v)))
 	nr.add_child(Kit.btn("Build", func(): msg = b.act("buildHall", [nh_name, nh_cool, nh_slots]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 13))
 	# ---- bottom-left placement strip
-	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); bl.offset_left = 8; bl.offset_bottom = -8; bl.offset_top = -330 if not Layout.phone else -190.0; bl.offset_right = 760 if not Layout.phone else 8.0 + maxf(320.0, app.vw() - app.RAIL_W - 8.0 - app.overlay_w() - 56.0); bl.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.94), Kit.CY, 12, 1, 12)); add_child(bl)
+	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); bl.offset_left = 8; bl.offset_bottom = -8; bl.grow_vertical = Control.GROW_DIRECTION_BEGIN; bl.offset_top = -8; bl.offset_right = 760 if not Layout.phone else 8.0 + maxf(320.0, app.vw() - app.RAIL_W - 8.0 - app.overlay_w() - 56.0); bl.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.94), Kit.CY, 12, 1, 12)); add_child(bl)
 	var bv := VBoxContainer.new(); bv.add_theme_constant_override("separation", 6); bl.add_child(bv)
-	bv.add_child(Kit.label("%s floor — choose a rack design, then click an empty slot" % hall.name, 14, Kit.CY, true))
+	bv.add_child(Kit.label("%s floor — choose a rack design, then PLACE RACK (or click the hall): it goes in the next free slot. Click a rack to inspect it." % hall.name, 14, Kit.CY, true))
 	var dr := HBoxContainer.new(); dr.add_theme_constant_override("separation", 8); bv.add_child(dr)
 	var dopts := [["", "choose rack design…"]]; for d in g.racks: dopts.append([d.id, d.name])
 	dr.add_child(Kit.option(dopts, design, func(v): design = v; refresh()))

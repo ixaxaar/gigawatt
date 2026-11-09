@@ -6,7 +6,7 @@ import { fail, ok } from './consts';
 import { DILEMMAS } from '../../sim/story-data';
 import { applyEffect, storyOf } from '../../sim/systems/story';
 import { SITE_DEFAULT } from '../../types';
-import { DEFAULT_SLOT, readSlot, writeSlot } from '../persistence';
+import { DEFAULT_SLOT, autosaveOn, readSlot, writeSlot } from '../persistence';
 import { newGameState } from '../state';
 import type { Ctx } from './ctx';
 
@@ -47,7 +47,7 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
       if (get().game.status && get().game.status !== 'playing') return; // game over
       set({ game: advanceMonth(get().game) });
       stepAllProjects(get);
-      writeSlot('auto', get().game); // autosave every month (best-effort)
+      if (autosaveOn()) writeSlot('auto', get().game); // autosave every month (best-effort); off for the title-screen demo
     },
 
     save: (slot = DEFAULT_SLOT) => (writeSlot(slot, get().game) ? ok(`Saved to slot '${slot}'.`) : fail('Could not write the save (storage unavailable).')),

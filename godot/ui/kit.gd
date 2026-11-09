@@ -321,6 +321,14 @@ static func tip(text: String) -> PanelContainer:
 	var c := chip("TIP", Color(1.0, 0.82, 0.25), 12); c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; hb.add_child(c)
 	hb.add_child(label(text, 13, TIPX, true)); return p
 
+const TERMS := "Plain-English terms:  SLA = the uptime you promise; miss it and you refund part of the bill.  tok/s = tokens per second, how much text a cluster can produce.  Mtok = a million tokens, what inference customers pay for.  TTFT = time to first token, how long a user waits for the first word.  TP = tensor parallel: how many GPUs share one model.  Ramp window = months you get after signing to deploy before the customer walks.  PUE = power overhead (1.3 means 30% extra for cooling and losses).  InfiniBand / RoCE = the network between racks."
+## Learner mode gets a short glossary at the top of the jargon-heavy screens.
+static func terms_tip(app) -> Control:
+	if app == null or app.b == null or str(app.b.g.get("mode", "operator")) != "learner": return Control.new()
+	var t := tip(TERMS); t.get_child(0).get_child(0).queue_free()
+	var hb: HBoxContainer = t.get_child(0); var c := chip("WORDS", Color(0.35, 0.82, 1.0), 12); c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; hb.add_child(c); hb.move_child(c, 0)
+	return t
+
 static func issue(sev: String, head: String, msg: String) -> PanelContainer:
 	var col := RD if sev == "error" else (AM if sev == "warn" else CY)
 	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(Color(col.r, col.g, col.b, 0.1), col, 6, 1, 9)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -358,8 +366,17 @@ static func spin(value: float, mn: float, mx: float, step: float, cb: Callable) 
 static func slider(value: float, mn: float, mx: float, step: float, cb: Callable) -> HSlider:
 	var s := HSlider.new(); s.min_value = mn; s.max_value = mx; s.step = step; s.value = value; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.custom_minimum_size = Vector2(120, 24); s.value_changed.connect(cb); return s
 
+## Apply a slider's value when the player has settled on it: on release for mouse and touch, and a short moment after the last step for a controller or keyboard (which never "drag").
+static func on_set(sl: HSlider, apply: Callable) -> void:
+	var tok := [0]
+	sl.drag_ended.connect(func(ch): if ch: tok[0] += 1; apply.call(sl.value))
+	sl.value_changed.connect(func(_v):
+		if not sl.is_inside_tree(): return
+		tok[0] += 1; var t: int = tok[0]
+		sl.get_tree().create_timer(0.45).timeout.connect(func(): if tok[0] == t and is_instance_valid(sl) and sl.is_inside_tree() and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): apply.call(sl.value)))
+
 static func option(opts: Array, selected: String, cb: Callable) -> OptionButton:
-	var o := OptionButton.new(); o.focus_mode = Control.FOCUS_NONE; o.add_theme_font_size_override("font_size", 14)
+	var o := OptionButton.new(); o.focus_mode = focus_mode(); o.add_theme_font_size_override("font_size", 14)
 	var sel := 0
 	for i in opts.size():
 		var id: String = opts[i][0] if opts[i] is Array else opts[i]; var nm: String = opts[i][1] if opts[i] is Array else opts[i]
@@ -368,7 +385,7 @@ static func option(opts: Array, selected: String, cb: Callable) -> OptionButton:
 	o.select(sel); o.item_selected.connect(func(i): cb.call(o.get_item_metadata(i))); return o
 
 static func check(text: String, on: bool, cb: Callable) -> CheckBox:
-	var c := CheckBox.new(); c.text = text; c.button_pressed = on; c.focus_mode = Control.FOCUS_NONE; c.add_theme_font_size_override("font_size", 14); c.toggled.connect(cb); return c
+	var c := CheckBox.new(); c.text = text; c.button_pressed = on; c.focus_mode = focus_mode(); c.add_theme_font_size_override("font_size", 14); c.toggled.connect(cb); return c
 
 # ---------- formatting ----------
 ## Unit prices ($/GPU-hour, $/Mtok): cents matter, so never round them away.
@@ -471,7 +488,7 @@ static func cluster_color(_g: Dictionary, id) -> Color:
 static func confirm(host: Node, text: String, on_yes: Callable, yes_label := "Confirm") -> void:
 	var layer: Node = host.get_tree().current_scene.get("root") if host.get_tree().current_scene != null else null
 	if layer == null: on_yes.call(); return
-	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); layer.add_child(h)
+	var h := Control.new(); h.name = "confirm"; h.set_anchors_preset(Control.PRESET_FULL_RECT); layer.add_child(h)
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.55); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var pn := PanelContainer.new(); pn.set_anchors_preset(Control.PRESET_CENTER); pn.offset_left = -260; pn.offset_right = 260; pn.offset_top = -90; pn.offset_bottom = 90
 	pn.add_theme_stylebox_override("panel", sb(deep(0.99), CY, 12, 2, 20)); h.add_child(pn)

@@ -22,7 +22,7 @@ const STEPS := [
 		"body": "Open CUSTOMERS. Each offer shows what the customer needs (GPUs for training, tokens per second for inference) and whether you can serve it today.",
 		"why": "No contract, no revenue. Customers decide what hardware is worth buying."},
 	{"id": "easy", "kind": "state", "target": "dock:contracts", "title": "Take an offer the easy way",
-		"body": "Pick an offer, open What you need to buy, and press EASY PATH. The game signs, orders, prepares the hall, deploys and assigns for you. If cash is short, try a smaller offer or switch to Learner mode (top bar) for $80M.",
+		"body": "Pick an offer, open What you need to buy, and press EASY PATH. The game signs, orders, prepares the hall, deploys and assigns for you. If cash is short, try a smaller offer.",
 		"why": "You will see what every part of the machine did on the next few steps."},
 	{"id": "time", "kind": "state", "target": "next", "title": "Let time pass",
 		"body": "Press NEXT MONTH (or Space, or the ▶▶ speeds). Hardware takes months to arrive: GPUs have the longest lead times.",
@@ -45,8 +45,8 @@ const STEPS := [
 ]
 
 func _ready() -> void:
-	card = PanelContainer.new(); card.visible = false; card.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	card.offset_left = 16 if not Layout.phone else 104; card.offset_top = 84 if not Layout.phone else 66; card.offset_right = card.offset_left + 420; card.offset_bottom = card.offset_top; card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card = PanelContainer.new(); card.visible = false; card.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	card.mouse_filter = Control.MOUSE_FILTER_STOP; _place()
 	card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.CY, Kit.BG, 3, 14)); app.root.add_child(card)
 	ring = PanelContainer.new(); ring.visible = false; ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var rs := StyleBoxFlat.new(); rs.bg_color = Color(0, 0, 0, 0); rs.border_color = Kit.AM; rs.set_border_width_all(4); rs.set_corner_radius_all(12); ring.add_theme_stylebox_override("panel", rs); app.root.add_child(ring)
@@ -108,14 +108,16 @@ func _build() -> void:
 	var dots := ""; for i in STEPS.size(): dots += "●" if i <= idx else "○"
 	h.add_child(Kit.label(dots, 11, Kit.CY))
 	v.add_child(Kit.label(str(s.title), 20, Kit.TX, true))
-	v.add_child(Kit.label(str(s.body), 14, Kit.DIM, true))
+	v.add_child(Kit.label(_adapt(str(s.body)), 14, Kit.DIM, true))
 	v.add_child(Kit.label("Why: " + str(s.why), 13, Kit.AM, true))
 	var f := HBoxContainer.new(); f.add_theme_constant_override("separation", 8); v.add_child(f)
 	if s.kind == "read":
 		if s.id == "path":
 			f.add_child(Kit.btn("Open the Learning path", func(): _next(); app.guide.visible = true; app.guide.open(), "go", 15))
 			f.add_child(Kit.btn("Close", func(): stop(), "", 14))
-		else: f.add_child(Kit.btn("Got it ▶", _next, "go", 15))
+		else:
+			var got := Kit.btn("Got it ▶", _next, "go", 15); f.add_child(got)
+			if Kit.pad_mode: got.call_deferred("grab_focus")   # a controller can always dismiss the card
 	else:
 		f.add_child(Kit.label("Do it in the game; this advances by itself.", 12, Kit.DIM))
 		var sp2 := Control.new(); sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; f.add_child(sp2)
@@ -124,7 +126,15 @@ func _build() -> void:
 	call_deferred("_fit"); get_tree().create_timer(0.15).timeout.connect(_fit)
 
 func _fit() -> void:
-	card.size = Vector2(420, 0)
+	card.size = Vector2(minf(420.0, app.vw() * 0.42), 0)
+	_place()
+
+## Bottom-left above the dock: never over a drawer's header or the hall's first racks. (Toasts stack above it.)
+func _place() -> void:
+	var rail: bool = Layout.phone
+	card.offset_left = (104.0 if rail else 16.0)
+	card.offset_right = card.offset_left + minf(420.0, app.vw() * 0.42)
+	card.offset_bottom = -12.0 if rail else -(app._dock_h + 16.0); card.offset_top = card.offset_bottom
 
 func _target(s: Dictionary) -> Control:
 	var t := str(s.get("target", ""))
@@ -133,9 +143,24 @@ func _target(s: Dictionary) -> Control:
 	return null
 
 func _process(_dt: float) -> void:
-	if not active or idx >= STEPS.size() or app.modal() != null: ring.visible = false; card.visible = active and idx < STEPS.size() and app.modal() == null; return
-	card.visible = true
+	var full_page: bool = app.FULL.has(app.cur)   # Design Lab, Supercomputer and Codex use the whole screen: the card would sit on their content
+	if not active or idx >= STEPS.size() or app.modal() != null: ring.visible = false; card.visible = active and idx < STEPS.size() and app.modal() == null and not full_page; return
+	card.visible = not full_page
+	_place()
 	var tg := _target(STEPS[idx])
 	if tg == null or not tg.is_visible_in_tree(): ring.visible = false; return
 	var r := tg.get_global_rect().grow(6.0)
 	ring.visible = true; ring.global_position = r.position; ring.size = r.size
+
+## The steps are written for mouse and keyboard; say the same thing in the words of the device in use (touch, controller, phone dock names).
+func _adapt(t: String) -> String:
+	if Kit.pad_mode:
+		t = t.replace("Drag to pan, right-drag to orbit, wheel to zoom, V flips the view.", "Left stick pans, right stick orbits, the triggers zoom, L3 flips the view.")
+		t = t.replace("(or Space, or the ▶▶ speeds)", "(or Y)")
+	elif Layout.touch:
+		t = t.replace("Drag to pan, right-drag to orbit, wheel to zoom, V flips the view.", "Drag to pan, pinch to zoom, two fingers twist to orbit.")
+		t = t.replace(" (or Space, or the ▶▶ speeds)", "")
+		t = t.replace("Press NEXT MONTH", "Press NEXT").replace("pressing NEXT MONTH", "pressing NEXT")
+	if Layout.phone:
+		t = t.replace("Open CUSTOMERS", "Open CLIENTS").replace("Open FACILITY", "Open BUILD")
+	return t

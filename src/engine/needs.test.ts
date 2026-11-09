@@ -52,3 +52,14 @@ describe('needsOf', () => {
     const f = fleetOf(g); expect(f.utilization).toBe(0);
   });
 });
+
+describe('needsOf: failed racks', () => {
+  it('says plainly that racks are down, and when they are back', () => {
+    const g = fresh();
+    expect(needsOf(g).some((n) => n.id === 'failed')).toBe(false);
+    g.halls[0].racks.push({ id: 'RK-T', slot: 0, designId: 'x', status: 'failed', readyMonth: g.month + 8 } as any);
+    const n = needsOf(g).find((x) => x.id === 'failed');
+    expect(n?.level).toBe('crit'); expect(n?.title).toMatch(/1 rack is down/); expect(n?.detail).toMatch(/8 months/);
+  });
+});
+

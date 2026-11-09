@@ -30,7 +30,7 @@ func _wide(row: Container, avail: float) -> void:
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.custom_minimum_size.y = row.get_minimum_size().y
 	par.remove_child(row); sc.add_child(row); par.add_child(sc); par.move_child(sc, idx)
 
-func _fit(c: Control) -> void:
+func _fit(c) -> void:   # untyped: the control may already be freed when the deferred call runs
 	if not is_instance_valid(c) or not c.is_inside_tree(): return
 	var sc: ScrollContainer = null; var p: Node = c.get_parent()
 	while p != null:

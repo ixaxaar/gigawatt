@@ -36,6 +36,7 @@ func _rebuild() -> void:
 	if msg != "": root.add_child(Kit.label(msg, 14, Kit.CY, true))
 	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
 	left.add_child(Kit.tip("Customers pay for capacity: training customers rent a big coherent cluster by the GPU-hour; inference customers pay per million tokens. Each offer shows what it needs and what you still lack — hit EASY PATH and the game orders, installs, deploys and assigns it for you."))
+	left.add_child(Kit.terms_tip(app))
 	left.add_child(Kit.label("MARKET OFFERS (%d)" % g.availableContracts.size(), 14, Kit.CY))
 	if g.availableContracts.is_empty(): left.add_child(Kit.label("No offers right now — new ones appear every month.", 14, Kit.DIM))
 	var offers: Array = g.availableContracts.duplicate()
@@ -86,8 +87,8 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 		v.add_child(Kit.label(("Earns ≈ %s/mo, power ≈ %s/mo → pays back in %d months" % [Kit.usd(o.revenueMo), Kit.usd(o.powerMo), int(o.paybackMo)]) if o.get("paybackMo") != null else "Does not pay back at this price", 11, Kit.DIM, true))
 		if o.hallGaps.size() > 0: v.add_child(Kit.label("Your hall also needs: " + " · ".join(o.hallGaps), 11, Kit.AM, true)); v.add_child(Kit.link("→ Build", func(): app.go("facility"), 11))
 		var bh := HBoxContainer.new(); bh.add_theme_constant_override("separation", 6); v.add_child(bh)
-		var easy := Kit.btn("EASY PATH — do it all for me" if afford else "Need more cash — take a loan", func(): msg = b.act("startEasy", [c.id, o.t.id, int(o.racks)]).message; app.sfx("buy"); refresh(), "go", 12); easy.disabled = not afford; bh.add_child(easy)
-		var just := Kit.btn("Just order the racks (I'll do the rest)", func(): msg = b.act("buyTemplate", [o.t.id, int(o.racks)]).message; app.sfx("buy"); refresh(), "", 12); just.disabled = not afford; bh.add_child(just)
+		var easy := Kit.btn("EASY PATH — do it all for me" if afford else "Need more cash — take a loan", func(): Kit.confirm(self, "Easy path: order %d rack%s for %s to serve %s? %s" % [int(o.racks), "" if int(o.racks) == 1 else "s", Kit.usd(o.cost), str(c.customer), (("It earns about %s a month and pays back in %d months." % [Kit.usd(o.revenueMo), int(o.paybackMo)]) if o.get("paybackMo") != null else "At this price it does not pay back.")], func(): var r: Dictionary = b.act("startEasy", [c.id, o.t.id, int(o.racks)]); msg = str(r.get("message", "")); app.sfx("buy"); app.toast(msg, "good" if r.get("ok", false) else "bad"); refresh(), "Do it"), "go", 12); easy.disabled = not afford; bh.add_child(easy)
+		var just := Kit.btn("Just order the racks (I'll do the rest)", func(): var r: Dictionary = b.act("buyTemplate", [o.t.id, int(o.racks)]); msg = str(r.get("message", "")); app.sfx("buy"); app.toast(msg, "good" if r.get("ok", false) else "bad"); refresh(), "", 12); just.disabled = not afford; bh.add_child(just)
 		v.add_child(Kit.hsep())
 	v.add_child(Kit.label("Easy path = the game signs, buys, installs plant, deploys racks, builds the fabric and assigns the contract for you as parts arrive (watch Projects on the Datacenter screen). After a manual order: wait for delivery → Warehouse ▸ Deploy racks → wait for commissioning → Supercomputer ▸ build a cluster → come back here and assign it.", 11, Kit.DIM, true))
 

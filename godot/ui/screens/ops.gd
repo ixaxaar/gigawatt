@@ -38,7 +38,7 @@ func _rebuild() -> void:
 	tp[1].add_child(Kit.label("Payroll %s/mo · hiring %s each · severance %s each" % [Kit.usd(s.monthlyCostUSD), Kit.usd(s.hireCostUSD), Kit.usd(s.severanceUSD)], 12, Kit.DIM, true))
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); tp[1].add_child(hb)
 	for n in [1, 5]: hb.add_child(Kit.btn("Hire %d" % n, func(): _act("hireStaff", [n]), "", 13))
-	hb.add_child(Kit.btn("Let go 1", func(): _act("fireStaff", [1]), "danger", 13))
+	hb.add_child(Kit.btn("Let go 1", func(): Kit.confirm(self, "Let one operator go? Severance is paid now and you lose their capacity.", func(): _act("fireStaff", [1]), "Let go"), "danger", 13))
 	# --- debt
 	var dp := Kit.panel("Debt", true, top)
 	var interest: float = g.debt * 0.07 / 12.0
@@ -91,7 +91,7 @@ func _rebuild() -> void:
 		var nm := Kit.label("%d× %s" % [qty, str(it.get("name", id))], 13, Kit.TX, true); nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sr.add_child(nm)
 		sr.add_child(Kit.label("%s at 60%% resale" % Kit.usd(0.6 * float(it.get("priceUSD", 0.0)) * qty), 12, Kit.GR))
 		sr.add_child(Kit.btn("Sell 1", func(): _act("sellInventory", [id, 1]), "", 12))
-		sr.add_child(Kit.btn("Sell all", func(): _act("sellInventory", [id, qty]), "danger", 12))
+		sr.add_child(Kit.btn("Sell all", func(): Kit.confirm(self, "Sell all %d at the resale price? This cannot be undone." % int(qty), func(): _act("sellInventory", [id, qty]), "Sell all"), "danger", 12))
 	# --- operating policy
 	var pol: Dictionary = g.get("policy", {})
 	var burn := int(pol.get("burnInMonths", 1)); var maint := int(pol.get("maintenance", 0))

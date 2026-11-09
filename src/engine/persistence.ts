@@ -45,6 +45,11 @@ export function migrate(g: GameState): string | null {
 
 const readIndex = (): Record<string, SaveInfo> => { try { return JSON.parse(localStorage.getItem(INDEX_KEY) ?? '{}'); } catch { return {}; } };
 
+let autosave = true;
+/** The title screen's background demo plays months too; it must never write the player's autosave. */
+export const setAutosave = (on: boolean) => { autosave = on; };
+export const autosaveOn = () => autosave;
+
 let lastAt = 0;   // strictly increasing, so two saves in the same millisecond still order correctly
 export function writeSlot(slot: string, g: GameState): boolean {
   try {

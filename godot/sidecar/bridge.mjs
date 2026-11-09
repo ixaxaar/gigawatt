@@ -7915,6 +7915,11 @@ const readIndex = () => {
     return {};
   }
 };
+let autosave = true;
+const setAutosave = (on) => {
+  autosave = on;
+};
+const autosaveOn = () => autosave;
 let lastAt = 0;
 function writeSlot(slot, g) {
   try {
@@ -12048,7 +12053,7 @@ const sessionActions = (c) => {
       if (get().game.status && get().game.status !== "playing") return;
       set({ game: advanceMonth(get().game) });
       stepAllProjects(get);
-      writeSlot("auto", get().game);
+      if (autosaveOn()) writeSlot("auto", get().game);
     },
     save: (slot = DEFAULT_SLOT) => writeSlot(slot, get().game) ? ok(`Saved to slot '${slot}'.`) : fail("Could not write the save (storage unavailable)."),
     load: (slot = DEFAULT_SLOT) => {
@@ -13385,6 +13390,11 @@ function needsOf(g) {
   }, 0);
   const walk = g.activeContracts.filter((a) => a.clusterIds.length === 0 && (a.deployBy ?? a.startMonth + 4) <= month + 1);
   if (walk.length) out.push({ id: "walk", level: "crit", title: "A customer is about to walk", detail: `${walk.map((a) => a.contract.customer).join(", ")}: bring a qualifying cluster online and assign it this month.`, go: "contracts", button: "Open Customers" });
+  const failed = g.halls.flatMap((h) => h.racks.filter((r) => r.status === "failed"));
+  if (failed.length) {
+    const back = Math.max(...failed.map((r) => r.readyMonth ?? month));
+    out.push({ id: "failed", level: "crit", title: `${failed.length} rack${failed.length > 1 ? "s are" : " is"} down`, detail: `A failed rack earns nothing and the contracts on it suffer. ${back > month ? `Back in about ${back - month} month${back - month > 1 ? "s" : ""} (a fire is a rebuild; a failed part needs a spare in the warehouse).` : "Repair is due now."} Keep spares and fire suppression to shorten this next time.`, go: "finance", button: "Open Operations" });
+  }
   revenue - g.activeContracts.length * 0;
   if (g.cash < 0) out.push({ id: "cash-neg", level: "crit", title: "Cash is negative", detail: "Creditors close you down after three months. Take a loan, land a contract or sell idle hardware.", go: "finance", button: "Open Operations" });
   if (revenue > 0) {
@@ -13565,6 +13575,9 @@ function env(name, a) {
       }
       return observe();
     }
+    case "autosave":
+      setAutosave(!!a[0]);
+      return observe();
     case "scenarios":
       return SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed }));
     default:

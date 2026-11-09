@@ -18,6 +18,9 @@ func _ready() -> void:
 	for a in ["ui_left", "ui_right", "ui_up", "ui_down"]:       # the D-pad navigates; sticks belong to the camera
 		for ev in InputMap.action_get_events(a):
 			if ev is InputEventJoypadMotion: InputMap.action_erase_event(a, ev)
+	for pair in [["ui_accept", JOY_BUTTON_A], ["ui_cancel", JOY_BUTTON_B]]:   # the project has no input map: A presses the focused control, B closes pop-ups (dropdowns)
+		var jb := InputEventJoypadButton.new(); jb.button_index = pair[1]
+		if not InputMap.action_has_event(pair[0], jb): InputMap.action_add_event(pair[0], jb)
 	reticle = Label.new(); reticle.text = "⊕"; reticle.label_settings = Kit.ls(34, Color(1, 0.95, 0.4)); reticle.visible = false
 	reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE; app.root.add_child(reticle)
 	hint = Kit.label("Ⓐ select   Ⓑ back   Ⓧ inspect rack   Ⓨ next month   LB/RB drawers   LT/RT zoom   ☰ menu", 13, Color(1, 1, 1, 0.8))
@@ -63,7 +66,8 @@ func _back() -> void:
 		elif m == app.guide: app.guide.visible = false
 		elif m == app.settings_ui: app._settings()
 		elif m == app.menu_ui: app._menu()
-		elif m.name == "slots": m.queue_free()
+		elif m.name == "slots" or m.name == "confirm": m.queue_free()
+		elif m.name == "site": (m as SiteScreen).cancel()
 		return
 	if app.inspector != null: app.inspector.queue_free(); app.inspector = null; return
 	if app.started and app.cur != "dash": app.show_screen("dash")

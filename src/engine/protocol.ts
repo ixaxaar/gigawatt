@@ -13,6 +13,7 @@ import { CONCEPTS } from '../concepts';
 import { useGame } from '../store';
 import { PERSONAS } from '../playtest/personas';
 import { QUERIES } from './queries';
+import { setAutosave } from './persistence';
 
 const st = () => useGame.getState();
 const G = () => st().game;
@@ -63,6 +64,7 @@ function env(name: string | undefined, a: any[]) {
       for (let m = 0; m < (a[1] ?? 12); m++) { if (G().status && G().status !== 'playing') break; for (const act of agent(ENV.observe(), () => ENV.legalActions())) ENV.step(act); }
       return ENV.observe();
     }
+    case 'autosave': setAutosave(!!a[0]); return ENV.observe();
     case 'scenarios': return SCENARIOS.map((x) => ({ id: x.id, title: x.title, description: x.description, horizonMonths: x.horizonMonths, seed: x.seed }));
     default: return undefined;
   }

@@ -32,7 +32,7 @@ func _rebuild() -> void:
 			var card := PanelContainer.new(); card.custom_minimum_size = Vector2(210, 0); var vc := Kit.vendor_color(a.vendor)
 			card.add_theme_stylebox_override("panel", Kit.sb(Kit.PANEL, Color(vc.r, vc.g, vc.b, 0.5), 8, 1, 10)); var v := VBoxContainer.new(); card.add_child(v)
 			v.add_child(Kit.label(str(a.availableFrom), 12, Kit.DIM)); v.add_child(Kit.label(a.name, 14, vc, true)); v.add_child(Kit.label("%d GB · %s TB/s · %d W" % [int(a.memGB), Kit.num(a.memBWTBs, 1), int(a.tdpW)], 11, Kit.DIM)); v.add_child(Kit.label(a.scaleUp, 11, Kit.DIM))
-			var bt := Button.new(); bt.flat = true; bt.set_anchors_preset(Control.PRESET_FULL_RECT); bt.focus_mode = Control.FOCUS_NONE; bt.pressed.connect(func(): sel = a.id; view = "list"; refresh()); card.add_child(bt); fl.add_child(card)
+			var bt := Button.new(); bt.flat = true; bt.set_anchors_preset(Control.PRESET_FULL_RECT); bt.focus_mode = Kit.focus_mode(); bt.pressed.connect(func(): sel = a.id; view = "list"; refresh()); card.add_child(bt); fl.add_child(card)
 	else:
 		var cols := Kit.cols_row(); root.add_child(cols)
 		var lc := Kit.column(cols, 0, true, true); var dc := Kit.column(cols, 0, true, true); Kit.fit_split(cols, app, [1, 1])
@@ -60,7 +60,7 @@ func _rebuild() -> void:
 				var st := ColorRect.new(); st.color = Kit.vendor_color(str(i.vendor)); st.custom_minimum_size = Vector2(4, 0); st.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(st)
 				var vb := VBoxContainer.new(); vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vb.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(vb)
 				vb.add_child(Kit.label(i.name, 13, Kit.TX, true)); vb.add_child(Kit.label("%s · %s" % [i.vendor, str(i.codex.summary).left(100)], 11, Kit.DIM, true))
-				var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Control.FOCUS_NONE; click.pressed.connect(func(): sel = i.id; refresh()); card.add_child(click); card.move_child(click, 0)
+				var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Kit.focus_mode(); click.pressed.connect(func(): sel = i.id; refresh()); card.add_child(click); card.move_child(click, 0)
 				fp[1].add_child(card)
 		if sel != "" and b.items.has(sel):
 			var it: Dictionary = b.item(sel); var dp := Kit.panel(it.name, true, dc)

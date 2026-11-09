@@ -73,6 +73,7 @@ func _rebuild() -> void:
 		cols = Kit.cols_row(); root.add_child(cols)
 	var c1 := Kit.column(cols, colw if touch else 380, false, false, true)
 	c1.add_child(Kit.tip("A cluster is racks + a network. Scale-up (NVLink, purple boxes) links GPUs inside a rack at TB/s; scale-out (InfiniBand/Ethernet, green/gold) links racks. Training needs both; inference mostly needs memory and tokens/s."))
+	c1.add_child(Kit.terms_tip(app))
 	var p1 := Kit.panel("1 · Pick racks", true, c1)
 	if free.is_empty(): p1[1].add_child(Kit.label("No free online racks — deploy racks in Warehouse and wait for commissioning. (You can also serve a customer straight from racks in Customers.)", 12, Kit.DIM, true))
 	else:
@@ -95,7 +96,7 @@ func _rebuild() -> void:
 		for row in [["Scale-out tech", Kit.option(TECH, f.scaleOutTech, func(v): f["scaleOutTech"] = v; _fit_fabric(f); refresh())], ["Topology", Kit.option(TOPO, f.topology, func(v): f["topology"] = v; refresh())], ["Leaf switch", Kit.option(sw, f.leafSwitchId, func(v): f["leafSwitchId"] = v; refresh())], ["Spine switch", Kit.option(sw, f.get("spineSwitchId", ""), func(v): f["spineSwitchId"] = v; refresh())], ["Node→leaf cable", Kit.option(cables, f.nodeToLeafCableId, func(v): f["nodeToLeafCableId"] = v; refresh())], ["Leaf→spine cable", Kit.option(cables, f.get("leafToSpineCableId", ""), func(v): f["leafToSpineCableId"] = v; refresh())]]:
 			gr.add_child(Kit.label(row[0], 12, Kit.DIM)); gr.add_child(row[1])
 		p2[1].add_child(Kit.label("Oversubscription %s:1" % f.oversubscription, 12, Kit.DIM))
-		var sl := Kit.slider(f.oversubscription, 1, 4, 0.5, func(_v): pass); sl.drag_ended.connect(func(ch): if ch: f["oversubscription"] = sl.value; refresh()); p2[1].add_child(sl)
+		var sl := Kit.slider(f.oversubscription, 1, 4, 0.5, func(_v): pass); Kit.on_set(sl, func(v): f["oversubscription"] = v; refresh()); p2[1].add_child(sl)
 	if msg != "": p2[1].add_child(Kit.label(msg, 12, Kit.AM, true))
 	var p3 := Kit.panel("Existing machines", false, c1)
 	if g.clusters.is_empty(): p3[1].add_child(Kit.label("None yet", 13, Kit.DIM))
@@ -108,7 +109,7 @@ func _rebuild() -> void:
 		p3[1].add_child(Kit.label(("serving: " + ", ".join(custs)) if custs.size() > 0 else "not serving any customer", 11, Kit.GR if custs.size() > 0 else Kit.DIM, true))
 		if c.get("stats") != null: p3[1].add_child(Kit.label("%s accels · domain %d · %s PF %s · %.0f GB/s/GPU" % [Kit.num(c.stats.accelerators), int(c.stats.scaleUpDomain), Kit.num(c.stats.peakPFLOPSFp8 if c.stats.peakPFLOPSFp8 > 0 else c.stats.peakPFLOPSBf16), "fp8" if c.stats.peakPFLOPSFp8 > 0 else "bf16", c.stats.effScaleOutGBs], 11, Kit.DIM, true))
 		var br := HFlowContainer.new(); br.add_theme_constant_override("h_separation", 6); p3[1].add_child(br)
-		br.add_child(Kit.btn("Uncluster", func(): msg = b.act("disbandCluster", [c.id]).message; app.sfx("click"); refresh(), "danger", 12))
+		br.add_child(Kit.btn("Uncluster", func(): Kit.confirm(self, "Uncluster %s? Its racks go back to the free pool and any customers it serves lose service." % str(c.name), func(): msg = b.act("disbandCluster", [c.id]).message; app.sfx("click"); refresh(), "Uncluster"), "danger", 12))
 		br.add_child(Kit.btn("Re-cluster (edit racks)", func():
 			var ids: Array = c.rackIds.duplicate(); var nm: String = c.name; var fab: Dictionary = c.fabric.duplicate(true)
 			var r: Dictionary = b.act("disbandCluster", [c.id])

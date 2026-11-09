@@ -31,7 +31,10 @@ func open(app_, start: Dictionary, heading: String, go_label: String, done: Call
 	bar.add_child(Kit.btn(go_label, func(): _done.call(style); queue_free(), "go", 20))
 	bar.add_child(Kit.btn("Use defaults", func(): style = Site.DEFAULT.duplicate(); _refresh(), "", 16))
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bar.add_child(sp)
-	bar.add_child(Kit.btn("Back", func(): _cancel.call(); queue_free(), "", 16))
+	bar.add_child(Kit.btn("Back", cancel, "", 16))
+
+func cancel() -> void:
+	_cancel.call(); queue_free()
 
 func _option(parent: VBoxContainer, title: String, key: String, items: Array) -> void:
 	parent.add_child(Kit.label(title.to_upper(), 13, Kit.DIM))

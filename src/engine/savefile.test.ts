@@ -15,4 +15,16 @@ describe('file-backed saves', () => {
     writeSlot('auto', g);
     expect(listSaves()[0].slot).toBe('auto');             // most recently written first
   });
+
+  it('the title-screen demo (autosave off) never writes the autosave; real play does', () => {
+    expect(useFileStorage(`/tmp/gw-save-test-demo-${Date.now()}`)).toBe(true);
+    handle({ id: 1, fn: 'init' });
+    handle({ id: 2, fn: 'env', name: 'autosave', args: [false] });
+    handle({ id: 3, fn: 'act', name: 'newGame', args: [7, 'operator'] });
+    handle({ id: 4, fn: 'env', name: 'autoplay', args: ['operator', 6] });
+    expect(listSaves().find((s) => s.slot === 'auto')).toBeUndefined();
+    handle({ id: 5, fn: 'env', name: 'autosave', args: [true] });
+    handle({ id: 6, fn: 'act', name: 'nextMonth' });
+    expect(listSaves().find((s) => s.slot === 'auto')).toBeDefined();
+  });
 });

@@ -30,7 +30,7 @@ func _rebuild() -> void:
 	var p1 := Kit.panel("Power position", true, top)
 	p1[1].add_child(Kit.stats([["Facility draw", "%.2f MW" % draw_mw], ["Spot utility", "$%.0f/MWh" % spot_mwh], ["Committed (firm)", "%.1f MW" % committed], ["Max incl. overdraw", "%.1f MW" % cap]], 2))
 	p1[1].add_child(Kit.bar(draw_mw, maxf(maxf(cap, draw_mw), 0.01), draw_mw > committed))
-	var why := "No contracts: 100%% bought at the spot utility rate (volatile — see energy-crisis events)." if live.is_empty() else ("Above contract + overdraw limit: the excess is bought at spot." if draw_mw > cap else ("In the overdraw band: extra MW billed at the overage multiple." if draw_mw > committed else "Inside your committed block: you pay the contract price."))
+	var why := "No contracts: 100% bought at the spot utility rate (volatile — see energy-crisis events)." if live.is_empty() else ("Above contract + overdraw limit: the excess is bought at spot." if draw_mw > cap else ("In the overdraw band: extra MW billed at the overage multiple." if draw_mw > committed else "Inside your committed block: you pay the contract price."))
 	p1[1].add_child(Kit.label(why, 12, Kit.DIM, true))
 	p1[1].add_child(Kit.label("Projected power bill: %s/mo · blended $%.0f/MWh" % [Kit.usd(pv.settle.netUSD), pv.settle.avgUSDPerMWh], 13, Kit.TX, true))
 	# spot market

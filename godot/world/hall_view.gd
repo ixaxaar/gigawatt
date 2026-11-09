@@ -673,6 +673,8 @@ func _process(dt: float) -> void:
 	if _beacon != null: _beacon.light_energy = 1.5 + 1.5 * sin(_t * 6.0)
 	if not _fault_mats.is_empty(): for m in _fault_mats: (m as StandardMaterial3D).emission_energy_multiplier = 1.2 + (0.0 if Settings.reduced_motion else 1.6 * (0.5 + 0.5 * sin(_t * 7.0)))
 	var k := Vector2.ZERO
+	var typing := get_viewport().gui_get_focus_owner()   # typing a hall name must not move the camera
+	if typing is LineEdit or typing is SpinBox or typing is TextEdit: return
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): k.x -= 1
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): k.x += 1
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP): k.y -= 1
