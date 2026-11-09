@@ -1051,7 +1051,7 @@ func _set_controls(vb: VBoxContainer) -> void:
 func _slider_row(parent: Control, title: String, lo: float, hi: float, val: float, on_change: Callable) -> HSlider:
 	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); parent.add_child(r)
 	var l := Kit.label(title, 16, Kit.TX); l.custom_minimum_size = Vector2(130, 0); r.add_child(l)
-	var s := HSlider.new(); s.min_value = lo; s.max_value = hi; s.step = 0.05; s.value = val; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.custom_minimum_size = Vector2(320, 24); s.value_changed.connect(on_change); r.add_child(s)
+	var s := HSlider.new(); Kit.ring(s); s.min_value = lo; s.max_value = hi; s.step = 0.05; s.value = val; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.custom_minimum_size = Vector2(320, 24); s.value_changed.connect(on_change); r.add_child(s)
 	return s
 
 # ---------- game over + save slots ----------

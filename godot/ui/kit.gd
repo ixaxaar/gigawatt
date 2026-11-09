@@ -367,7 +367,13 @@ static func spin(value: float, mn: float, mx: float, step: float, cb: Callable) 
 	var s := SpinBox.new(); s.min_value = mn; s.max_value = mx; s.step = step; s.value = value; s.custom_minimum_size = Vector2(110, 0); s.value_changed.connect(cb); return s
 
 static func slider(value: float, mn: float, mx: float, step: float, cb: Callable) -> HSlider:
-	var s := HSlider.new(); s.min_value = mn; s.max_value = mx; s.step = step; s.value = value; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.custom_minimum_size = Vector2(120, 24); s.value_changed.connect(cb); return s
+	var s := HSlider.new(); s.min_value = mn; s.max_value = mx; s.step = step; s.value = value; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.custom_minimum_size = Vector2(120, 24); s.value_changed.connect(cb); ring(s); return s
+
+## A visible focus ring for controls that have none by default (sliders): a controller user must see where focus is.
+static func ring(c: Control) -> void:
+	var f := StyleBoxFlat.new(); f.bg_color = Color(0, 0, 0, 0); f.border_color = Color(1.0, 0.92, 0.35); f.set_border_width_all(2); f.set_corner_radius_all(6)
+	f.content_margin_top = 4; f.content_margin_bottom = 4
+	c.add_theme_stylebox_override("focus", f)
 
 ## Apply a slider's value when the player has settled on it: on release for mouse and touch, and a short moment after the last step for a controller or keyboard (which never "drag").
 static func on_set(sl: HSlider, apply: Callable) -> void:
@@ -521,10 +527,12 @@ static func reveal(node: Control) -> void:
 static func rebuild_keep(node: Control, rebuild: Callable) -> void:
 	var vals := []
 	for sc in node.find_children("*", "ScrollContainer", true, false): vals.append((sc as ScrollContainer).scroll_vertical)
-	var fi := -1   # in pad mode keep the controller focus on "the same" button after the screen is rebuilt
+	var fi := -1; var fslider := false   # in pad mode keep the controller focus on "the same" control after the screen is rebuilt
 	if pad_mode and node.is_inside_tree():
 		var fo := node.get_viewport().gui_get_focus_owner()
-		if fo != null and node.is_ancestor_of(fo): fi = node.find_children("*", "BaseButton", true, false).find(fo)
+		if fo != null and node.is_ancestor_of(fo):
+			if fo is HSlider: fslider = true; fi = node.find_children("*", "HSlider", true, false).filter(func(b): return b.is_visible_in_tree()).find(fo)
+			else: fi = node.find_children("*", "BaseButton", true, false).filter(func(b): return b.is_visible_in_tree() and b.focus_mode == Control.FOCUS_ALL).find(fo)
 	rebuild.call()
 	_restore_now(node, vals)
 	if (vals.is_empty() and fi < 0) or not node.is_inside_tree(): return
@@ -534,7 +542,7 @@ static func rebuild_keep(node: Control, rebuild: Callable) -> void:
 	var scs := node.find_children("*", "ScrollContainer", true, false).filter(func(s): return not s.is_queued_for_deletion())
 	for i in mini(scs.size(), vals.size()): (scs[i] as ScrollContainer).scroll_vertical = vals[i]
 	if fi >= 0 and pad_mode:
-		var bs := node.find_children("*", "BaseButton", true, false).filter(func(b): return b.is_visible_in_tree() and b.focus_mode == Control.FOCUS_ALL)
+		var bs := node.find_children("*", "HSlider" if fslider else "BaseButton", true, false).filter(func(b): return b.is_visible_in_tree() and (fslider or b.focus_mode == Control.FOCUS_ALL))
 		if not bs.is_empty(): bs[mini(fi, bs.size() - 1)].grab_focus()
 
 ## True when the mouse is over an interactive UI panel (so the 3D view must not react).

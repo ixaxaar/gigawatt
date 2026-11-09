@@ -136,10 +136,12 @@ func _left_edge() -> float:
 
 ## The card stays in the part of the hall that the open drawer leaves free.
 func _width() -> float:
+	if not app.is_inside_tree(): return 420.0
 	return clampf(app.vw() - app.hall.cover_px - _left_edge() - 14.0, 250.0, 420.0)
 
 ## Bottom-left above the dock: never over a drawer's header or the hall's first racks. (Toasts stack above it.)
 func _place() -> void:
+	if not app.is_inside_tree(): return
 	var rail: bool = Layout.phone
 	card.offset_left = _left_edge()
 	card.offset_right = card.offset_left + _width()

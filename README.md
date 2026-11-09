@@ -6,6 +6,8 @@
 
 The front-end is a **Godot 4** game (Vulkan, forward+, a 1 unit = 1 m scale-model datacenter). Every rule — physics of power and cooling, fabric bisection, MFU, inference capacity, contracts, markets, incidents — runs in a deterministic TypeScript engine that Godot drives through a headless Node sidecar.
 
+> **Alpha (0.9).** Playable from 2020 to the end on Linux, Windows, macOS and Android, with mouse, controller or touch, but rough in places. Saves may not carry over between alphas. Tell us what broke or confused you in [issues](https://github.com/ixaxaar/gigawatt/issues) or [discussions](https://github.com/ixaxaar/gigawatt/discussions). Known gaps are listed in the [changelog](CHANGELOG.md).
+
 ![The hall](docs/screenshots/hall.png)
 
 ## What you actually do

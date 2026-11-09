@@ -79,6 +79,7 @@ func _drawer(dir: int) -> void:
 	idx = posmod(idx + dir, app.DOCK.size())
 	var key: String = app.DOCK[idx][0]
 	app.show_screen(app.last_tab.get(key, key))
+	call_deferred("ensure_focus", true)   # focus moves into the new drawer, not left on a dock tab
 
 ## X: inspect the rack under the reticle (or place a rack there while the Build drawer is open).
 func inspect() -> void:

@@ -80,6 +80,7 @@ func play(kind: String) -> void:
 	for v in _voices:
 		if not v.playing: p = v; break
 	if p == null: p = _voices[0]
+	if not p.is_inside_tree(): return   # the scene is being reloaded (Save & quit to title)
 	p.stream = s; p.volume_db = float(meta.get("db", -8)); p.pitch_scale = rng.randf_range(0.96, 1.05) if meta.get("jitter", false) else 1.0; p.play()
 
 ## Wire click / hover / toggle sounds onto every button in the tree, now and as nodes appear.
