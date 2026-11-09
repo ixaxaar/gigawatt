@@ -55,7 +55,8 @@ func _vendor_of(chassis: String) -> String:
 func _showroom(c1: VBoxContainer, platforms: Array, t: Dictionary, f: Dictionary, checks: Array) -> void:
 	var b: Bridge = app.b; var st := _state(plat)
 	if showroom == null: showroom = Showroom.new()
-	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); c1.add_child(row)
+	var row: BoxContainer = VBoxContainer.new() if Layout.touch else HBoxContainer.new()   # touch: preview above, facts below
+	row.add_theme_constant_override("separation", 10); c1.add_child(row)
 	var left := VBoxContainer.new(); left.size_flags_horizontal = Control.SIZE_EXPAND_FILL; left.size_flags_stretch_ratio = 1.7; left.add_theme_constant_override("separation", 6); row.add_child(left)
 	left.add_child(showroom)
 	showroom.set_spec(RackModel.spec_from_template(b, t, f), not st.live)

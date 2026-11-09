@@ -271,7 +271,7 @@ static func fit_split(cols: Container, app, pref: Array) -> void:
 	var n := kids.size(); var sum := 0.0
 	for i in n: sum += float(pref[mini(i, pref.size() - 1)])
 	var gap := 12.0 * maxf(0.0, n - 1.0)
-	var min_each := 300.0
+	var min_each := 460.0
 	var fits := true
 	for i in n: if (avail - gap) * float(pref[mini(i, pref.size() - 1)]) / sum < min_each: fits = false
 	for i in n:

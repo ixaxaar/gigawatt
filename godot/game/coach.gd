@@ -46,7 +46,7 @@ const STEPS := [
 
 func _ready() -> void:
 	card = PanelContainer.new(); card.visible = false; card.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	card.offset_left = 16; card.offset_top = 84; card.offset_right = 436; card.offset_bottom = 84; card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.offset_left = 16 if not Layout.phone else 104; card.offset_top = 84 if not Layout.phone else 66; card.offset_right = card.offset_left + 420; card.offset_bottom = card.offset_top; card.mouse_filter = Control.MOUSE_FILTER_STOP
 	card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.CY, Kit.BG, 3, 14)); app.root.add_child(card)
 	ring = PanelContainer.new(); ring.visible = false; ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var rs := StyleBoxFlat.new(); rs.bg_color = Color(0, 0, 0, 0); rs.border_color = Kit.AM; rs.set_border_width_all(4); rs.set_corner_radius_all(12); ring.add_theme_stylebox_override("panel", rs); app.root.add_child(ring)

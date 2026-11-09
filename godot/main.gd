@@ -18,7 +18,7 @@ func accent_of(id: String) -> Color:
 func drawer_w(id := "") -> float:
 	var w := vw()
 	var f := Settings.drawer_frac if Settings.drawer_frac > 0.0 else (0.30 if Layout.phone else -1.0)   # the player drags the divider to resize it
-	if f > 0.0: return clampf(w * f, 300.0, maxf(320.0, w - (RAIL_W + 14.0 if Layout.phone else 300.0)))
+	if f > 0.0: return clampf(w * f, 380.0 if Layout.phone else 300.0, maxf(380.0, w - (RAIL_W + 14.0 if Layout.phone else 300.0)))
 	if Layout.handheld: return minf(w * (0.8 if id == "shop" else 0.68), w - 120.0)
 	return minf(clampf(w * 0.62, 900.0, 1240.0) if id == "shop" else clampf(w * 0.5, 780.0, 980.0), w - 300.0)
 const SECS := [0.0, 4.0, 1.6, 0.6]
@@ -643,6 +643,12 @@ func _audit_layout() -> void:
 			for i in 5: if p != null and p != scr: path = "%s/%s" % [p.get_class(), path]; p = p.get_parent()
 			print("AUDIT %s thin %s size=%s text=%s" % [cur, path, r.size, str(ctl.get("text")).left(50)]); n += 1
 			if n > 12: break
+	var wide := []
+	for c in (scr as Node).find_children("*", "Control", true, false):
+		var ctl := c as Control
+		if ctl.is_visible_in_tree() and not (ctl is ScrollContainer): wide.append([ctl.get_combined_minimum_size().x, ctl.get_class(), str(ctl.get("text")).left(40), ctl.get_parent().get_class() if ctl.get_parent() else ""])
+	wide.sort_custom(func(a, b): return a[0] > b[0])
+	for i in mini(6, wide.size()): print("AUDITWIDE %s %s" % [cur, wide[i]])
 	print("AUDIT %s done n=%d frac=%.2f cover=%.0f vw=%.0f scr_left=%.0f" % [cur, n, Settings.drawer_frac, _cover_of(cur), vs.x, (scr as Control).offset_left])
 
 func _make_screen(id: String) -> Control:
