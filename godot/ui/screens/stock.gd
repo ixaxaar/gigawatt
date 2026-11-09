@@ -70,7 +70,7 @@ func _rebuild() -> void:
 	left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
 	var ra := Kit.panel("Rack assembly — your designs", true, left)
 	if g.racks.is_empty(): ra[1].add_child(Kit.label("No rack designs yet. Buy a system in Procure (it saves its design automatically) or build one in the Design Lab.", 14, Kit.DIM, true))
-	var le := LineEdit.new(); le.placeholder_text = "Filter designs by name (Enter)"; le.text = design_q; le.custom_minimum_size = Vector2(300, 0); le.text_submitted.connect(func(t): design_q = t; refresh()); ra[1].add_child(le)
+	var le := LineEdit.new(); le.placeholder_text = "Filter designs by name (Enter)"; le.text = design_q; le.custom_minimum_size = Vector2(300 if not Layout.compact else 180, 0); le.text_submitted.connect(func(t): design_q = t; refresh()); ra[1].add_child(le)
 	var used := []; var unused := []
 	for d in g.racks:
 		if design_q != "" and not d.name.to_lower().contains(design_q.to_lower()): continue

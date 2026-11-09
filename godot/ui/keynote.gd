@@ -29,7 +29,8 @@ func open(k: Dictionary, more: int) -> void:
 	for c in get_children(): c.queue_free()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mouse_filter = Control.MOUSE_FILTER_STOP; visible = true
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.72); dim.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(dim)
-	var pc := PanelContainer.new(); pc.set_anchors_preset(Control.PRESET_FULL_RECT); pc.offset_left = 200; pc.offset_right = -200; pc.offset_top = 56; pc.offset_bottom = -56
+	var vsz := get_viewport().get_visible_rect().size; var side := maxf(24.0, (vsz.x - 1280.0) * 0.5) if vsz.x > 1500.0 else (200.0 if vsz.x > 1100.0 else 24.0)   # never wider than ~1280 px, even on an ultrawide
+	var pc := PanelContainer.new(); pc.set_anchors_preset(Control.PRESET_FULL_RECT); pc.offset_left = side; pc.offset_right = -side; pc.offset_top = 56 if vsz.y > 600.0 else 16.0; pc.offset_bottom = -56 if vsz.y > 600.0 else -16.0
 	pc.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.BG, 3, 20)); add_child(pc)
 	var outer := VBoxContainer.new(); outer.add_theme_constant_override("separation", 10); pc.add_child(outer)
 	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); outer.add_child(hd)

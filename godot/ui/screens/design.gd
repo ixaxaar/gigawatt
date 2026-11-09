@@ -1,6 +1,7 @@
 class_name DesignScreen
 extends Control
 ## Design Lab: tray bench (motherboard) and rack bench (42U elevation), with live engine validation.
+var _reveal_picker := false
 var app
 var tab := "tray"
 # tray lab
@@ -121,7 +122,7 @@ func _tray(root: Control) -> void:
 	bd.ch = ch; bd.sel_kind = _active(ch) if sel_idx >= 0 else ""; bd.sel_idx = sel_idx
 	for s in ch.slots: bd.cells[s.kind] = _cells(ch, s.kind)
 	for id in b.items: if b.items[id].kind != "chassis": bd.items[id] = b.items[id]
-	bd.socket_clicked.connect(func(k, i): sel_kind = k; sel_idx = i; refresh())
+	bd.socket_clicked.connect(func(k, i): sel_kind = k; sel_idx = i; _reveal_picker = Layout.touch; refresh())
 	bench[1].add_child(bd)
 	bench[1].add_child(Kit.label(str(ch.codex.summary), 12, Kit.DIM, true))
 	if tmsg != "": bench[1].add_child(Kit.label(tmsg, 13, Kit.AM, true))
@@ -130,6 +131,7 @@ func _tray(root: Control) -> void:
 	col.add_child(Kit.tip("This is a server tray. Click a socket on the board and pick a part. Watch the Sizing advisor: GPUs set the power and NIC needs, CPUs set PCIe lanes and memory channels — and everything you add costs money per GPU-hour."))
 	var active := _active(ch)
 	var ip := Kit.panel("Install into: %s%s" % [ZONE.get(active, active), (" #%d" % (sel_idx + 1)) if sel_idx >= 0 else ""], true, col)
+	if _reveal_picker: _reveal_picker = false; Kit.reveal(ip[0])
 	var sk := HFlowContainer.new(); sk.add_theme_constant_override("h_separation", 5); sk.add_theme_constant_override("v_separation", 5); ip[1].add_child(sk)
 	for s in ch.slots:
 		var filled := _cells(ch, s.kind).filter(func(x): return x != null).size()

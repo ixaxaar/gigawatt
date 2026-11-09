@@ -11,7 +11,7 @@ var yaw := 0.7
 var _drag := false
 
 func _init() -> void:
-	stretch = true; custom_minimum_size = Vector2(520, 380); size_flags_horizontal = Control.SIZE_EXPAND_FILL; mouse_filter = Control.MOUSE_FILTER_STOP
+	stretch = true; custom_minimum_size = Vector2(520, 380) if not Layout.phone else Vector2(300, 150); size_flags_horizontal = Control.SIZE_EXPAND_FILL; mouse_filter = Control.MOUSE_FILTER_STOP
 	vp = SubViewport.new(); vp.own_world_3d = true; add_child(vp)
 	env = Environment.new(); env.background_mode = Environment.BG_COLOR; env.background_color = Color(0.01, 0.014, 0.022); env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.3; env.glow_enabled = Settings.tier().glow

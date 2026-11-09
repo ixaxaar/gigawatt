@@ -99,7 +99,7 @@ func _rebuild() -> void:
 				if a.contract.id == x.contractId: cust = a.contract.customer
 			pp[1].add_child(Kit.label("%s · %d× build" % [cust, int(x.racks)], 13))
 			var at: int = -1 if x.stage == "failed" else STAGES.find(x.stage)
-			var sr := HBoxContainer.new(); sr.add_theme_constant_override("separation", 4); pp[1].add_child(sr)
+			var sr := HFlowContainer.new(); sr.add_theme_constant_override("h_separation", 4); sr.add_theme_constant_override("v_separation", 4); pp[1].add_child(sr)   # flows onto a second line in a narrow drawer
 			for i in STAGES.size():
 				var failed: bool = x.stage == "failed"
 				if failed or i <= at:

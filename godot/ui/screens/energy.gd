@@ -71,7 +71,7 @@ func _rebuild() -> void:
 		var m: float = mw.get(o.id, o.mw)
 		var take: float = m * o.priceUSDPerMWh * pv.hours; var spot_cost: float = minf(draw, m) * spot_mwh * pv.hours; var save: float = spot_cost - minf(draw, m) * o.priceUSDPerMWh * pv.hours
 		var cheaper: bool = o.priceUSDPerMWh < spot_mwh
-		var card := Kit.panel("%s  ·  %s" % [o.supplier, str(o.source).to_upper()], true, og); card[0].custom_minimum_size = Vector2(430, 0); card[0].size_flags_horizontal = Control.SIZE_FILL
+		var card := Kit.panel("%s  ·  %s" % [o.supplier, str(o.source).to_upper()], true, og); card[0].custom_minimum_size = Vector2(430 if not Layout.compact else 250, 0); card[0].size_flags_horizontal = Control.SIZE_FILL
 		var v: VBoxContainer = card[1]
 		v.add_child(Kit.rich("$%s/MWh  [color=#%s](%s%d%% vs spot)[/color] · %d mo" % [o.priceUSDPerMWh, (Kit.GR if cheaper else Kit.RD).to_html(false), "−" if cheaper else "+", int(absf(round((o.priceUSDPerMWh / spot_mwh - 1.0) * 100.0))), int(o.termMonths)], 14))
 		v.add_child(Kit.table([], [["Firmness", "%d%% months delivered" % int(round(o.firmness * 100.0))], ["Oversubscription limit", "+%d%% over commit, billed ×%s" % [int(round(o.overdrawPct * 100.0)), o.overageMult]], ["Take-or-pay", "%s/mo" % Kit.usd(take)], ["Covers", "%d%% of today's %.2f MW draw" % [int(round(minf(1.0, m / draw) * 100.0)), draw_mw]]]))

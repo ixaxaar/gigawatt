@@ -19,7 +19,7 @@ func _rebuild() -> void:
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := Kit.head_row(8); root.add_child(hd)
 	hd.add_child(Kit.label("CODEX", 26, Kit.CY)); hd.add_child(Kit.label("%d real parts" % b.items.size(), 13, Kit.DIM))
-	var le := LineEdit.new(); le.placeholder_text = "search: hbm, nvlink, dpu, liquid…"; le.text = q; le.custom_minimum_size = Vector2(300, 0); le.text_submitted.connect(func(t): q = t; refresh()); le.text_changed.connect(func(t): q = t); hd.add_child(le)
+	var le := LineEdit.new(); le.placeholder_text = "search: hbm, nvlink, dpu, liquid…"; le.text = q; le.custom_minimum_size = Vector2(300 if not Layout.compact else 180, 0); le.text_submitted.connect(func(t): q = t; refresh()); le.text_changed.connect(func(t): q = t); hd.add_child(le)
 	hd.add_child(Kit.btn("Search", func(): refresh(), "", 14))
 	for t in [["list", "Parts encyclopedia"], ["concepts", "Datacenter 101"], ["time", "Accelerator timeline"]]: hd.add_child(Kit.btn(t[1], func(): view = t[0]; refresh(), "pri" if view == t[0] else "", 14))
 	if view == "concepts":

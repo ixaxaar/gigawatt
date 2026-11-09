@@ -74,7 +74,7 @@ func _ready() -> void:
 	var th := Theme.new(); th.default_font_size = 17; th.default_font = Fonts.regular; th.set_font("bold_font", "RichTextLabel", Fonts.bold); th.set_font("normal_font", "RichTextLabel", Fonts.regular); root.theme = th
 	ui.add_child(root)
 	_build_shell(); _relayout(); _title(); audio.play("boot")
-	if Settings.compat and Settings.preset < 0: get_tree().create_timer(1.2).timeout.connect(func(): toast("Running in compatibility mode on %s (no Forward+). Effects are reduced; see the wiki's Performance page." % Settings.adapter, "info"))
+	if Settings.compat and Settings.preset < 0 and RenderingServer.get_current_rendering_method() == "gl_compatibility": get_tree().create_timer(1.2).timeout.connect(func(): toast("Running in compatibility mode on %s (no Forward+). Effects are reduced; see the wiki's Performance page." % Settings.adapter, "info"))
 	pad = Pad.new(); pad.app = self; add_child(pad)
 	coach = Coach.new(); coach.app = self; add_child(coach)
 	b.changed.connect(_on_changed)
@@ -297,7 +297,7 @@ func _apply_drawer_width() -> void:
 	for id in screens:
 		var sc: Control = screens[id]
 		if sc is ScreenWrap and not OVERLAY.has(id) and not FULL.has(id): sc.offset_left = -drawer_w(id)
-	hall.set_cover(_cover_of(cur) + inset.z); _place_tab()
+	hall.set_cover(_cover_of(cur) + inset.z); hall.blocked = FULL.has(cur); _place_tab()
 
 func _relayout() -> void:
 	if top == null: return
@@ -338,7 +338,7 @@ func _relayout() -> void:
 	toasts.offset_left = (RAIL_W + 14.0) if rail else 14.0; toasts.offset_right = toasts.offset_left + tw
 	toasts.offset_bottom = -12.0 if rail else -(_dock_h + 16.0); toasts.offset_top = toasts.offset_bottom
 	banner.offset_top = _bar_h + 74.0
-	_place_cam_tools()
+	_place_cam_tools(); call_deferred("_fit_top")
 
 ## Apply the chosen UI theme live: palette, top bar, dock, and every screen (rebuilt on demand).
 func _restyle() -> void:
@@ -468,6 +468,7 @@ func _on_changed() -> void:
 		if e.level != "info": toast(e.text, e.level)
 	_seen_log = g.log.size()
 	hall.rebuild()
+	_fit_top()
 	_apply_unlocks()
 	_hall_audio()
 	_check_end()
@@ -615,7 +616,7 @@ func show_screen(id: String) -> void:
 	var cover := 0.0
 	if OVERLAY.has(id): cover = overlay_w()
 	elif not FULL.has(id): cover = drawer_w()
-	hall.set_cover(cover + (inset.z if cover > 0.0 else 0.0))
+	hall.set_cover(cover + (inset.z if cover > 0.0 else 0.0)); hall.blocked = FULL.has(cur)
 	if not screens.has(id): screens[id] = _make_screen(id); holder.add_child(screens[id])
 	var scr: Control = screens[id]
 	if scr is ScreenWrap:   # (re)apply the inner margins: some screens reset their own anchors in _ready()
@@ -663,6 +664,8 @@ func _audit_layout() -> void:
 		if ctl.is_visible_in_tree() and not (ctl is ScrollContainer): wide.append([ctl.get_combined_minimum_size().x, ctl.get_class(), str(ctl.get("text")).left(40), ctl.get_parent().get_class() if ctl.get_parent() else ""])
 	wide.sort_custom(func(a, b): return a[0] > b[0])
 	for i in mini(6, wide.size()): print("AUDITWIDE %s %s" % [cur, wide[i]])
+	var leaf := wide.filter(func(w): return str(w[2]) != "<null>")   # the widest controls that carry text: these are what push a drawer wider than the screen
+	for i in mini(6, leaf.size()): print("AUDITLEAF %s %s" % [cur, leaf[i]])
 	print("AUDIT %s done n=%d frac=%.2f cover=%.0f vw=%.0f scr_left=%.0f" % [cur, n, Settings.drawer_frac, _cover_of(cur), vs.x, (scr as Control).offset_left])
 
 func _make_screen(id: String) -> Control:
@@ -789,6 +792,17 @@ func _place_cam_tools() -> void:
 	cam_tools.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	cam_tools.offset_left = (RAIL_W + 12.0) if Layout.phone else 14.0; cam_tools.offset_top = _bar_h + 12.0
 	cam_tools.offset_right = cam_tools.offset_left + 56.0; cam_tools.offset_bottom = cam_tools.offset_top
+
+## The top bar never overflows: when the stats do not fit (large UI scale, text boost, narrow window) the least important ones drop out, so NEXT and MENU stay on screen.
+func _fit_top() -> void:
+	if top == null or not started or not top.visible: return
+	var hb := top.get_child(0) as HBoxContainer
+	for k in ["rev", "burn", "net", "nw", "rep"]: if lbl.get(k + "_box") != null: (lbl[k + "_box"] as Control).visible = true
+	if lbl.get("debt_box") != null: (lbl.debt_box as Control).visible = b != null and float(b.g.debt) > 0.0 and Layout.kind == "desktop"
+	if lbl.get("netw_box") != null: (lbl.netw_box as Control).visible = _net_on and Layout.kind != "phone"
+	for k in ["debt", "netw", "rep", "nw", "burn", "net", "rev"]:
+		if hb.get_combined_minimum_size().x <= top.size.x - 8.0: break
+		if lbl.get(k + "_box") != null: (lbl[k + "_box"] as Control).visible = false
 
 ## Toasts and the mission banner sit under dialogs (hidden while one is open) and only age while they can be seen.
 func _age_toasts(dt: float) -> void:
@@ -954,8 +968,8 @@ func _set_display(vb: VBoxContainer) -> void:
 			if bool(t.dark) != dk: continue
 			var id: String = t.id
 			fl.add_child(Kit.btn(str(t.name), func(): Settings.theme = id; Settings.save_all(); audio.play("click"); _restyle(), "pri" if Settings.theme == id else "", 14))
-	_opt_row(vb, "Window mode", ["Windowed", "Fullscreen (borderless)", "Exclusive fullscreen"], Settings.window_mode, func(i): Settings.window_mode = i; Settings.save_all(); Settings.apply(get_window()))
-	_opt_row(vb, "V-Sync", ["Off", "On", "Adaptive"], Settings.vsync, func(i): Settings.vsync = i; Settings.save_all(); Settings.apply(get_window()))
+	if not Layout.is_mobile(): _opt_row(vb, "Window mode", ["Windowed", "Fullscreen (borderless)", "Exclusive fullscreen"], Settings.window_mode, func(i): Settings.window_mode = i; Settings.save_all(); Settings.apply(get_window()))
+	if not Layout.is_mobile(): _opt_row(vb, "V-Sync", ["Off", "On", "Adaptive"], Settings.vsync, func(i): Settings.vsync = i; Settings.save_all(); Settings.apply(get_window()))
 	var caps := [0, 30, 40, 60, 90, 120, 144, 1000]
 	_opt_row(vb, "Frame rate limit", ["Automatic", "30", "40", "60", "90", "120", "144", "Unlimited"], maxi(0, caps.find(Settings.fps_cap)), func(i): Settings.fps_cap = caps[i]; Settings.save_all(); Settings.apply_fps())
 	var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 14); vb.add_child(r)

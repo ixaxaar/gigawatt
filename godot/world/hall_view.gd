@@ -669,6 +669,7 @@ func _update_cam() -> void:
 
 func _process(dt: float) -> void:
 	_t += dt
+	if _drag != 0 and Input.get_mouse_button_mask() == 0: _drag = 0   # the button was released over the interface: do not keep dragging the camera
 	if auto_orbit and not Settings.reduced_motion: yaw += dt * orbit_speed; _update_cam()
 	if _beacon != null: _beacon.light_energy = 1.5 + 1.5 * sin(_t * 6.0)
 	if not _fault_mats.is_empty(): for m in _fault_mats: (m as StandardMaterial3D).emission_energy_multiplier = 1.2 + (0.0 if Settings.reduced_motion else 1.6 * (0.5 + 0.5 * sin(_t * 7.0)))
@@ -743,8 +744,10 @@ func _touch_input(e: InputEvent) -> bool:
 		return false
 	return false
 
+var blocked := false   # a full-screen page (Design Lab, Supercomputer, Codex) covers the hall: nothing under it may react
 func _unhandled_input(e: InputEvent) -> void:
-	if b == null: return
+	if b == null or blocked: return
+	if (e is InputEventMouse or e is InputEventScreenTouch or e is InputEventScreenDrag) and cover_px > 0.0 and e.position.x > get_viewport().get_visible_rect().size.x - cover_px: return   # taps in a drawer's gaps are the drawer's
 	if _touch_input(e): return
 	if _two_down and (e is InputEventMouseMotion or e is InputEventMouseButton): return
 	if e is InputEventMouseButton:

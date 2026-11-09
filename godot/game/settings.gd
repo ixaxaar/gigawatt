@@ -101,7 +101,7 @@ static func ensure_gpu() -> bool:
 
 ## A warning for the title screen when the game is not on the Vulkan renderer (usually a stale VK_ICD_FILENAMES makes Vulkan fail, and the game silently runs on the integrated GPU through OpenGL).
 static func gpu_warning() -> String:
-	if not compat: return ""
+	if not compat or RenderingServer.get_current_rendering_method() != "gl_compatibility": return ""   # Forward Mobile (phones) is Vulkan, not a fallback
 	var v := OS.get_environment("VK_ICD_FILENAMES")
 	var why := "Vulkan could not start"
 	if v != "" and not FileAccess.file_exists(v.split(":")[0]): why = "VK_ICD_FILENAMES points at a missing file (%s)" % v.split(":")[0]

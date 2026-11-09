@@ -258,7 +258,7 @@ static func cols2(root: Control) -> Array:
 
 ## A row of columns that reflows like a web layout: side by side when there is room, stacked when there is not (touch / compact layouts).
 static func cols_row(sep := 12) -> Container:
-	var c: Container = HFlowContainer.new() if (Layout.touch or Layout.compact) else HBoxContainer.new()
+	var c: Container = HFlowContainer.new() if Layout.touch else HBoxContainer.new()   # only touch screens scroll as one page; a mouse screen keeps side-by-side columns that scroll on their own (a flowing row would collapse them to nothing)
 	c.add_theme_constant_override("separation", sep); c.add_theme_constant_override("h_separation", sep); c.add_theme_constant_override("v_separation", sep)
 	if c is HBoxContainer: c.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	return c
@@ -298,9 +298,12 @@ static func column(parent: Control, min_w := 0.0, expand := true, flat := false,
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); parent.add_child(sc); return v
 
 static func stat(lbl: String, value: String, col: Color = TX) -> VBoxContainer:
-	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_child(label(lbl.to_upper(), 11, DIM)); v.add_child(label(value, 20, col)); return v
+	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var wrap := Layout.compact   # on small screens a stat's name may wrap instead of forcing the whole drawer wider
+	v.add_child(label(lbl.to_upper(), 11, DIM, wrap)); v.add_child(label(value, 20, col, wrap)); return v
 
 static func stats(items: Array, cols := 4) -> GridContainer:
+	if Layout.phone: cols = mini(cols, 2)
 	var g := GridContainer.new(); g.columns = cols; g.add_theme_constant_override("h_separation", 12); g.add_theme_constant_override("v_separation", 8); g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for it in items: g.add_child(stat(it[0], it[1], it[2] if it.size() > 2 else TX))
 	return g
@@ -497,6 +500,18 @@ static func confirm(host: Node, text: String, on_yes: Callable, yes_label := "Co
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); vb.add_child(row)
 	row.add_child(btn(yes_label, func(): h.queue_free(); on_yes.call(), "pri", 16))
 	row.add_child(btn("Cancel", func(): h.queue_free(), "", 16))
+
+## Scroll the page so `node` is at the top of the visible area (touch screens stack columns: after tapping a socket the part picker is far below the board).
+static func reveal(node: Control) -> void:
+	if node == null or not node.is_inside_tree(): return
+	var tree := node.get_tree()
+	await tree.process_frame; await tree.process_frame; await tree.process_frame
+	if not is_instance_valid(node) or not node.is_inside_tree(): return
+	var p: Node = node.get_parent()
+	while p != null and not (p is ScrollContainer): p = p.get_parent()
+	if p == null: return
+	var sc := p as ScrollContainer
+	sc.scroll_vertical = maxi(0, int(node.global_position.y - sc.global_position.y) + sc.scroll_vertical - 8)
 
 ## Run `rebuild` (which frees and recreates the UI) without losing scroll positions.
 static func rebuild_keep(node: Control, rebuild: Callable) -> void:
