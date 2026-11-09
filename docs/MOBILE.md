@@ -27,3 +27,9 @@ What is in the project, what works, and what is missing before a store build.
 - **Safe area.** The interface sits inside the display's safe area (camera cut-outs, rounded corners) plus a small margin on phones (`GW_INSET="l,t,r,b"` previews it on a desktop).
 - **Reflowing columns.** Multi-column screens (Design, Procure, Codex) stack when narrow (`Kit.cols_row` / `Kit.fit_split`); the Supercomputer builder on touch is one row of cards you swipe left and right, each card scrolling up and down.
 - Scroll positions are restored the same frame after a screen rebuild (no jump to the top when you toggle a button); touch-scroll picks the innermost list that can still move that way and ignores lists covered by a pop-up.
+
+## Releasing the APK
+The release workflow does not build the APK (it needs the Android SDK, the NDK and a signing key); it is built and attached by hand:
+1. `scripts/build-android-native.sh` (fetches nodejs-mobile, builds the JNI shim).
+2. Set `GODOT_ANDROID_KEYSTORE_RELEASE_PATH`, `_USER` and `_PASSWORD` to a keystore, then `godot --headless --path godot --export-release Android build/android/GIGAWATT-<ver>-android.apk`. v0.8.1 was signed with a certificate made from a personal RSA key (a temporary PKCS12 keystore, deleted afterwards); keep using the same key so updates install over earlier builds.
+3. `gh release upload <tag> <apk>`, add its line to `SHA256SUMS.txt`, and the site picks the `.apk` up on its own.

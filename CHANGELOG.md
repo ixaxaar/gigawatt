@@ -5,7 +5,7 @@ All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepa
 ## [0.8.1] - 2026-11-08
 
 ### Added
-- **Android build (preview).** `scripts/build-android-native.sh` and a Godot export produce an APK that runs the engine inside the app (nodejs-mobile) and plays on a real phone (checked on a Pixel 9a). Not yet signed or published to a store; see docs/MOBILE.md.
+- **Android build (preview).** A signed arm64 APK (`GIGAWATT-v0.8.1-android.apk`, on the release and the site) runs the engine inside the app (nodejs-mobile) and plays on a real phone (checked on a Pixel 9a). Not a store build; see docs/MOBILE.md.
 - **Touch as a first-class input.** Drag-scroll from anywhere (cards and buttons included, no scrollbars), buttons at least 52 px tall, and one scroller per screen that keeps its position when a card is pressed.
 - **Resizable drawers on every layout.** A divider with a pill grip on each drawer's edge: drag to size the drawer (30% on phones by default, remembered), tap to fold it away.
 - **Safe area.** On phones the interface keeps clear of camera cut-outs and rounded corners.

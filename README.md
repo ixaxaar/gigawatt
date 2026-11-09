@@ -99,8 +99,9 @@ Grab the archive for your OS from [Releases](https://github.com/ixaxaar/gigawatt
 | Linux (x86_64) | `GIGAWATT-<ver>-linux.tar.gz` | `GIGAWATT/gigawatt.sh` (needs a Vulkan GPU/driver) |
 | macOS, Apple Silicon | `GIGAWATT-<ver>-macos-arm64.zip` | `xattr -dr com.apple.quarantine GIGAWATT.app`, then open |
 | macOS, Intel | `GIGAWATT-<ver>-macos-x64.zip` | same as above |
+| Android (arm64, preview) | `GIGAWATT-<ver>-android.apk` | open the file on the phone and allow installs from your browser; plays in landscape |
 
-Builds are unsigned, hence the OS warnings. Releases are built by `.github/workflows/release.yml` on every `v*` tag (`scripts/package.sh` assembles the Godot export, the sidecar and a Node runtime).
+Builds are unsigned (the Android APK is signed with a personal key, not a store key), hence the OS warnings. Releases are built by `.github/workflows/release.yml` on every `v*` tag (`scripts/package.sh` assembles the Godot export, the sidecar and a Node runtime).
 
 ## Run from source
 

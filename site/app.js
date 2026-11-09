@@ -45,14 +45,14 @@
   // ---- downloads: pick the right build from the latest release ----
   const nav = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "";
   const ua = navigator.userAgent || "";
-  let myOS = /win/i.test(nav) ? "windows" : /mac/i.test(nav) ? "macos" : /linux|x11|cros/i.test(nav + ua) ? "linux" : "";
+  let myOS = /android/i.test(ua) ? "android" : /win/i.test(nav) ? "windows" : /mac/i.test(nav) ? "macos" : /linux|x11|cros/i.test(nav + ua) ? "linux" : "";
   fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(rel => {
       const ver = document.getElementById("ver");
       if (ver) ver.textContent = `Latest: ${rel.tag_name} · ${new Date(rel.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
       const find = k => (rel.assets || []).find(a => a.name.toLowerCase().includes(k) && !a.name.endsWith(".txt"));
-      const map = { linux: find("linux"), windows: find("windows"), "macos-arm64": find("macos-arm64"), "macos-x64": find("macos-x64") };
+      const map = { linux: find("linux"), windows: find("windows"), "macos-arm64": find("macos-arm64"), "macos-x64": find("macos-x64"), android: find(".apk") };
       let primary = null;
       document.querySelectorAll(".dl").forEach(a => {
         const asset = map[a.dataset.os];
@@ -66,7 +66,7 @@
       const main = document.getElementById("dl-main"), note = document.getElementById("dl-note");
       if (primary && main) {
         main.href = primary.browser_download_url;
-        const label = { linux: "Linux", windows: "Windows", macos: "macOS" }[myOS];
+        const label = { linux: "Linux", windows: "Windows", macos: "macOS", android: "Android" }[myOS];
         main.textContent = `Download for ${label}`;
         if (note) note.textContent = `${rel.tag_name} · ${(primary.size / 1048576).toFixed(0)} MB · free · also for the other platforms below`;
       }
