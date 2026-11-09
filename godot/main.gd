@@ -314,7 +314,7 @@ func _relayout() -> void:
 	lbl.debt_box.visible = k == "desktop" and float(b.g.get("debt", 0.0)) > 0.0
 	lbl.mode.visible = k == "desktop"
 	lbl.speed.custom_minimum_size = Vector2(124 if k == "desktop" else (84 if k == "handheld" else 60), Layout.tap()); _speed_label()
-	next_btn.custom_minimum_size = Vector2(0, Layout.tap()); next_btn.text = "NEXT MONTH ▶" if k != "phone" else "▶"
+	next_btn.custom_minimum_size = Vector2(0 if k == "desktop" else 150, maxf(Layout.tap(), 0.0)); next_btn.text = "NEXT MONTH ▶" if k == "desktop" else "NEXT ▶"; next_btn.add_theme_font_size_override("font_size", Kit.fs(17))
 	menu_btn.text = "MENU" if k != "phone" else "≡"; menu_btn.custom_minimum_size = Vector2(0 if k != "phone" else 52, Layout.tap())
 	(top.get_child(0) as HBoxContainer).add_theme_constant_override("separation", 16 if k == "desktop" else (12 if k == "handheld" else 8))
 	_dock_h = 84.0 if k == "desktop" else 74.0

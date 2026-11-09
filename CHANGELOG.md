@@ -2,6 +2,27 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.8.1] - 2026-11-08
+
+### Added
+- **Android build (preview).** `scripts/build-android-native.sh` and a Godot export produce an APK that runs the engine inside the app (nodejs-mobile) and plays on a real phone (checked on a Pixel 9a). Not yet signed or published to a store; see docs/MOBILE.md.
+- **Touch as a first-class input.** Drag-scroll from anywhere (cards and buttons included, no scrollbars), buttons at least 52 px tall, and one scroller per screen that keeps its position when a card is pressed.
+- **Resizable drawers on every layout.** A divider with a pill grip on each drawer's edge: drag to size the drawer (30% on phones by default, remembered), tap to fold it away.
+- **Safe area.** On phones the interface keeps clear of camera cut-outs and rounded corners.
+- **Responsive screens.** Text and buttons wrap to the drawer's width; header rows flow onto several lines; Design, Procure and Codex columns stack when narrow; the Supercomputer builder is a row of cards you swipe left and right.
+- A landscape two-column title screen and a two-column pause menu for phones.
+
+### Changed
+- **No hall walls.** Halls are always open plan; the Walls option is gone from the site picker.
+- Phones are now truly locked to landscape (v0.8.0 used the wrong orientation value).
+- Cluster and per-rack cables stay visible at every zoom level (only their detail drops with distance).
+- The Next button in the top bar is wide and labelled on phones and handhelds.
+- Two-finger orbit is slower (half speed).
+
+### Fixed
+- The screen no longer jumps to the top and back when you select a card in Procure and other screens.
+- Header hints no longer wrap one word per line in narrow drawers.
+
 ## [0.8.0] - 2026-11-08
 
 ### Added
