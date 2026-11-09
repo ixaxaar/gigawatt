@@ -78,8 +78,10 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 	v.add_child(Kit.label("WHAT YOU NEED TO BUY", 12, Kit.CY))
 	for o in opts:
 		var afford: bool = o.cost <= b.g.cash
-		var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)
-		h.add_child(Kit.label("%d × %s" % [int(o.racks), o.t.name], 14)); h.add_child(Kit.label("DIY" if o.t.tier == "diy" else str(o.t.integrator), 11, Kit.DIM))
+		if Layout.compact: v.add_child(Kit.label("%d × %s" % [int(o.racks), o.t.name], 14, Kit.TX, true))   # narrow drawer: the name gets its own wrapping line, the chips flow below
+		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 8); h.add_theme_constant_override("v_separation", 4); v.add_child(h)
+		if not Layout.compact: h.add_child(Kit.label("%d × %s" % [int(o.racks), o.t.name], 14))
+		h.add_child(Kit.label("DIY" if o.t.tier == "diy" else str(o.t.integrator), 11, Kit.DIM))
 		for t in o.tags: h.add_child(Kit.tag(str(t)))
 		var rows := []; for x in o.cover: rows.append([Kit.label("✓" if x.ok else "✗", 12, Kit.GR if x.ok else Kit.RD), x.label, "need %s" % x.need, str(x.have)])
 		v.add_child(Kit.table([], rows))

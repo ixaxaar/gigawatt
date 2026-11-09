@@ -355,12 +355,12 @@ static func row(parent: Control, left: Control, right: Array = []) -> HBoxContai
 static func table(headers: Array, rows: Array, ratios: Array = []) -> GridContainer:
 	var g := GridContainer.new(); g.columns = maxi(headers.size(), (rows[0].size() if rows.size() > 0 else 1)); g.add_theme_constant_override("h_separation", 14); g.add_theme_constant_override("v_separation", 5); g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if headers.size() > 0:
-		for h in headers: g.add_child(label(str(h).to_upper(), 11, DIM))
+		for h in headers: g.add_child(label(str(h).to_upper(), 11, DIM, Layout.compact))
 	for r in rows:
 		for c in r:
 			if c is Control: g.add_child(c)
 			else:
-				var l := label(str(c), 14); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; g.add_child(l)
+				var l := label(str(c), 14, TX, Layout.compact); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; g.add_child(l)   # small screens: cells wrap instead of widening the drawer
 	return g
 
 static func spin(value: float, mn: float, mx: float, step: float, cb: Callable) -> SpinBox:
