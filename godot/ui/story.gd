@@ -22,9 +22,10 @@ func open_chapter(c: Dictionary) -> void:
 	v.add_child(Kit.label(str(c.text), 19, Kit.DIM, true))
 	var sp := Control.new(); sp.size_flags_vertical = Control.SIZE_EXPAND_FILL; v.add_child(sp)
 	var go := Kit.btn("Into %d  ▶" % int(c.year), func(): _close_chapter(), "go", 19); go.custom_minimum_size = Vector2(0, 54); v.add_child(go)
-	go.grab_focus()
+	if go.focus_mode != Control.FOCUS_NONE: go.grab_focus()   # only a controller/keyboard user has focusable buttons
 
 func _close_chapter() -> void:
+	if OS.has_feature("debug"): print("STORY chapter closed")
 	visible = false; app.b.act("ackStory"); app.check_story()
 
 func open_dilemma(d: Dictionary) -> void:
@@ -50,4 +51,5 @@ func _choose(i: int) -> void:
 	visible = false; app.toast(str(r.get("message", "")), "good"); app.check_story()
 
 func _later(id: String) -> void:
+	if OS.has_feature("debug"): print("STORY later pressed")
 	visible = false; app.dilemma_dismissed = id

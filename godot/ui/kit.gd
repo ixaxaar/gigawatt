@@ -505,13 +505,17 @@ static func confirm(host: Node, text: String, on_yes: Callable, yes_label := "Co
 static func reveal(node: Control) -> void:
 	if node == null or not node.is_inside_tree(): return
 	var tree := node.get_tree()
-	await tree.process_frame; await tree.process_frame; await tree.process_frame
+	for i in 9: await tree.process_frame   # let the screen's own scroll-holding after a rebuild finish first
 	if not is_instance_valid(node) or not node.is_inside_tree(): return
+	var scs: Array = []   # every scroller around the node, innermost first (a column can scroll inside the page's own scroller)
 	var p: Node = node.get_parent()
-	while p != null and not (p is ScrollContainer): p = p.get_parent()
-	if p == null: return
-	var sc := p as ScrollContainer
-	sc.scroll_vertical = maxi(0, int(node.global_position.y - sc.global_position.y) + sc.scroll_vertical - 8)
+	while p != null:
+		if p is ScrollContainer: scs.append(p)
+		p = p.get_parent()
+	for sc in scs:
+		if not is_instance_valid(sc) or not is_instance_valid(node): return
+		(sc as ScrollContainer).scroll_vertical = maxi(0, int(node.global_position.y - (sc as Control).global_position.y) + (sc as ScrollContainer).scroll_vertical - 8)
+		await tree.process_frame
 
 ## Run `rebuild` (which frees and recreates the UI) without losing scroll positions.
 static func rebuild_keep(node: Control, rebuild: Callable) -> void:

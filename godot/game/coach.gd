@@ -126,14 +126,23 @@ func _build() -> void:
 	call_deferred("_fit"); get_tree().create_timer(0.15).timeout.connect(_fit)
 
 func _fit() -> void:
-	card.size = Vector2(minf(420.0, app.vw() * 0.42), 0)
+	card.size = Vector2(_width(), 0)
 	_place()
+
+## Left edge for floating cards: clear of the phone dock rail and of the camera buttons on touch screens.
+func _left_edge() -> float:
+	if Layout.touch: return (app.RAIL_W if Layout.phone else 0.0) + 12.0 + 56.0 + 10.0
+	return 16.0
+
+## The card stays in the part of the hall that the open drawer leaves free.
+func _width() -> float:
+	return clampf(app.vw() - app.hall.cover_px - _left_edge() - 14.0, 250.0, 420.0)
 
 ## Bottom-left above the dock: never over a drawer's header or the hall's first racks. (Toasts stack above it.)
 func _place() -> void:
 	var rail: bool = Layout.phone
-	card.offset_left = (104.0 if rail else 16.0)
-	card.offset_right = card.offset_left + minf(420.0, app.vw() * 0.42)
+	card.offset_left = _left_edge()
+	card.offset_right = card.offset_left + _width()
 	card.offset_bottom = -12.0 if rail else -(app._dock_h + 16.0); card.offset_top = card.offset_bottom
 
 func _target(s: Dictionary) -> Control:

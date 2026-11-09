@@ -60,7 +60,7 @@ export function newGameState(seed: number): GameState {
   g.log.push({
     month: START_MONTH,
     level: 'info',
-    text: 'GIGAWATT day one: $50M cash, Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh.',
+    text: 'GIGAWATT day one: Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh.',
   });
   g.log.push({
     month: START_MONTH,

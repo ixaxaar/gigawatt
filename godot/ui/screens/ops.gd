@@ -31,19 +31,19 @@ func _rebuild() -> void:
 	# --- team
 	var s: Dictionary = b.q("staffing")
 	var tp := Kit.panel("Team", true, top)
-	tp[1].add_child(Kit.label("%d / %d operators" % [int(s.have), int(s.needed)], 20, Kit.GR if s.have >= s.needed else Kit.RD))
+	tp[1].add_child(Kit.label(("%d operators (you need %d)" % [int(s.have), int(s.needed)]) if s.have >= s.needed else ("%d of %d operators needed" % [int(s.have), int(s.needed)]), 20, Kit.GR if s.have >= s.needed else Kit.RD, true))
 	var full: bool = s.failureMult <= 1.01 and int(s.repairExtraMonths) < 1
 	tp[1].add_child(Kit.label("Fully staffed" if full else "Failures ×%.1f, repairs +%d month%s" % [s.failureMult, int(s.repairExtraMonths), "s" if int(s.repairExtraMonths) > 1 else ""], 13, Kit.GR if full else Kit.AM, true))
 	for f in s.breakdown: tp[1].add_child(Kit.label("%s: %d" % [f.label, int(f.n)], 12, Kit.DIM))
 	tp[1].add_child(Kit.label("Payroll %s/mo · hiring %s each · severance %s each" % [Kit.usd(s.monthlyCostUSD), Kit.usd(s.hireCostUSD), Kit.usd(s.severanceUSD)], 12, Kit.DIM, true))
-	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); tp[1].add_child(hb)
+	var hb := HFlowContainer.new(); hb.add_theme_constant_override("h_separation", 8); hb.add_theme_constant_override("v_separation", 6); tp[1].add_child(hb)
 	for n in [1, 5]: hb.add_child(Kit.btn("Hire %d" % n, func(): _act("hireStaff", [n]), "", 13))
 	hb.add_child(Kit.btn("Let go 1", func(): Kit.confirm(self, "Let one operator go? Severance is paid now and you lose their capacity.", func(): _act("fireStaff", [1]), "Let go"), "danger", 13))
 	# --- debt
 	var dp := Kit.panel("Debt", true, top)
 	var interest: float = g.debt * 0.07 / 12.0
 	dp[1].add_child(Kit.stats([["Cash", Kit.usd(g.cash), Kit.GR if g.cash > 0 else Kit.RD], ["Debt", Kit.usd(g.debt), Kit.RD if g.debt > 0 else Kit.TX], ["Interest · 7% APR", "%s/mo" % Kit.usd(interest)]], 3))
-	var db := HBoxContainer.new(); db.add_theme_constant_override("separation", 8); dp[1].add_child(db)
+	var db := HFlowContainer.new(); db.add_theme_constant_override("h_separation", 8); db.add_theme_constant_override("v_separation", 6); dp[1].add_child(db)
 	for amt in [5.0e6, 2.0e7]: db.add_child(Kit.btn("Borrow %s" % Kit.usd(amt), func(): _act("takeLoan", [int(amt)]), "", 13))
 	for amt in [1.0e6, 5.0e6]:
 		var rb := Kit.btn("Repay %s" % Kit.usd(amt), func(): _act("repayLoan", [int(amt)]), "", 13)
@@ -98,14 +98,14 @@ func _rebuild() -> void:
 	var pv = b.q("preview"); if typeof(pv) != TYPE_DICTIONARY: pv = {}
 	var opp := Kit.panel("Operating policy", false, sc)
 	opp[1].add_child(Kit.label("BURN-IN — how long new racks soak before going live", 11, Kit.DIM))
-	var bh := HBoxContainer.new(); bh.add_theme_constant_override("separation", 6); opp[1].add_child(bh)
+	var bh := HFlowContainer.new(); bh.add_theme_constant_override("h_separation", 6); bh.add_theme_constant_override("v_separation", 6); opp[1].add_child(bh)
 	var blab := ["0 mo — skip: ships dead GPUs (3x burn-in failures)", "1 mo — standard", "2 mo — thorough (0.5x failures, +1 month lead)", "3 mo — exhaustive (0.25x failures, +2 months lead)"]
 	for m in 4:
 		var tb := Kit.btn(blab[m], func(): _act("setPolicy", [m, maint]), "", 12)
 		if m == burn: tb.modulate = Color(0.5, 1.0, 0.9)
 		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(tb)
 	opp[1].add_child(Kit.label("MAINTENANCE — how hard you fight hardware decay", 11, Kit.DIM))
-	var mh := HBoxContainer.new(); mh.add_theme_constant_override("separation", 6); opp[1].add_child(mh)
+	var mh := HFlowContainer.new(); mh.add_theme_constant_override("h_separation", 6); mh.add_theme_constant_override("v_separation", 6); opp[1].add_child(mh)
 	var mlab := ["Reactive — $0", "Preventive — $150/rack/mo (0.75x failures)", "Premium — $400/rack/mo (0.55x failures)"]
 	for l in 3:
 		var mb := Kit.btn(mlab[l], func(): _act("setPolicy", [burn, l]), "", 12)
@@ -119,7 +119,7 @@ func _rebuild() -> void:
 	if vrows.is_empty(): vp[1].add_child(Kit.label("No vendor relationships yet — buy parts to earn them.", 12, Kit.DIM))
 	for v in vrows:
 		var fw: Dictionary = v.get("framework") if v.get("framework") != null else {}
-		var vh := HBoxContainer.new(); vh.add_theme_constant_override("separation", 8); vp[1].add_child(vh)
+		var vh := HFlowContainer.new(); vh.add_theme_constant_override("h_separation", 8); vh.add_theme_constant_override("v_separation", 6); vp[1].add_child(vh)
 		vh.add_child(_cell(str(v.get("name", v.get("id", "?"))), 120.0))
 		var relb := VBoxContainer.new(); relb.custom_minimum_size = Vector2(80.0, 0); vh.add_child(relb)
 		relb.add_child(Kit.bar(float(v.get("rel", 0.0)), 100.0))
@@ -143,7 +143,7 @@ func _rebuild() -> void:
 	if not vopts.is_empty():
 		if fw_vendor == "" or not vnames.has(fw_vendor): fw_vendor = vopts[0][0]
 		vp[1].add_child(Kit.hsep())
-		var fh := HBoxContainer.new(); fh.add_theme_constant_override("separation", 8); vp[1].add_child(fh)
+		var fh := HFlowContainer.new(); fh.add_theme_constant_override("h_separation", 8); fh.add_theme_constant_override("v_separation", 6); vp[1].add_child(fh)
 		fh.add_child(Kit.label("New framework:", 12, Kit.DIM))
 		fh.add_child(Kit.option(vopts, fw_vendor, func(id): fw_vendor = str(id); refresh()))
 		for c in [2.0e6, 1.0e7, 5.0e7]:

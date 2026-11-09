@@ -5,6 +5,7 @@ import { useGame } from '../store';
 import { fleetOf, needsOf, offerMoney } from './needs';
 import { contractRevenue } from '../sim/economy';
 import { generateContracts } from '../sim/market';
+import { buildOptions } from '../contractfit';
 import { mulberry32 } from '../sim/rng';
 import type { ActiveContract, GameState } from '../types';
 
@@ -63,3 +64,13 @@ describe('needsOf: failed racks', () => {
   });
 });
 
+describe('opening offers', () => {
+  it('at least one of the first offers can be served in time by some build (the tutorial sends you there)', () => {
+    for (const mode of ['learner', 'operator', 'tycoon'] as const) for (let seed = 1; seed <= 12; seed++) {
+      useGame.getState().newGame(seed, mode);
+      const g = useGame.getState().game;
+      const ok = g.availableContracts.some((c) => buildOptions(g, c).some((o) => o.fitsRamp));
+      expect(ok, `${mode} seed ${seed}`).toBe(true);
+    }
+  });
+});

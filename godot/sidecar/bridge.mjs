@@ -9055,7 +9055,7 @@ function newGameState(seed) {
   g.log.push({
     month: START_MONTH,
     level: "info",
-    text: "GIGAWATT day one: $50M cash, Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh."
+    text: "GIGAWATT day one: Hall A with 500 kW IT power / 600 kW air cooling over 40 rack slots, utility at $0.07/kWh."
   });
   g.log.push({
     month: START_MONTH,
@@ -12013,6 +12013,7 @@ const sessionActions = (c) => {
   return {
     newGame: (seed = Math.floor(Math.random() * 2 ** 31), mode = "operator") => {
       const g = newGameState(seed);
+      for (let k2 = 1; k2 <= 40 && !g.availableContracts.some((x) => buildOptions(g, x).some((o2) => o2.fitsRamp)); k2++) g.availableContracts = generateContracts(g, g.month, mulberry32(seed + 7919 * k2));
       g.mode = mode;
       if (mode === "learner") {
         g.cash = 8e7;

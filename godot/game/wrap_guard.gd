@@ -26,7 +26,7 @@ func _wide(row: Container, avail: float) -> void:
 	if not (row.get_class() in ["HBoxContainer", "GridContainer"]) or row.get_parent() == null or row.get_parent() is ScrollContainer: return
 	if row.get_minimum_size().x <= avail: return
 	var par := row.get_parent(); var idx := row.get_index()
-	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.custom_minimum_size.y = row.get_minimum_size().y
 	par.remove_child(row); sc.add_child(row); par.add_child(sc); par.move_child(sc, idx)
 

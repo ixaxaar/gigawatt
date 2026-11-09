@@ -180,7 +180,7 @@ func _build_shell() -> void:
 	lbl.netw_box.mouse_filter = Control.MOUSE_FILTER_STOP; lbl.netw_box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	lbl.netw_box.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT: go("network"))
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(sp)
-	lbl.mode = Kit.btn("Operator", func(): var m: String = b.g.get("mode", "operator"); b.act("setMode", ["operator" if m == "learner" else ("tycoon" if m == "operator" else "learner")]), "", 14); lbl.mode.custom_minimum_size = Vector2(112, 0); lbl.mode.tooltip_text = "Game mode: Learner (explainers, no bankruptcy), Operator, Tycoon. Click to change."; hb.add_child(lbl.mode)
+	lbl.mode = Kit.btn("Operator", func(): var m: String = b.g.get("mode", "operator"); var nx: String = "operator" if m == "learner" else ("tycoon" if m == "operator" else "learner"); Kit.confirm(self, "Switch to %s mode? Learner shows explainers and Easy path, Operator adds guided checklists, Tycoon has no hand-holding. Your cash and hall stay as they are." % nx.capitalize(), func(): b.act("setMode", [nx]), "Switch"), "", 14); lbl.mode.custom_minimum_size = Vector2(112, 0); lbl.mode.tooltip_text = "Game mode: Learner (explainers, no bankruptcy), Operator, Tycoon. Click to change."; hb.add_child(lbl.mode)
 	lbl.speed = Kit.btn("⏸ Paused", func(): set_speed((speed + 1) % 4), "", 15); lbl.speed.custom_minimum_size = Vector2(124, 0); lbl.speed.tooltip_text = "Auto-advance speed: click to cycle Paused, 1x, 2x, 3x. Space advances one month."; hb.add_child(lbl.speed)
 	next_btn = Kit.btn("NEXT MONTH ▶", next_month, "go", 17); hb.add_child(next_btn)
 	menu_btn = Kit.btn("MENU", func(): _menu(), "", 14); hb.add_child(menu_btn)
@@ -333,9 +333,10 @@ func _relayout() -> void:
 	dock_box.alignment = BoxContainer.ALIGNMENT_CENTER if not rail else BoxContainer.ALIGNMENT_BEGIN
 	holder.offset_top = _bar_h + 10.0; holder.offset_bottom = -(_dock_h + 8.0) if not rail else -6.0
 	holder.offset_left = 14 if k != "phone" else RAIL_W + 8.0; holder.offset_right = -14 if k != "phone" else -6.0
-	var tw := minf(380.0, vw() * 0.4)   # bottom-left, above the dock: never over a drawer's header, tabs or first card
+	var left0 := ((RAIL_W if rail else 0.0) + 12.0 + 56.0 + 10.0) if Layout.touch else 14.0
+	var tw := clampf(vw() - hall.cover_px - left0 - 14.0, 230.0, 380.0)   # bottom-left, above the dock: never over a drawer's header, tabs or first card
 	toasts.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); toasts.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	toasts.offset_left = (RAIL_W + 14.0) if rail else 14.0; toasts.offset_right = toasts.offset_left + tw
+	toasts.offset_left = ((RAIL_W if rail else 0.0) + 12.0 + 56.0 + 10.0) if Layout.touch else 14.0; toasts.offset_right = toasts.offset_left + tw   # touch: right of the camera buttons
 	toasts.offset_bottom = -12.0 if rail else -(_dock_h + 16.0); toasts.offset_top = toasts.offset_bottom
 	banner.offset_top = _bar_h + 74.0
 	_place_cam_tools(); call_deferred("_fit_top")
@@ -502,7 +503,7 @@ func toast(text: String, level := "info") -> void:
 	elif level == "good" and ("deliver" in low or "arrived" in low): cue = "delivery"
 	audio.play(cue)
 	var p := PanelContainer.new(); p.set_meta("txt", text); var col := Kit.GR if level == "good" else (Kit.RD if level == "bad" else Kit.CY)
-	p.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(minf(380.0, vw() * 0.4), 0); toasts.add_child(p)
+	p.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.94), col, 8, 1, 10)); p.add_child(Kit.label(text, 14, Kit.TX, true)); p.custom_minimum_size = Vector2(clampf(vw() - hall.cover_px - 100.0, 230.0, 380.0), 0); toasts.add_child(p)
 	p.set_meta("life", 16.0 if level == "bad" else 7.0)   # ages only while visible (not behind a dialog); bad news stays longer
 	while toasts.get_child_count() > 3:   # never more than three: drop the oldest that is not bad news first
 		var drop: Node = toasts.get_child(0)
@@ -757,6 +758,7 @@ func _input(e: InputEvent) -> void:
 	_last_input = Time.get_ticks_msec()
 	if e is InputEventKey and e.pressed and not e.echo:
 		if e.keycode == KEY_Q and e.ctrl_pressed: _menu_do("quit")
+		elif e.keycode == KEY_ESCAPE and get_viewport().gui_get_focus_owner() is LineEdit: get_viewport().gui_release_focus(); get_viewport().set_input_as_handled()   # leave the text field first
 		elif e.keycode == KEY_ESCAPE:   # Esc closes the topmost thing; it never quits and never stacks the pause menu on another overlay
 			var m := modal()
 			if m != null and m.name != "title": get_viewport().set_input_as_handled(); pad._back()
@@ -805,10 +807,18 @@ func _fit_top() -> void:
 		if lbl.get(k + "_box") != null: (lbl[k + "_box"] as Control).visible = false
 
 ## Toasts and the mission banner sit under dialogs (hidden while one is open) and only age while they can be seen.
+var _last_vp := Vector2.ZERO
 func _age_toasts(dt: float) -> void:
 	if root == null or toasts == null or banner == null: return
+	var vpsz := get_viewport().get_visible_rect().size
+	if vpsz != _last_vp:   # window, UI size, text size or layout changed: refit the top bar, dialogs and camera buttons
+		_last_vp = vpsz; _fit_top(); _place_cam_tools()
+		if settings_ui != null and settings_pn != null: _center(settings_pn, 800, 680)
 	var show_now := modal() == null
 	if cam_tools != null: cam_tools.visible = started and Layout.touch and show_now and not FULL.has(cur)
+	# The drawer's divider is drawn under dialogs but would still win the click at its position (the GUI picks by tree order, not z-index):
+	# a dialog button near the drawer edge ignored taps. Under a dialog the divider takes no input at all.
+	if drawer_tab != null: drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP if show_now else Control.MOUSE_FILTER_IGNORE
 	toasts.modulate.a = 1.0 if show_now else 0.0; banner.visible = show_now
 	var lift := 0.0   # toasts stack above the tutorial card when it is showing
 	if coach != null and coach.card != null and coach.card.visible: lift = coach.card.size.y + 8.0
@@ -916,6 +926,7 @@ func _small_fonts(n: Node) -> int:
 
 # ---------- settings + controls ----------
 var settings_ui: Control
+var settings_pn: PanelContainer
 var _settings_tab := "Display"
 const KEYS := [["Space", "Next month"], ["1-8", "Open a drawer or workshop"], ["0", "Open the Codex"], ["T", "Thermal view"], ["V", "Top view"], ["L", "Rack labels"], ["Esc", "Close the top dialog, or open the pause menu"], ["F1", "Settings"], ["Ctrl+Q", "Save and quit"],
 	["Left-drag, WASD, arrows", "Pan the hall"], ["Right-drag, Q E", "Orbit the hall"], ["Middle-drag, Shift+right-drag", "Pan the hall"], ["Wheel", "Zoom"], ["Speed button", "Pause, 1x, 2x, 3x"]]
@@ -927,7 +938,7 @@ func _settings() -> void:
 	if OS.has_environment("GW_SETTINGS_TAB"): _settings_tab = OS.get_environment("GW_SETTINGS_TAB")
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); settings_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
-	var pn := PanelContainer.new(); _center(pn, 800, 680)
+	var pn := PanelContainer.new(); _center(pn, 800, 680); settings_pn = pn; pn.clip_contents = true
 	pn.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.98), Kit.CY, 14, 2, 22)); h.add_child(pn)
 	var vb := VBoxContainer.new(); vb.add_theme_constant_override("separation", 10); pn.add_child(vb)
 	var head := HBoxContainer.new(); vb.add_child(head)   # Close sits in the header too: it stays reachable however big the UI is scaled
@@ -935,7 +946,7 @@ func _settings() -> void:
 	head.add_child(Kit.btn("Close ✕", func(): settings_ui.queue_free(); settings_ui = null, "", 16))
 	var tabs := HFlowContainer.new(); tabs.add_theme_constant_override("h_separation", 6); tabs.add_theme_constant_override("v_separation", 6); vb.add_child(tabs)
 	var body := VBoxContainer.new(); body.add_theme_constant_override("separation", 12); body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.add_child(body); body.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vb.add_child(sc)
+	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO; sc.add_child(body); body.size_flags_horizontal = Control.SIZE_EXPAND_FILL; vb.add_child(sc)
 	_settings_fill(body, tabs)
 	vb.add_child(Kit.btn("Close", func(): settings_ui.queue_free(); settings_ui = null, "pri", 18))
 
@@ -959,7 +970,7 @@ func _opt_row(parent: Control, title: String, items: Array, selected: int, cb: C
 
 func _set_display(vb: VBoxContainer) -> void:
 	_opt_row(vb, "Layout", ["Auto (this device)", "Desktop / laptop / console", "Handheld (Steam Deck)", "Phone"], ["auto", "desktop", "handheld", "phone"].find(Settings.layout), func(i): Settings.layout = ["auto", "desktop", "handheld", "phone"][i]; Settings.apply(get_window()); Settings.save_all(); get_window().size_changed.emit())
-	vb.add_child(Kit.label("Running as: %s (%s). The layout changes the top bar, dock and drawers, not the game." % [Layout.kind, "auto" if Settings.layout == "auto" else "forced"], 13, Kit.DIM, true))
+	vb.add_child(Kit.label("Running as: %s (%s). The layout changes the top bar, dock and drawers, not the game." % [Layout.kind if Settings.layout == "auto" else Settings.layout, "auto" if Settings.layout == "auto" else "forced"], 13, Kit.DIM, true))
 	vb.add_child(Kit.label("UI THEME", 13, Kit.DIM))
 	for dk in [true, false]:
 		var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 6); fl.add_theme_constant_override("v_separation", 6); vb.add_child(fl)
@@ -1123,6 +1134,7 @@ func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 
 func _menu() -> void:
 	if menu_ui != null: menu_ui.queue_free(); menu_ui = null; return
+	get_viewport().gui_release_focus()   # nothing behind the dialog keeps the keyboard
 	var h := Control.new(); h.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_child(h); menu_ui = h
 	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.6); dim.set_anchors_preset(Control.PRESET_FULL_RECT); h.add_child(dim)
 	var wide: bool = Layout.phone or vs_h() < 900   # short screens: two columns so every button fits

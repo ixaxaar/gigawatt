@@ -64,7 +64,21 @@ func _can(sc: ScrollContainer, vertical: bool, delta: int) -> bool:
 	if room <= 1.0: return false
 	return bar.value > 0.5 if delta < 0 else bar.value < room - 0.5
 
+## Debug builds only: say which control sits on top at a touch (for chasing "my tap did nothing" reports).
+func _top_at(p: Vector2) -> String:
+	var best: Control = null; var best_key := -1.0; var i := 0
+	var stack := [get_tree().root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		i += 1
+		if n is Control and (n as Control).is_visible_in_tree() and (n as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE and (n as Control).get_global_rect().has_point(p):
+			var key := float((n as Control).z_index) * 1000000.0 + float(i)
+			if key >= best_key: best = n; best_key = key
+		var kids := n.get_children(); kids.reverse(); stack.append_array(kids)
+	return str(best.get_path()) + " (" + best.get_class() + ")" if best != null else "none"
+
 func _begin(p: Vector2) -> void:
+	if OS.has_feature("debug"): print("TAP ", p, " top=", _top_at(p))
 	_cands.clear(); _on_btn = false; _dragging = false; _start = p
 	var hit: Array = []
 	for s in get_tree().root.find_children("*", "ScrollContainer", true, false):

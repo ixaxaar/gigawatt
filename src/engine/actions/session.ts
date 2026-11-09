@@ -8,6 +8,9 @@ import { applyEffect, storyOf } from '../../sim/systems/story';
 import { SITE_DEFAULT } from '../../types';
 import { DEFAULT_SLOT, autosaveOn, readSlot, writeSlot } from '../persistence';
 import { newGameState } from '../state';
+import { buildOptions } from '../../contractfit';
+import { generateContracts } from '../../sim/market';
+import { mulberry32 } from '../../sim/rng';
 import type { Ctx } from './ctx';
 
 export const sessionActions = (c: Ctx): Partial<GameStore> => {
@@ -15,6 +18,8 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
   return {
     newGame: (seed = Math.floor(Math.random() * 2 ** 31), mode = 'operator') => {
       const g = newGameState(seed);
+      // The tutorial sends a new player to the first offers: make sure at least one of them can be served in time by some build.
+      for (let k = 1; k <= 40 && !g.availableContracts.some((x) => buildOptions(g, x).some((o) => o.fitsRamp)); k++) g.availableContracts = generateContracts(g, g.month, mulberry32(seed + 7919 * k));
       g.mode = mode;
       if (mode === 'learner') { g.cash = 80_000_000; g.log.push({ month: g.month, level: 'info', text: '🎓 Learner mode: $80M starting cash, explainers everywhere, and the Easy path will do the build steps for you.' }); }
       if (mode === 'tycoon') { g.cash = 30_000_000; g.log.push({ month: g.month, level: 'info', text: '💼 Tycoon mode: $30M, no hand-holding. Good luck.' }); }

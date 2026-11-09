@@ -2,6 +2,38 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.9.0] - 2026-11-09 (alpha)
+
+First alpha for friends. A full critique pass (six testers on desktop at nine resolutions, a Pixel 9a, a virtual Steam Deck controller, a random-button tester and a code review; see `docs/CRITIQUE-0.8.md`) drove this release.
+
+### Fixed
+- **The title screen no longer overwrites your autosave.** Its background demo used to play 22 months and save over the "auto" slot, so Continue loaded the demo. The demo now runs with autosave off (regression test in `src/engine/savefile.test.ts`).
+- **Controller:** A now presses the focused control and B closes dropdowns (the project had no input map, so A did nothing). Focus no longer escapes the site picker, the Load dialog or Easy Path confirmations; the Supply cards, checkboxes, dropdowns and sliders can be reached and changed with the D-pad; the tutorial card's "Got it" takes focus. Sliders apply a moment after the last step instead of only on mouse release.
+- **Android:** Back no longer quits. It closes the top dialog, leaves the drawer, then opens the pause menu. The game autosaves when the app is paused. The pause menu has no "Save & quit game", and Settings has no Window mode or V-Sync on phones. The desktop-style "Vulkan could not start" warning is gone (phones run Vulkan Mobile).
+- **Dialogs:** Space and the other hotkeys do nothing behind a chapter card, keynote, decision, pause menu or Settings; Esc closes the top dialog (never stacks the pause menu, never quits from the title or site picker); F1 toggles Settings.
+- **Short screens (Steam Deck 1280x800, 720p and 768p laptops):** the title uses the two-column layout so Settings and Quit are reachable; the pause menu is a panel in two columns; Settings tabs wrap and Close sits in the header; the Codex parts list is no longer blank; the top bar drops its least important stats instead of pushing NEXT and MENU off-screen.
+- **The rack tooltip** disappears when the pointer leaves the 3D hall; it no longer follows the mouse over drawers and dialogs.
+- **Toasts** stack bottom-left above the dock (at most three, bad news stays longer, hidden behind dialogs, never over a drawer header). The tutorial card moved bottom-left too and hides on the full-screen workshops.
+- Build: the placement panel is compact; clicking an occupied rack inspects it instead of buying another; the text no longer promises to place into the clicked slot.
+- Typing a hall name no longer pans the camera; releasing the mouse over a drawer no longer leaves the camera dragging; taps in a drawer's gaps and on full-screen pages no longer reach the hidden hall.
+- Phone: energy and Home drawers no longer clip text at the right edge; the site picker's buttons sit inside the safe area; tapping a Design Lab socket scrolls to the part picker.
+- "100%% bought" typo on Energy.
+
+### Added
+- **Camera buttons for touch:** zoom +/−, top view, heat view and rack labels.
+- **Learner glossary** ("WORDS": SLA, tok/s, Mtok, TTFT, TP, ramp window, PUE, InfiniBand/RoCE) at the top of Customers, Supply and Supercomputer.
+- **Confirmations** on Easy Path (cost and payback), Let go, Sell all and Uncluster; ordering and Easy Path report the result as a toast.
+- **"N racks are down"** in the Overview's Needs card, with when they are back and what shortens it (regression test in `src/engine/needs.test.ts`).
+- Settings > Controls lists the missing keys and a Touch section; tutorial text follows the input device (mouse, touch, controller) and the phone's dock names.
+- The website says "Alpha" and links to issues and discussions.
+
+### Known gaps (alpha)
+- The Design Lab boards (tray and rack) cannot be operated with a controller or the keyboard alone.
+- Keyboard-only play is limited to hotkeys; Tab navigation only exists in controller mode.
+- Light themes (Paper, Sand, Mist) have weak contrast in places.
+- UI does not scale with ultrawide screens beyond the height-based scale.
+- Android APK is built by hand (not in CI) and cannot be made 16 KB page-aligned (a nodejs-mobile limit); iOS is untouched.
+
 ## [0.8.1] - 2026-11-08
 
 ### Added

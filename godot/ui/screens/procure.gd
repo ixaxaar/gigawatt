@@ -63,7 +63,7 @@ func _showroom(c1: VBoxContainer, platforms: Array, t: Dictionary, f: Dictionary
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 8); left.add_child(tb)
 	var door_b := Kit.btn("Door: open" if showroom.door_open else "Door: closed", func(): showroom.set_door(not showroom.door_open); app.sfx("click"); refresh(), "pri" if showroom.door_open else "", 14)
 	var cab_b := Kit.btn("Cables: on" if showroom.cables_on else "Cables: off", func(): showroom.set_cables(not showroom.cables_on); app.sfx("click"); refresh(), "pri" if showroom.cables_on else "", 14)
-	tb.add_child(door_b); tb.add_child(cab_b); tb.add_child(Kit.label("Drag to spin · wheel to zoom", 13, Kit.DIM))
+	tb.add_child(door_b); tb.add_child(cab_b); tb.add_child(Kit.label("Drag to spin" if Layout.touch else "Drag to spin · wheel to zoom", 13, Kit.DIM))
 	# overlay card: what it is, and whether your hall can take it
 	var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.accent, Kit.PANEL_FILL, 2, 12)); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(card)
 	var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 6); card.add_child(cv)
