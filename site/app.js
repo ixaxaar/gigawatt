@@ -98,3 +98,22 @@
     [gen, mw, cool].forEach(el => el.addEventListener("input", run)); run();
   }
 })();
+
+// ---- nav turns solid after the hero; screenshot lightbox ----
+(() => {
+  const nav = document.querySelector(".nav");
+  const onScroll = () => nav && nav.classList.toggle("solid", scrollY > 40);
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  const lb = document.getElementById("lb");
+  if (!lb) return;
+  const img = lb.querySelector("img"), cap = lb.querySelector("p");
+  let last = null;
+  const close = () => { lb.classList.remove("open"); if (last) last.focus(); };
+  document.querySelectorAll("[data-zoom]").forEach(b => b.addEventListener("click", () => {
+    last = b; img.src = b.dataset.zoom; img.alt = b.querySelector("img").alt;
+    cap.textContent = b.querySelector("figcaption").textContent;
+    lb.classList.add("open"); document.getElementById("lb-x").focus();
+  }));
+  lb.addEventListener("click", e => { if (e.target !== img) close(); });
+  addEventListener("keydown", e => { if (e.key === "Escape" && lb.classList.contains("open")) close(); });
+})();
