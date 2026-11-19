@@ -15,16 +15,21 @@
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
 <body class="wiki">
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
-  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+<header class="nav always">
+  <a class="logo" href="../" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="index.html">Wiki</a>
-    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="../">Home</a>
+      <a href="index.html">Wiki</a>
+      <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    </div>
     <a href="../#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -33,13 +38,14 @@
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html" aria-current="page">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+    <nav aria-label="Pages"><ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html" aria-current="page">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul></nav>
   </aside>
   <main id="main" class="doc">
+    <p class="kicker">Player wiki</p>
     <h1>Getting started</h1>
     <p class="lede2">Installing GIGAWATT, picking a mode, and finding your way around the HUD, drawers, camera and saves.</p>
     <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#install-and-run">Install and run</a></li><li><a href="#the-title-screen-and-modes">The title screen and modes</a></li><li><a href="#the-hud">The HUD</a></li><li><a href="#the-eight-drawers">The eight drawers</a></li><li><a href="#camera-and-the-hall">Camera and the hall</a></li><li><a href="#keyboard-shortcuts">Keyboard shortcuts</a></li><li><a href="#saves">Saves</a></li><li><a href="#settings">Settings</a></li></ul></nav>
-    <figure><img loading="lazy" src="img/overview-needs.webp" alt="The Overview drawer. The &quot;Needs you now&quot; card at the top is "><figcaption>The Overview drawer. The &quot;Needs you now&quot; card at the top is the one thing worth doing next; everything below it folds away.</figcaption></figure>
+    <figure><img loading="lazy" src="img/overview-needs.webp" width="1600" height="856" alt="The Overview drawer. The &quot;Needs you now&quot; card at the top is "><figcaption>The Overview drawer. The &quot;Needs you now&quot; card at the top is the one thing worth doing next; everything below it folds away.</figcaption></figure>
 <h2 id="install-and-run">Install and run</h2>
 <p>Grab the archive for your OS from the game's Releases page, extract it, and run the launcher inside — Node.js is bundled, so there is nothing else to install.</p>
 <div class="tbl"><table><thead><tr><th>OS</th><th>Run</th></tr></thead><tbody><tr><td>Windows</td><td><code>GIGAWATT\GIGAWATT.exe</code> (SmartScreen: <em>More info → Run anyway</em>)</td></tr><tr><td>Linux</td><td><code>GIGAWATT/gigawatt.sh</code> (needs a Vulkan-capable GPU and driver)</td></tr><tr><td>macOS</td><td>Remove the quarantine attribute from the app, then open it</td></tr></tbody></table></div>

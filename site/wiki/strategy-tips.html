@@ -15,16 +15,21 @@
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
 <body class="wiki">
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
-  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+<header class="nav always">
+  <a class="logo" href="../" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="index.html">Wiki</a>
-    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="../">Home</a>
+      <a href="index.html">Wiki</a>
+      <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    </div>
     <a href="../#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -33,13 +38,14 @@
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html" aria-current="page">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+    <nav aria-label="Pages"><ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html" aria-current="page">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul></nav>
   </aside>
   <main id="main" class="doc">
+    <p class="kicker">Player wiki</p>
     <h1>Strategy tips</h1>
     <p class="lede2">Habits that separate a thriving AI factory from a beautiful hall full of idle GPUs. (Deliberately qualitative — balance numbers shift with tuning, the habits don't.)</p>
     <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#buy-before-you-need">Buy before you need</a></li><li><a href="#grow-the-boring-parts-first">Grow the boring parts first</a></li><li><a href="#match-hardware-to-workload">Match hardware to workload</a></li><li><a href="#utilization-is-the-business">Utilization is the business</a></li><li><a href="#run-it-like-an-operator">Run it like an operator</a></li><li><a href="#mind-the-money">Mind the money</a></li><li><a href="#sell-hardware-on-a-cadence">Sell hardware on a cadence</a></li><li><a href="#hedge-what-you-can-t-control">Hedge what you can't control</a></li><li><a href="#learn-the-stack">Learn the stack</a></li><li><a href="#keep-it-boring">Keep it boring</a></li></ul></nav>
-    <figure><img loading="lazy" src="img/end-screen.webp" alt="The end screen: how the story finished, your revenue and cas"><figcaption>The end screen: how the story finished, your revenue and cash over eight years, your best deal, your worst incident and how you stacked up against the rivals.</figcaption></figure>
+    <figure><img loading="lazy" src="img/end-screen.webp" width="1600" height="856" alt="The end screen: how the story finished, your revenue and cas"><figcaption>The end screen: how the story finished, your revenue and cash over eight years, your best deal, your worst incident and how you stacked up against the rivals.</figcaption></figure>
 <h2 id="buy-before-you-need">Buy before you need</h2>
 <p>Lead times and allocation punish just-in-time thinking. Order transformers, plant and racks for the contracts you <em>expect</em>, not just the ones you've signed. When a keynote announces a part that changes your market, a pre-order is a cheap place in the queue — you can cancel most of it back if plans change.</p>
 <h2 id="grow-the-boring-parts-first">Grow the boring parts first</h2>
@@ -58,7 +64,7 @@
 <p>A PPA sized to your steady load turns energy crises into non-events; over-committing turns them into monthly losses. Blend contract kinds (training and inference) and customers so a default or a demand dip doesn't idle the campus.</p>
 <h2 id="learn-the-stack">Learn the stack</h2>
 <p>The Codex's &quot;Datacenter 101&quot; verdicts tell you whether you need each concept <em>right now</em> — read them, click <em>Show me where</em>, and close gaps in order. Missions pay you to learn the whole stack; finish the Learning path before you decide which habits to skip.</p>
-<figure><img loading="lazy" src="img/campus-aisle.webp" alt="Down the cold aisle"><figcaption>Cold aisle discipline: containment, labels and no surprises.</figcaption></figure>
+<figure><img loading="lazy" src="img/campus-aisle.webp" width="1600" height="856" alt="Down the cold aisle"><figcaption>Cold aisle discipline: containment, labels and no surprises.</figcaption></figure>
 <h2 id="keep-it-boring">Keep it boring</h2>
 <p>The endgame scoring rewards net worth, reliability and scale — and all three come from the same place: racks bought, filled, refreshed and sold on schedule, with no fires, no outages and no missed ramp windows. Spectacular is what it looks like when you didn't prepare.</p>
 <p>Related: <a href="incidents-and-resilience.html">Incidents and resilience</a> · <a href="money-and-operations.html">Money and operations</a> · <a href="hardware-roadmap.html">Hardware roadmap</a>.</p>

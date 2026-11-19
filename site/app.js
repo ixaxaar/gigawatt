@@ -43,55 +43,89 @@
   }
 
   // ---- downloads: pick the right build from the latest release ----
-  const nav = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "";
+  const dev = navigator.userAgentData || null;
+  const plat = (dev && dev.platform) || navigator.platform || "";
   const ua = navigator.userAgent || "";
-  let myOS = /android/i.test(ua) ? "android" : /win/i.test(nav) ? "windows" : /mac/i.test(nav) ? "macos" : /linux|x11|cros/i.test(nav + ua) ? "linux" : "";
-  fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
-    .then(r => r.ok ? r.json() : Promise.reject(r.status))
-    .then(rel => {
-      const ver = document.getElementById("ver");
-      if (ver) ver.textContent = `Latest: ${rel.tag_name} · ${new Date(rel.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
-      const find = k => (rel.assets || []).find(a => a.name.toLowerCase().includes(k) && !a.name.endsWith(".txt"));
-      const map = { linux: find("linux"), windows: find("windows"), "macos-arm64": find("macos-arm64"), "macos-x64": find("macos-x64"), android: find(".apk") };
-      let primary = null;
-      document.querySelectorAll(".dl").forEach(a => {
-        const asset = map[a.dataset.os];
-        if (asset) {
+  let myOS = "", arch = "";
+  if (/android/i.test(ua)) myOS = "android";
+  else if (/iphone|ipad|ipod/i.test(ua) || (/mac/i.test(plat) && navigator.maxTouchPoints > 1)) myOS = "ios"; // iPad reports itself as a Mac
+  else if (/win/i.test(plat)) myOS = "windows";
+  else if (/mac/i.test(plat)) myOS = "macos";
+  else if (/linux|x11/i.test(plat + " " + ua)) myOS = "linux";
+  const cards = [...document.querySelectorAll(".dl")];
+  const main = document.getElementById("dl-main"), note = document.getElementById("dl-note"), ver = document.getElementById("ver");
+  const LABEL = { linux: "Linux", windows: "Windows", macos: "macOS", android: "Android" };
+  let rel = null;
+  const find = k => rel && (rel.assets || []).find(a => a.name.toLowerCase().includes(k) && !a.name.endsWith(".txt"));
+  const keyOf = os => ({ linux: "linux", windows: "windows", "macos-arm64": "macos-arm64", "macos-x64": "macos-x64", android: ".apk" })[os];
+  // which cards are "yours": works without the GitHub API. On a Mac the chip is only known if the browser says so, otherwise both are offered.
+  function mine() {
+    if (myOS === "macos") return arch === "arm" ? ["macos-arm64"] : arch === "x86" ? ["macos-x64"] : ["macos-arm64", "macos-x64"];
+    return LABEL[myOS] ? [myOS] : [];
+  }
+  function mark() {
+    const ids = mine();
+    cards.forEach(c => {
+      const on = ids.includes(c.dataset.os);
+      c.classList.toggle("rec", on);
+      if (on) c.dataset.rec = ids.length > 1 ? "Pick your chip" : "Your platform";
+    });
+    if (!main || !LABEL[myOS]) return;
+    main.textContent = `Download for ${LABEL[myOS]}`;
+    const ids1 = ids.length === 1 ? ids[0] : "";
+    const asset = ids1 && find(keyOf(ids1));
+    main.href = asset ? asset.browser_download_url : ids.length > 1 ? "#download" : "https://github.com/ixaxaar/gigawatt/releases/latest";
+    if (note && asset) note.textContent = `${rel.tag_name} · ${(asset.size / 1048576).toFixed(0)} MB · free · also for the other platforms below`;
+  }
+  mark();
+  if (myOS === "macos" && dev && dev.getHighEntropyValues) dev.getHighEntropyValues(["architecture"]).then(v => { arch = /arm/i.test(v.architecture || "") ? "arm" : /x86/i.test(v.architecture || "") ? "x86" : ""; mark(); }).catch(() => {});
+  if (ver) {
+    const fallback = ver.innerHTML;
+    ver.textContent = "Checking the latest release…";
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" }, signal: ctl.signal })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(r => {
+        rel = r;
+        ver.textContent = `Latest: ${rel.tag_name} · ${new Date(rel.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
+        cards.forEach(a => {
+          const asset = find(keyOf(a.dataset.os));
+          if (!asset) return;
           a.href = asset.browser_download_url;
-          a.querySelector("span").textContent += ` · ${(asset.size / 1048576).toFixed(0)} MB`;
-        }
-        const isMine = a.dataset.os === myOS || (myOS === "macos" && a.dataset.os === "macos-arm64");
-        if (isMine && asset) { a.classList.add("rec"); primary = asset; }
-      });
-      const main = document.getElementById("dl-main"), note = document.getElementById("dl-note");
-      if (primary && main) {
-        main.href = primary.browser_download_url;
-        const label = { linux: "Linux", windows: "Windows", macos: "macOS", android: "Android" }[myOS];
-        main.textContent = `Download for ${label}`;
-        if (note) note.textContent = `${rel.tag_name} · ${(primary.size / 1048576).toFixed(0)} MB · free · also for the other platforms below`;
-      }
-    })
-    .catch(() => { const v = document.getElementById("ver"); if (v) v.textContent = "See the latest builds on GitHub."; });
+          const sz = a.querySelector(".sz"); if (sz) sz.textContent = `${(asset.size / 1048576).toFixed(0)} MB`;
+        });
+        mark();
+      })
+      .catch(() => { ver.innerHTML = fallback; })
+      .finally(() => clearTimeout(timer));
+  }
 
-  // ---- heat lab ----
+  // ---- heat lab: rack power against what the cooling class can remove (rounded figures, in line with the wiki's power-and-cooling page) ----
   const $ = id => document.getElementById(id);
   const gen = $("gen"), mw = $("mw"), cool = $("cool");
   if (gen && mw && cool) {
-    const perRackGPUs = { 13: 16, 41: 32, 57: 32, 132: 72, 190: 144 };
+    const GEN = { 13: [16, ""], 41: [32, ""], 57: [32, ""], 120: [72, ""], 190: [144, ", projected"] };
     const dots = $("dots"); for (let i = 0; i < 10; i++) dots.appendChild(document.createElement("i"));
     function run() {
-      const kw = +gen.value, limit = +cool.value, budget = +mw.value * 1000;
+      const kw = +gen.value, limit = +cool.value, budget = +mw.value * 1000, per = GEN[kw][0];
       $("mwv").textContent = mw.value;
+      $("genhint").textContent = `${per} GPUs and about ${kw} kW per rack${GEN[kw][1]}`;
       const racks = Math.floor(budget / kw);
       $("racks").textContent = racks.toLocaleString();
-      $("gpus").textContent = (racks * (perRackGPUs[kw] || 0)).toLocaleString();
+      $("gpus").textContent = (racks * per).toLocaleString();
       const ratio = kw / limit;
-      const v = $("verdict"), why = $("why");
-      let cls, msg, text;
-      if (ratio <= 0.8) { cls = "ok"; msg = "COOLED"; text = `${kw} kW per rack is comfortably inside what this cooling can remove (${limit} kW).`; }
-      else if (ratio <= 1) { cls = "warn"; msg = "TIGHT"; text = `${kw} kW is close to the ${limit} kW this cooling can handle. A hot day or one failed unit and racks throttle.`; }
-      else { cls = "bad"; msg = "OVERHEATING"; text = `${kw} kW per rack is more than ${limit} kW of cooling can remove. In the game that means thermal failures at three times the normal rate. Pick liquid or immersion.`; }
-      v.className = "verdict " + cls; v.textContent = msg; why.textContent = text;
+      const cls = ratio <= 0.8 ? "ok" : ratio <= 1 ? "warn" : "bad";
+      const msg = { ok: "COOLED", warn: "TIGHT", bad: "OVERHEATING" }[cls];
+      // all three explanations are laid out in one grid cell, so the panel is as tall as the longest and never jumps
+      const texts = {
+        ok: `${kw} kW per rack is comfortably inside what this cooling can remove (${limit} kW).`,
+        warn: `${kw} kW is close to the ${limit} kW this cooling can handle. A hot day or one failed unit and racks throttle.`,
+        bad: `${kw} kW per rack is more than ${limit} kW of cooling can remove, so these racks could not run as shown. In the game that means thermal failures at three times the normal rate. Step up to a denser cooling class.`,
+      };
+      $("why").innerHTML = ["ok", "warn", "bad"].map(k => `<p${k === cls ? ' class="cur"' : ""}></p>`).join("");
+      [...$("why").children].forEach((p, i) => { p.textContent = texts[["ok", "warn", "bad"][i]]; });
+      const v = $("verdict"); v.className = "verdict " + cls; v.textContent = msg;
+      $("readout").classList.toggle("bad", cls === "bad");
       const lit = Math.max(1, Math.min(10, Math.round(ratio * 10)));
       [...dots.children].forEach((d, i) => { d.className = i < lit ? "on " + cls : ""; });
     }
@@ -99,21 +133,82 @@
   }
 })();
 
-// ---- nav turns solid after the hero; screenshot lightbox ----
+// ---- header menu, solid header after the hero ----
 (() => {
   const nav = document.querySelector(".nav");
   const onScroll = () => nav && nav.classList.toggle("solid", scrollY > 40);
   addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  const btn = document.getElementById("menubtn"), links = document.getElementById("navlinks");
+  if (!btn || !links) return;
+  const set = open => { links.classList.toggle("open", open); btn.setAttribute("aria-expanded", open); };
+  btn.addEventListener("click", () => set(!links.classList.contains("open")));
+  links.addEventListener("click", e => { if (e.target.closest("a")) set(false); });
+  addEventListener("keydown", e => { if (e.key === "Escape") set(false); });
+  addEventListener("scroll", () => set(false), { passive: true });
+})();
+
+// ---- gallery: arrows for mouse users, clips play only while on screen ----
+(() => {
+  const rail = document.getElementById("rail");
+  if (!rail) return;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prev = document.getElementById("rail-prev"), next = document.getElementById("rail-next");
+  const sync = () => {
+    if (prev) prev.disabled = rail.scrollLeft < 4;
+    if (next) next.disabled = rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 4;
+  };
+  const go = dir => rail.scrollBy({ left: dir * Math.round(rail.clientWidth * 0.7), behavior: reduce ? "auto" : "smooth" });
+  if (prev) prev.addEventListener("click", () => go(-1));
+  if (next) next.addEventListener("click", () => go(1));
+  rail.addEventListener("scroll", sync, { passive: true }); addEventListener("resize", sync); sync();
+  if (reduce) return; // reduced motion: posters only, clips play in the enlarged view on request
+  const vids = [...rail.querySelectorAll("video")];
+  if (!("IntersectionObserver" in window)) return;
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    const v = e.target, host = v.closest(".shot");
+    if (e.isIntersecting && !document.documentElement.classList.contains("lb-open")) { const p = v.play(); if (p) p.catch(() => {}); host.classList.add("playing"); }
+    else { v.pause(); host.classList.remove("playing"); }
+  }), { root: null, threshold: 0.6 });
+  vids.forEach(v => io.observe(v));
+})();
+
+// ---- lightbox: readable enlargement, focus trap, inert page, scroll lock ----
+(() => {
   const lb = document.getElementById("lb");
   if (!lb) return;
-  const img = lb.querySelector("img"), cap = lb.querySelector("p");
-  let last = null;
-  const close = () => { lb.classList.remove("open"); if (last) last.focus(); };
-  document.querySelectorAll("[data-zoom]").forEach(b => b.addEventListener("click", () => {
-    last = b; img.src = b.dataset.zoom; img.alt = b.querySelector("img").alt;
-    cap.textContent = b.querySelector("figcaption").textContent;
-    lb.classList.add("open"); document.getElementById("lb-x").focus();
-  }));
-  lb.addEventListener("click", e => { if (e.target !== img) close(); });
-  addEventListener("keydown", e => { if (e.key === "Escape" && lb.classList.contains("open")) close(); });
+  const img = lb.querySelector("img"), vid = lb.querySelector("video"), cap = document.getElementById("lb-cap"), scroller = document.getElementById("lb-scroll"), x = document.getElementById("lb-x");
+  let last = null, inerted = [];
+  const root = document.documentElement;
+  const centre = () => { scroller.scrollLeft = Math.max(0, (scroller.scrollWidth - scroller.clientWidth) / 2); scroller.scrollTop = 0; };
+  const open = (b) => {
+    last = b;
+    const video = b.dataset.video;
+    lb.classList.toggle("isvideo", !!video);
+    if (video) { vid.poster = b.dataset.poster || ""; vid.src = video; vid.currentTime = 0; cap.innerHTML = ""; cap.append(Object.assign(document.createElement("b"), { textContent: b.dataset.cap || "Clip" })); const p = vid.play(); if (p) p.catch(() => {}); }
+    else { img.onload = centre; img.src = b.dataset.zoom; img.alt = b.querySelector("img").alt; cap.textContent = b.querySelector(".cap, figcaption").textContent; }
+    lb.hidden = false; lb.classList.add("open"); root.classList.add("lb-open");
+    inerted = [...document.body.children].filter(el => el !== lb && el.tagName !== "SCRIPT");
+    inerted.forEach(el => { el.inert = true; });
+    document.querySelectorAll(".rail video").forEach(v => v.pause());
+    x.focus(); if (!video) centre();
+  };
+  const close = () => {
+    lb.classList.remove("open"); lb.hidden = true; root.classList.remove("lb-open");
+    vid.pause(); vid.removeAttribute("src"); vid.load(); img.removeAttribute("src");
+    inerted.forEach(el => { el.inert = false; }); inerted = [];
+    if (last) last.focus();
+  };
+  document.querySelectorAll("[data-zoom],[data-video]").forEach(b => b.addEventListener("click", () => open(b)));
+  x.addEventListener("click", close);
+  scroller.addEventListener("click", e => { if (e.target === scroller) close(); });
+  addEventListener("keydown", e => {
+    if (!lb.classList.contains("open")) return;
+    if (e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (e.key !== "Tab") return;
+    const stops = [x, scroller].concat(lb.classList.contains("isvideo") ? [vid] : []);
+    const i = stops.indexOf(document.activeElement);
+    e.preventDefault();
+    stops[(i + (e.shiftKey ? stops.length - 1 : 1)) % stops.length].focus();
+  });
+  document.addEventListener("focusin", e => { if (lb.classList.contains("open") && !lb.contains(e.target)) x.focus(); });
 })();

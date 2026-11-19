@@ -17,6 +17,20 @@ const ORDER = ['index', 'getting-started', 'first-hour', 'power-and-cooling', 's
 const files = readdirSync(SRC).filter((f) => f.endsWith('.md') && f !== 'README.md').map((f) => f.replace(/\.md$/, ''));
 const slugs = [...ORDER.filter((s) => files.includes(s)), ...files.filter((s) => !ORDER.includes(s)).sort()];
 
+// intrinsic size of a webp (lossy, lossless or extended/animated) so every <img> carries width and height
+const sizeCache = new Map();
+function webpSize(src) {
+  const file = join(OUT, src.replace(/\.png$/, '.webp'));
+  if (sizeCache.has(file)) return sizeCache.get(file);
+  let r = null;
+  try {
+    const b = readFileSync(file); const k = b.toString('ascii', 12, 16);
+    if (k === 'VP8 ') r = [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+    else if (k === 'VP8L') { const v = b.readUInt32LE(21); r = [(v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1]; }
+    else if (k === 'VP8X') r = [b.readUIntLE(24, 3) + 1, b.readUIntLE(27, 3) + 1];
+  } catch { /* missing image is reported at the end */ }
+  sizeCache.set(file, r); return r;
+}
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -25,7 +39,7 @@ function inline(t) {
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
-  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, a, u) => `<img loading="lazy" src="${u.replace(/\.png$/, '.webp')}" alt="${a}">`);
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, a, u) => { const d = webpSize(u); return `<img loading="lazy" src="${u.replace(/\.png$/, '.webp')}"${d ? ` width="${d[0]}" height="${d[1]}"` : ''} alt="${a}">`; });
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, a, u) => `<a href="${u.replace(/\.md(#|$)/, '.html$1')}">${a}</a>`);
   return s;
 }
@@ -116,16 +130,21 @@ const shell = (p, idx) => {
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
 <body class="wiki">
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
-  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+<header class="nav always">
+  <a class="logo" href="../" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="index.html">Wiki</a>
-    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="../">Home</a>
+      <a href="index.html"${p.slug === 'index' ? ' aria-current="page"' : ''}>Wiki</a>
+      <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    </div>
     <a href="../#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -134,9 +153,10 @@ const shell = (p, idx) => {
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages">${nav(p.slug)}</ul>
+    <nav aria-label="Pages"><ul class="pages">${nav(p.slug)}</ul></nav>
   </aside>
   <main id="main" class="doc">
+    <p class="kicker">Player wiki</p>
     <h1>${esc(p.title)}</h1>
     ${p.lede ? `<p class="lede2">${inline(p.lede)}</p>` : ''}
     ${p.toc.length > 2 ? `<nav class="toc" aria-label="On this page"><strong>On this page</strong><ul>${p.toc.map((t) => `<li><a href="#${t.id}">${esc(t.text)}</a></li>`).join('')}</ul></nav>` : ''}

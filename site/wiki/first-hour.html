@@ -15,16 +15,21 @@
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
 <body class="wiki">
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
-  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+<header class="nav always">
+  <a class="logo" href="../" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="index.html">Wiki</a>
-    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="../">Home</a>
+      <a href="index.html">Wiki</a>
+      <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    </div>
     <a href="../#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -33,17 +38,18 @@
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html" aria-current="page">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+    <nav aria-label="Pages"><ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html" aria-current="page">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul></nav>
   </aside>
   <main id="main" class="doc">
+    <p class="kicker">Player wiki</p>
     <h1>Your first hour</h1>
     <p class="lede2">A step-by-step walkthrough from an empty hall to your first revenue, following the Learning path missions in order.</p>
     <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#1-place-your-first-order-procure">1 · Place your first order (Procure)</a></li><li><a href="#2-expand-your-cooling-plant-build">2 · Expand your cooling plant (Build)</a></li><li><a href="#3-design-a-server-tray-design-lab">3 · Design a server tray (Design Lab)</a></li><li><a href="#4-design-a-rack-design-lab">4 · Design a rack (Design Lab)</a></li><li><a href="#5-place-a-rack-on-the-floor-warehouse">5 · Place a rack on the floor (Warehouse)</a></li><li><a href="#6-get-a-rack-online">6 · Get a rack online</a></li><li><a href="#7-build-a-cluster-supercomputer">7 · Build a cluster (Supercomputer)</a></li><li><a href="#8-land-your-first-contract-customers">8 · Land your first contract (Customers)</a></li><li><a href="#9-sign-a-power-contract-energy">9 · Sign a power contract (Energy)</a></li><li><a href="#10-earn-revenue">10 · Earn revenue</a></li><li><a href="#after-the-first-hour">After the first hour</a></li></ul></nav>
     <p>The <strong>Missions</strong> panel on the Overview screen always shows your next three missions with a <strong>Go →</strong> button that jumps to the right screen. Each completed mission pays a cash reward and teaches one lesson. This page walks the opening ten in order. If you ever feel stuck, the <a href="customers-and-contracts.html">Easy Path</a> on the Customers screen can order, install, deploy and assign a contract for you.</p>
-<figure><img loading="lazy" src="img/story-chapter.webp" alt="Every January a chapter card sets the scene for the year ahe"><figcaption>Every January a chapter card sets the scene for the year ahead.</figcaption></figure>
+<figure><img loading="lazy" src="img/story-chapter.webp" width="1600" height="900" alt="Every January a chapter card sets the scene for the year ahe"><figcaption>Every January a chapter card sets the scene for the year ahead.</figcaption></figure>
 <h2 id="1-place-your-first-order-procure">1 · Place your first order (Procure)</h2>
 <p>Open <strong>Supply → Procure</strong>. The guided planner walks you through: pick a <strong>platform</strong> (a GPU generation, pre-engineered), say <strong>how many accelerators</strong> you want, choose <strong>how to buy</strong> — DIY (cheapest, you integrate), an OEM integrated rack, or turnkey (priciest, fastest) — check your hall can feed and cool it, then order from the bill of materials. The lesson: hardware has <strong>lead times</strong> and, for GPUs, <strong>allocation</strong>. Parts arrive months later, so order early.</p>
-<figure><img loading="lazy" src="img/procure.webp" alt="The guided planner"><figcaption>Platform → how many → how to buy → hall check → order.</figcaption></figure>
+<figure><img loading="lazy" src="img/procure.webp" width="1600" height="856" alt="The guided planner"><figcaption>Platform → how many → how to buy → hall check → order.</figcaption></figure>
 <h2 id="2-expand-your-cooling-plant-build">2 · Expand your cooling plant (Build)</h2>
 <p>Open <strong>Facility → Build</strong>. Under <em>Buy plant</em>, buy a CRAH (air handler) sized for your hall's cooling class, wait for it to arrive, then <strong>Install 1</strong> from inventory. Every watt of IT power becomes a watt of heat, and cooling capacity — not floor space — caps most AI halls. See <a href="power-and-cooling.html">Power and cooling</a>.</p>
 <h2 id="3-design-a-server-tray-design-lab">3 · Design a server tray (Design Lab)</h2>
@@ -54,7 +60,7 @@
 <p>Open <strong>Supply → Warehouse</strong>. Your rack design lists exactly which parts are missing; use <strong>order all missing</strong> to buy them in one go. When everything is in the warehouse and the hall has power, cooling and a free slot, press <strong>DEPLOY 1</strong> (or pick the design on the Build screen and click an empty floor slot).</p>
 <h2 id="6-get-a-rack-online">6 · Get a rack online</h2>
 <p>Racks take months to install and commission. Press <code>Space</code> to advance months and watch the <strong>Next month</strong> preview on the Overview screen — it tells you what is arriving, what starts burn-in and what goes online. Commissioning (power-on, firmware, burn-in) is what finds dead GPUs before your customers do; you control its length in Operations.</p>
-<figure><img loading="lazy" src="img/build-ledger.webp" alt="Build screen ledger"><figcaption>Every rack's serial, slot, status and current job, on the Build screen.</figcaption></figure>
+<figure><img loading="lazy" src="img/build-ledger.webp" width="1600" height="856" alt="Build screen ledger"><figcaption>Every rack's serial, slot, status and current job, on the Build screen.</figcaption></figure>
 <h2 id="7-build-a-cluster-supercomputer">7 · Build a cluster (Supercomputer)</h2>
 <p>Open <strong>Supercomputer</strong>, select your online rack(s), press <strong>Auto-design for TRAINING</strong> (or the cheaper inference fabric), check the <em>What can this machine do?</em> table, and <strong>BUILD CLUSTER</strong>. A cluster is racks plus a network fabric — see <a href="networking-and-clusters.html">Networking and clusters</a>.</p>
 <h2 id="8-land-your-first-contract-customers">8 · Land your first contract (Customers)</h2>

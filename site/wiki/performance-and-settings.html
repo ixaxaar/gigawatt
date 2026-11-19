@@ -15,16 +15,21 @@
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
 <body class="wiki">
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
-  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+<header class="nav always">
+  <a class="logo" href="../" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="index.html">Wiki</a>
-    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="../">Home</a>
+      <a href="index.html">Wiki</a>
+      <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    </div>
     <a href="../#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -33,14 +38,15 @@
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html" aria-current="page">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+    <nav aria-label="Pages"><ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html" aria-current="page">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul></nav>
   </aside>
   <main id="main" class="doc">
+    <p class="kicker">Player wiki</p>
     <h1>Performance and settings</h1>
     <p class="lede2">Graphics presets, render scale, the Steam Deck, laptops with two GPUs, and what to do when the game runs slowly.</p>
     <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#the-settings-tabs">The settings tabs</a></li><li><a href="#graphics-presets">Graphics presets</a></li><li><a href="#3d-resolution">3D resolution</a></li><li><a href="#device-layouts">Device layouts</a></li><li><a href="#steam-deck-and-small-screens">Steam Deck and small screens</a></li><li><a href="#laptops-and-pcs-with-two-gpus">Laptops and PCs with two GPUs</a></li><li><a href="#if-the-game-runs-slowly">If the game runs slowly</a></li><li><a href="#where-the-files-live">Where the files live</a></li></ul></nav>
     <p>GIGAWATT picks graphics settings for your machine the first time it starts and shows the choice in <strong>Menu ▸ Settings ▸ Graphics</strong> as &quot;Auto&quot;. You can change anything later; the settings are saved and apply immediately.</p>
-<figure><img loading="lazy" src="img/settings-graphics.webp" alt="Settings, Graphics tab"><figcaption>The Graphics tab: a preset, a 3D resolution slider and a one-line summary of what the preset does.</figcaption></figure>
+<figure><img loading="lazy" src="img/settings-graphics.webp" width="1600" height="856" alt="Settings, Graphics tab"><figcaption>The Graphics tab: a preset, a 3D resolution slider and a one-line summary of what the preset does.</figcaption></figure>
 <h2 id="the-settings-tabs">The settings tabs</h2>
 <ul><li><strong>Display</strong>: the UI theme (four dark and three light; see <a href="make-it-yours.html">Make it yours</a>), window mode (windowed, borderless fullscreen or exclusive fullscreen), V-Sync, a frame-rate limit, UI size (Auto by default), and a &quot;Copy diagnostics&quot; button for bug reports.</li><li><strong>Graphics</strong>: the preset and the 3D resolution.</li><li><strong>Audio</strong>: master, music and effects volume, and the music style.</li><li><strong>Accessibility</strong>: colour-blind-safe cluster colours, reduced motion (no auto-orbit camera and no sliding panels) and a text-size boost.</li><li><strong>Controls</strong>: the keyboard, mouse and controller bindings.</li></ul>
 <h2 id="graphics-presets">Graphics presets</h2>

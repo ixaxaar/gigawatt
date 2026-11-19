@@ -15,16 +15,21 @@
 <meta name="theme-color" content="#050912">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="../style.css">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="../base.css">
 <link rel="stylesheet" href="wiki.css">
 </head>
 <body class="wiki">
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav">
-  <a class="logo" href="../" aria-label="GIGAWATT home">⚡ GIGAWATT</a>
+<header class="nav always">
+  <a class="logo" href="../" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="index.html">Wiki</a>
-    <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="../">Home</a>
+      <a href="index.html">Wiki</a>
+      <a href="https://github.com/ixaxaar/gigawatt/discussions">Community</a>
+    </div>
     <a href="../#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -33,17 +38,18 @@
     <label class="sr" for="q">Search the wiki</label>
     <input id="q" type="search" placeholder="Search the wiki…" autocomplete="off">
     <ul id="results" class="results" hidden></ul>
-    <ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html" aria-current="page">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul>
+    <nav aria-label="Pages"><ul class="pages"><li><a href="index.html">GIGAWATT Player Wiki</a></li><li><a href="getting-started.html">Getting started</a></li><li><a href="first-hour.html">Your first hour</a></li><li><a href="power-and-cooling.html">Power and cooling</a></li><li><a href="servers-and-racks.html">Servers and racks</a></li><li><a href="networking-and-clusters.html">Networking and clusters</a></li><li><a href="customers-and-contracts.html" aria-current="page">Customers and contracts</a></li><li><a href="money-and-operations.html">Money and operations</a></li><li><a href="energy-and-spot.html">Energy and the spot market</a></li><li><a href="hardware-roadmap.html">Hardware roadmap</a></li><li><a href="incidents-and-resilience.html">Incidents and resilience</a></li><li><a href="strategy-tips.html">Strategy tips</a></li><li><a href="see-it-in-action.html">See it in action</a></li><li><a href="make-it-yours.html">Make it yours</a></li><li><a href="performance-and-settings.html">Performance and settings</a></li><li><a href="faq.html">FAQ</a></li><li><a href="glossary.html">Glossary</a></li></ul></nav>
   </aside>
   <main id="main" class="doc">
+    <p class="kicker">Player wiki</p>
     <h1>Customers and contracts</h1>
     <p class="lede2">Training versus inference offers, fit verdicts, the Easy Path, SLAs, renewals and the ramp window — how capacity becomes revenue.</p>
     <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#fit-verdicts">Fit verdicts</a></li><li><a href="#the-easy-path">The Easy Path</a></li><li><a href="#signing-ramp-window-and-slas">Signing, ramp window and SLAs</a></li><li><a href="#renewals">Renewals</a></li><li><a href="#reputation">Reputation</a></li></ul></nav>
     <p>Customers pay for capacity in two ways, and the hardware they need differs:</p>
 <ul><li><strong>Training</strong> customers rent a big coherent cluster by the GPU-hour. Offers state a minimum accelerator count, a price per GPU-hour, and network requirements — a scale-up domain size (e.g. 72) and GB/s per GPU. Training is compute- and network-bound.</li><li><strong>Inference</strong> customers pay per million tokens. Offers state a target tokens/s and a price per Mtok. Inference is memory-bandwidth-bound: GPUs with more HBM capacity and bandwidth hold bigger models and bigger KV caches, serving more users per replica.</li></ul>
 <p>Each offer also shows its archetype (startup, lab, enterprise, sovereign), the model, the duration in months, an <strong>SLA availability</strong> target, and a deadline by which you must sign or the offer disappears.</p>
-<figure><img loading="lazy" src="img/customers.webp" alt="Customers and contracts"><figcaption>Market offers with live fit verdicts and what you still lack.</figcaption></figure>
-<figure><img loading="lazy" src="img/contract-offers.webp" alt="Offers lead with what they pay: monthly revenue, total value"><figcaption>Offers lead with what they pay: monthly revenue, total value and profit after power. The requirements fold open when you want the detail.</figcaption></figure>
+<figure><img loading="lazy" src="img/customers.webp" width="1600" height="856" alt="Customers and contracts"><figcaption>Market offers with live fit verdicts and what you still lack.</figcaption></figure>
+<figure><img loading="lazy" src="img/contract-offers.webp" width="1600" height="856" alt="Offers lead with what they pay: monthly revenue, total value"><figcaption>Offers lead with what they pay: monthly revenue, total value and profit after power. The requirements fold open when you want the detail.</figcaption></figure>
 <p>Every customer has its own logo, drawn from its name: you will see the same badge on its offers and contracts, on the Overview, on the rack inspector, on the end screen's best deal, and on the rack tops in the hall when you are close.</p>
 <h2 id="fit-verdicts">Fit verdicts</h2>
 <p>Every offer carries a live verdict computed against your actual fleet:</p>

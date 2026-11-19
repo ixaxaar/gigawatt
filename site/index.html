@@ -26,6 +26,8 @@
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="preload" href="assets/hero.webp" as="image" fetchpriority="high">
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="base.css">
 <link rel="stylesheet" href="home.css">
 </head>
 <body>
@@ -35,11 +37,14 @@
 <header class="nav" id="top">
   <a class="logo" href="#top" aria-label="GIGAWATT home"><i></i>GIGAWATT</a>
   <nav aria-label="Primary">
-    <a href="#turn">How it plays</a>
-    <a href="#gallery">Screens</a>
-    <a href="#features">Features</a>
-    <a href="#heat">Heat lab</a>
-    <a href="wiki/">Wiki</a>
+    <button class="menubtn" type="button" id="menubtn" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <div class="links" id="navlinks">
+      <a href="#turn">How it plays</a>
+      <a href="#gallery">Screens</a>
+      <a href="#features">Features</a>
+      <a href="#heat">Heat lab</a>
+      <a href="wiki/">Wiki</a>
+    </div>
     <a href="#download" class="btn mini go">Download</a>
   </nav>
 </header>
@@ -51,23 +56,27 @@
   <img class="hero-bg" src="assets/hero.webp" width="1600" height="856" fetchpriority="high" alt="">
   <canvas id="rackfield" aria-hidden="true"></canvas>
   <div class="hero-copy">
-    <p class="eyebrow"><b>Alpha</b><span>AI datacenter tycoon</span><span>2020 → 2028</span></p>
+    <p class="eyebrow"><b>Alpha</b><span>AI datacenter tycoon</span><span class="x">2020 → 2028</span></p>
     <h1>GIGA<span>WATT</span></h1>
-    <p class="tagline">Every kilowatt is a negotiation.</p>
-    <p class="lede">Buy real GPUs, design racks, fight physics for every watt, and lease your supercomputer to the labs training the next frontier model.</p>
-    <div class="cta">
-      <a id="dl-main" class="btn go big" href="https://github.com/ixaxaar/gigawatt/releases/latest">Play free</a>
-      <a class="btn big" href="#gallery">See it running</a>
+    <div class="hc-l">
+      <p class="tagline">Every kilowatt is a negotiation.</p>
+      <p class="lede">Buy real GPUs, design racks, <span class="x">fight physics for every watt, and </span>lease your supercomputer to the labs training the next frontier model.</p>
     </div>
-    <p class="alpha"><b>ALPHA</b>Rough in places. <span class="x">Saves may not carry over between alphas. Tell us what broke or confused you: </span><a href="https://github.com/ixaxaar/gigawatt/issues">open an issue</a> or <a href="https://github.com/ixaxaar/gigawatt/discussions">start a discussion</a>.</p>
-    <p class="fine x" id="dl-note" style="margin-top:12px">Linux · Windows · macOS · Android · plays on Steam Deck with a controller</p>
+    <div class="hc-r">
+      <div class="cta">
+        <a id="dl-main" class="btn go big" href="https://github.com/ixaxaar/gigawatt/releases/latest">Play free</a>
+        <a class="btn big" href="#gallery"><span>See it <span class="x">running</span></span></a>
+      </div>
+      <p class="alpha"><b>ALPHA</b>Rough in places. <span class="x">Saves may not carry over between alphas. Tell us what broke or confused you: </span><a href="https://github.com/ixaxaar/gigawatt/issues">open an issue</a> or <a href="https://github.com/ixaxaar/gigawatt/discussions">start a discussion</a>.</p>
+      <p class="fine x" id="dl-note">Linux · Windows · macOS · Android · plays on Steam Deck with a controller</p>
+    </div>
   </div>
-  <div class="hud" aria-label="At a glance">
+  <div class="hudbar"><div class="hud" aria-label="At a glance">
     <div><b>690+</b><span>real parts, 100+ vendors</span></div>
     <div><b>97</b><span>months to survive</span></div>
     <div><b>4</b><span>cooling classes</span></div>
     <div><b>6</b><span>endings</span></div>
-  </div>
+  </div></div>
 </section>
 
 <!-- THE TURN -->
@@ -86,46 +95,50 @@
 
 <!-- GALLERY -->
 <section class="s alt" id="gallery">
-  <div class="wrap">
-    <p class="kicker">In the game</p>
-    <h2>Fly the hall.<br>Read the heat.</h2>
-    <p class="sub">Swipe sideways. Tap a screenshot to enlarge.</p>
+  <div class="wrap railhead">
+    <div>
+      <p class="kicker">In the game</p>
+      <h2>Fly the hall.<br>Read the heat.</h2>
+      <p class="sub">Scroll sideways, or use the arrows. Tap any screenshot or clip to enlarge it.</p>
+    </div>
+    <div class="railctl" aria-label="Scroll the gallery">
+      <button class="btn" type="button" id="rail-prev" aria-label="Previous screenshots">&larr;</button>
+      <button class="btn" type="button" id="rail-next" aria-label="Next screenshots">&rarr;</button>
+    </div>
   </div>
-  <div class="rail" tabindex="0" aria-label="Screenshot gallery">
-    <figure class="shot clip"><img src="assets/tour-basics.webp" width="960" height="540" loading="lazy" alt="The drawers open one after another, then months pass and the revenue in the top bar moves"><figcaption><em>Clip</em> · The loop</figcaption></figure>
-    <figure class="shot clip"><img src="assets/tour-showroom.webp" width="960" height="540" loading="lazy" alt="A rack turns on a turntable as platforms are picked, with the door and the cabling shown"><figcaption><em>Clip</em> · Pick a rack</figcaption></figure>
-    <figure class="shot clip"><img src="assets/tour-cables.webp" width="960" height="540" loading="lazy" alt="The camera flies from the whole hall down to the neatly tied cabling at the rear of a rack"><figcaption><em>Clip</em> · Down to the cables</figcaption></figure>
-    <button class="shot" data-zoom="assets/hall.webp" type="button"><img src="assets/hall.webp" width="1600" height="856" loading="lazy" alt="The hall with labelled racks and the needs-you-now panel"><figcaption>The hall</figcaption></button>
-    <button class="shot" data-zoom="assets/procure.webp" type="button"><img src="assets/procure.webp" width="1600" height="856" loading="lazy" alt="The Procure drawer showing platform cards and a build planner"><figcaption>Procure</figcaption></button>
-    <button class="shot" data-zoom="assets/design.webp" type="button"><img src="assets/design.webp" width="1600" height="856" loading="lazy" alt="The Design Lab tray bench"><figcaption>Design lab</figcaption></button>
-    <button class="shot" data-zoom="assets/supercomputer.webp" type="button"><img src="assets/supercomputer.webp" width="1600" height="856" loading="lazy" alt="The Supercomputer builder showing a fabric and model fit table"><figcaption>Supercomputer</figcaption></button>
-    <button class="shot" data-zoom="assets/customers.webp" type="button"><img src="assets/customers.webp" width="1600" height="856" loading="lazy" alt="The Customers drawer with market offers and a build suggestion"><figcaption>Customers</figcaption></button>
-    <button class="shot" data-zoom="assets/build-ledger.webp" type="button"><img src="assets/build-ledger.webp" width="1600" height="856" loading="lazy" alt="The Facility drawer with power and cooling gauges and the machine ledger"><figcaption>Power and cooling</figcaption></button>
-    <button class="shot" data-zoom="assets/campus-thermal.webp" type="button"><img src="assets/campus-thermal.webp" width="1600" height="856" loading="lazy" alt="A campus-scale hall in thermal view"><figcaption>Campus scale</figcaption></button>
-    <button class="shot" data-zoom="assets/rack-cabling.webp" type="button"><img src="assets/rack-cabling.webp" width="1600" height="856" loading="lazy" alt="Cabling at the rear of a rack"><figcaption>One cable per port</figcaption></button>
+  <div class="rail" id="rail" tabindex="0" role="region" aria-label="Screenshot gallery. Use the arrow keys to scroll.">
+    <button class="shot clip" data-video="assets/clip-basics.mp4" data-poster="assets/poster-basics.webp" data-cap="The loop" type="button" aria-label="Play larger: The drawers open one after another, then months pass and the revenue in the top bar moves"><video muted loop playsinline preload="none" poster="assets/poster-basics.webp" width="720" height="404" aria-hidden="true"><source src="assets/clip-basics.mp4" type="video/mp4"></video><span class="cap"><em>Clip</em> · The loop</span></button>
+    <button class="shot clip" data-video="assets/clip-showroom.mp4" data-poster="assets/poster-showroom.webp" data-cap="Pick a rack" type="button" aria-label="Play larger: A rack turns on a turntable as platforms are picked, with the door and the cabling shown"><video muted loop playsinline preload="none" poster="assets/poster-showroom.webp" width="720" height="404" aria-hidden="true"><source src="assets/clip-showroom.mp4" type="video/mp4"></video><span class="cap"><em>Clip</em> · Pick a rack</span></button>
+    <button class="shot clip" data-video="assets/clip-cables.mp4" data-poster="assets/poster-cables.webp" data-cap="Down to the cables" type="button" aria-label="Play larger: The camera flies from the whole hall down to the neatly tied cabling at the rear of a rack"><video muted loop playsinline preload="none" poster="assets/poster-cables.webp" width="720" height="404" aria-hidden="true"><source src="assets/clip-cables.mp4" type="video/mp4"></video><span class="cap"><em>Clip</em> · Down to the cables</span></button>
+    <button class="shot" data-zoom="assets/hall.webp" type="button"><img src="assets/hall.webp" width="1600" height="856" loading="lazy" alt="The hall with labelled racks and the needs-you-now panel"><span class="cap">The hall</span></button>
+    <button class="shot" data-zoom="assets/procure.webp" type="button"><img src="assets/procure.webp" width="1600" height="856" loading="lazy" alt="The Procure drawer showing platform cards and a build planner"><span class="cap">Procure</span></button>
+    <button class="shot" data-zoom="assets/design.webp" type="button"><img src="assets/design.webp" width="1600" height="856" loading="lazy" alt="The Design Lab tray bench"><span class="cap">Design lab</span></button>
+    <button class="shot" data-zoom="assets/supercomputer.webp" type="button"><img src="assets/supercomputer.webp" width="1600" height="856" loading="lazy" alt="The Supercomputer builder showing a fabric and model fit table"><span class="cap">Supercomputer</span></button>
+    <button class="shot" data-zoom="assets/customers.webp" type="button"><img src="assets/customers.webp" width="1600" height="856" loading="lazy" alt="The Customers drawer with market offers and a build suggestion"><span class="cap">Customers</span></button>
+    <button class="shot" data-zoom="assets/build-ledger.webp" type="button"><img src="assets/build-ledger.webp" width="1600" height="856" loading="lazy" alt="The Facility drawer with power and cooling gauges and the machine ledger"><span class="cap">Power and cooling</span></button>
   </div>
 </section>
 
 <!-- FEATURE PANELS -->
 <div id="features">
   <section class="panel p1">
-    <img src="assets/procure.webp" width="1600" height="856" loading="lazy" alt="">
+    <img src="assets/showroom.webp" width="1600" height="856" loading="lazy" alt="">
     <div class="wrap"><div class="card cham"><p class="num">01 · Supply</p><h3>Procure like an operator</h3><p>HGX A100 to Vera Rubin NVL144, AMD Instinct, Gaudi, Cerebras, Tenstorrent. <span class="x">Street prices drift with the AI boom and lead times stretch when everyone wants the same chip.</span></p><ul class="tags x"><li>Lead times</li><li>Allocation</li><li>Vendor deals</li></ul></div></div>
   </section>
   <section class="panel p2 right">
-    <img src="assets/design.webp" width="1600" height="856" loading="lazy" alt="">
+    <img src="assets/rack-cabling.webp" width="1600" height="856" loading="lazy" alt="">
     <div class="wrap"><div class="card cham"><p class="num">02 · Engineering</p><h3>Design at the motherboard</h3><p>A tray bench with sockets, DIMM banks, GPU baseboards, NICs, NVMe and PSUs, plus a 42U rack elevation. <span class="x">Power, weight and cooling are checked before you spend a dollar.</span></p><ul class="tags x"><li>Live validation</li><li>5-year cost advisor</li><li>Reusable designs</li></ul></div></div>
   </section>
   <section class="panel p3">
-    <img src="assets/supercomputer.webp" width="1600" height="856" loading="lazy" alt="">
+    <img src="assets/campus-aisle.webp" width="1600" height="856" loading="lazy" alt="">
     <div class="wrap"><div class="card cham"><p class="num">03 · Scale</p><h3>Wire a supercomputer</h3><p>Group racks into one machine, design the fabric or hand-tune it, then see what it can train or serve: tokens per second, MFU, time to first token. <span class="x">MoE and dense models behave differently, as they should.</span></p><ul class="tags x"><li>Fat-tree</li><li>Scale-up domains</li><li>Oversubscription</li></ul></div></div>
   </section>
   <section class="panel p4 right">
-    <img src="assets/customers.webp" width="1600" height="856" loading="lazy" alt="">
+    <img src="assets/contract-offers.webp" width="1600" height="856" loading="lazy" alt="">
     <div class="wrap"><div class="card cham"><p class="num">04 · Revenue</p><h3>Customers who want things</h3><p>Offers show a live fit verdict and exactly what you still need to buy. <span class="x">Hit <em>Easy Path</em> and the game orders, installs and assigns for you as parts arrive. Or sell idle capacity on the spot market.</span></p><ul class="tags x"><li>Training</li><li>Inference</li><li>SLAs</li><li>Spot market</li></ul></div></div>
   </section>
   <section class="panel p5">
-    <img src="assets/build-ledger.webp" width="1600" height="856" loading="lazy" alt="">
+    <img src="assets/campus-thermal.webp" width="1600" height="856" loading="lazy" alt="">
     <div class="wrap"><div class="card cham"><p class="num">05 · Survive</p><h3>Run it, age it, sell it</h3><p>Hardware loses value every year and every GPU generation. <span class="x">An investor board reviews you each January. Go three months cash-negative and it is over. One of six endings and a scored report.</span></p><ul class="tags x"><li>Staffing</li><li>Failures</li><li>Chill soundtrack</li><li>3 save slots</li></ul></div></div>
   </section>
 </div>
@@ -135,33 +148,37 @@
   <div class="wrap">
     <p class="kicker">Try it</p>
     <h2>Can your hall<br>cool that rack?</h2>
-    <p class="sub">The question the game asks you every month. <span class="x">Rack powers are rounded vendor figures; the game computes them from your exact parts.</span></p>
+    <p class="sub">The question the game asks you every month. <span class="x">Rack powers and cooling limits are rounded figures; the game computes them from your exact parts.</span></p>
     <div class="labgrid">
       <div class="controls">
         <label for="gen">Generation</label>
         <select id="gen">
-          <option value="13">2020 · 2× DGX A100 (16 GPUs/rack)</option>
-          <option value="41">2023 · 4× DGX H100 (32 GPUs/rack)</option>
-          <option value="57">2025 · 4× HGX B200 (32 GPUs/rack)</option>
-          <option value="132" selected>2025 · GB200 NVL72 (72 GPUs/rack)</option>
-          <option value="190">2026 · Vera Rubin NVL144, projected (144 GPUs/rack)</option>
+          <option value="13">2020 · DGX A100 ×2</option>
+          <option value="41">2023 · DGX H100 ×4</option>
+          <option value="57">2025 · HGX B200 ×4</option>
+          <option value="120" selected>2025 · GB200 NVL72</option>
+          <option value="190">2026 · Vera Rubin (projected)</option>
         </select>
+        <p class="hint" id="genhint">72 GPUs and about 120 kW per rack</p>
         <label for="mw">Hall power budget: <b id="mwv">5</b> MW</label>
         <input id="mw" type="range" min="1" max="50" value="5">
         <label for="cool">Cooling</label>
         <select id="cool">
-          <option value="20">Air (CRAH + containment)</option>
-          <option value="55">Rear-door heat exchanger</option>
-          <option value="150" selected>Direct liquid cooling</option>
-          <option value="250">Immersion</option>
+          <option value="22">Air · ~22 kW per rack</option>
+          <option value="40">Rear-door · ~40 kW</option>
+          <option value="150" selected>Direct liquid · to ~150 kW</option>
+          <option value="250">Immersion · ~250 kW</option>
         </select>
+        <noscript><p class="hint">These controls need JavaScript. The figures shown are for a GB200 rack on direct liquid cooling.</p></noscript>
       </div>
-      <div class="readout" aria-live="polite">
-        <div class="verdict" id="verdict"></div>
-        <div class="big"><b id="racks">0</b><span>racks fit in the power budget</span></div>
-        <div class="big"><b id="gpus">0</b><span>accelerators</span></div>
+      <div class="readout" id="readout" aria-live="polite">
+        <div class="vrow"><div class="verdict ok" id="verdict">COOLED</div></div>
+        <div class="bigs">
+          <div class="big"><b id="racks">41</b><span>racks fit in the power budget</span><span class="flag">too hot to run</span></div>
+          <div class="big"><b id="gpus">2,952</b><span>accelerators</span><span class="flag">too hot to run</span></div>
+        </div>
         <div class="dots" id="dots" aria-hidden="true"></div>
-        <p id="why"></p>
+        <div class="whybox" id="why"><p class="cur">120 kW per rack is comfortably inside what this cooling can remove (150 kW).</p></div>
       </div>
     </div>
   </div>
@@ -188,7 +205,7 @@
     <h2>Play it on the couch.<br>Or on the train.</h2>
     <p class="sub">Full controller support, graphics presets from Potato to Ultra, and an Android alpha that plays in landscape. <span class="x">A Steam release is planned.</span></p>
     <div class="pad">
-      <ul class="x">
+      <ul>
         <li><kbd>A</kbd> select</li>
         <li><kbd>B</kbd> back / close drawer</li>
         <li><kbd>X</kbd> inspect the rack under the reticle</li>
@@ -198,7 +215,7 @@
         <li><kbd>L-stick</kbd> pan <kbd>R-stick</kbd> orbit</li>
         <li><kbd>Start</kbd> menu <kbd>View</kbd> game speed</li>
       </ul>
-      <figure><img loading="lazy" src="assets/campus-thermal.webp" width="1600" height="856" alt="A campus-scale hall in thermal view"><figcaption>Fly the camera across hundreds of racks. The in-game Codex explains every part as you meet it.</figcaption></figure>
+      <figure><img loading="lazy" src="assets/floor-closeup.webp" width="1600" height="856" alt="The floor of a hall seen from eye level, with racks in the distance"><figcaption>Fly the camera across hundreds of racks. The in-game Codex explains every part as you meet it.</figcaption></figure>
     </div>
   </div>
 </section>
@@ -208,23 +225,23 @@
   <div class="wrap">
     <p class="kicker" style="justify-content:center">Free · no account</p>
     <h2>Pick your platform</h2>
-    <p class="sub" id="ver">Loading the latest release…</p>
+    <p class="sub" id="ver">See the latest builds on <a href="https://github.com/ixaxaar/gigawatt/releases/latest">GitHub</a>.</p>
     <div class="dlgrid" id="dlgrid">
-      <a class="dl" data-os="linux" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Linux</b><span>x86_64 · tar.gz</span></a>
-      <a class="dl" data-os="windows" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Windows</b><span>x64 · zip</span></a>
-      <a class="dl" data-os="macos-arm64" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>macOS</b><span>Apple silicon · zip</span></a>
-      <a class="dl" data-os="macos-x64" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>macOS</b><span>Intel · zip</span></a>
-      <a class="dl" data-os="android" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Android</b><span>arm64 phones · apk (alpha)</span></a>
+      <a class="dl" data-os="linux" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Linux</b><span>x86_64 · tar.gz</span><span class="sz"></span></a>
+      <a class="dl" data-os="windows" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Windows</b><span>x64 · zip</span><span class="sz"></span></a>
+      <a class="dl" data-os="macos-arm64" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>macOS</b><span>Apple silicon · zip</span><span class="sz"></span></a>
+      <a class="dl" data-os="macos-x64" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>macOS</b><span>Intel · zip</span><span class="sz"></span></a>
+      <a class="dl" data-os="android" href="https://github.com/ixaxaar/gigawatt/releases/latest"><b>Android</b><span>arm64 phones · apk (alpha)</span><span class="sz"></span></a>
     </div>
     <p class="fine x">Android: download the APK on your phone, allow installs from your browser when asked, and play in landscape (Android 10+, arm64; it is an alpha, so expect rough edges). Builds are not notarised or store-signed, so your OS will warn you the first time. Each release lists SHA-256 checksums. Everything is built by GitHub Actions from the public source.</p>
 
     <details class="nerd">
       <summary>For the curious: how it is built</summary>
       <div class="nerdbody">
-        <div><h4>Godot 4 front-end</h4><p>Vulkan, the 3D hall, drawers and controller layer. A Node sidecar speaks a JSON line protocol to the engine (in-process on Android).</p></div>
-        <div><h4>Deterministic engine</h4><p>Every rule lives in TypeScript: power, cooling, fabric, markets. Same seed, same game; golden trajectory tests pin full campaigns bit for bit.</p></div>
-        <div><h4>Scripted players</h4><p>Six personas play full 97-month campaigns and check whole-state invariants every month.</p></div>
-        <div><h4>An RL environment</h4><p>A step/reset interface with a Python wrapper, so agents can learn to run a datacenter.</p></div>
+        <div><h3>Godot 4 front-end</h3><p>Vulkan, the 3D hall, drawers and controller layer. A Node sidecar speaks a JSON line protocol to the engine (in-process on Android).</p></div>
+        <div><h3>Deterministic engine</h3><p>Every rule lives in TypeScript: power, cooling, fabric, markets. Same seed, same game; golden trajectory tests pin full campaigns bit for bit.</p></div>
+        <div><h3>Scripted players</h3><p>Six personas play full 97-month campaigns and check whole-state invariants every month.</p></div>
+        <div><h3>An RL environment</h3><p>A step/reset interface with a Python wrapper, so agents can learn to run a datacenter.</p></div>
       </div>
     </details>
   </div>
@@ -247,7 +264,11 @@
   <div class="fine">Built with Godot 4 and TypeScript. Part names and specs are for educational purposes; vendors are not affiliated with this game.</div>
 </footer>
 
-<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Screenshot"><button type="button" id="lb-x">Close · Esc</button><img alt=""><p></p></div>
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden>
+  <div class="lb-bar"><p id="lb-cap"></p><button type="button" id="lb-x" aria-label="Close enlarged view">Close · Esc</button></div>
+  <div class="lb-scroll" id="lb-scroll" tabindex="0" role="group" aria-label="Enlarged picture. Scroll or drag to pan."><img alt=""><video muted loop playsinline controls></video></div>
+  <p class="lb-hint">Drag to pan, pinch to zoom.</p>
+</div>
 
 <script src="app.js"></script>
 </body>
