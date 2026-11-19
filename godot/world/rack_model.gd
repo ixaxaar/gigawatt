@@ -176,7 +176,7 @@ static func cable_meshes(sp: Dictionary, detail: int) -> Dictionary:
 static func make_cables(sp: Dictionary, detail: int, dim := false) -> Node3D:
 	var root := Node3D.new(); var cm := cable_meshes(sp, detail)
 	for e in cm.meshes:
-		var mi := MeshInstance3D.new(); mi.mesh = e[1]; mi.material_override = _emit_mat(e[0], 0.12 if dim else 0.4); mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; root.add_child(mi)
+		var mi := MeshInstance3D.new(); mi.mesh = e[1]; mi.material_override = _cable_mat(e[0], dim); mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; root.add_child(mi)
 	root.set_meta("counts", cm.counts); return root
 
 func _build_cables(_ys: Array, _tor_y: float, detail: int) -> void:
@@ -191,6 +191,7 @@ static func _make_tubes(spec: Dictionary, ys: Array, tor_y: float, detail: int, 
 	var nics: int = spec.nics; var n: int = ys.size()
 	var spine: bool = int(spec.scale_up) > 8 and n >= 4
 	var slot := [0, 0]       # next free slot in the left and right bundle
+	var low := [1e9, 1e9]    # lowest cable height in each bundle: the velcro ties start there, not in mid-air
 	var pitch := 0.0125
 	var r_out := 0.0065 if detail == 2 else 0.02
 	for i in n:
@@ -202,6 +203,7 @@ static func _make_tubes(spec: Dictionary, ys: Array, tor_y: float, detail: int, 
 			var sl: int = slot[lane]; slot[lane] += 1
 			var bx := sgn * (0.2 + (sl % 4) * pitch) * (1.0 if sgn > 0 else 1.0); var bz := -0.42 - float((sl / 4) % 3) * pitch
 			var hy := cy - 0.012 + float(k) * 0.004    # each cable keeps its own height on the horizontal run
+			low[lane] = minf(low[lane], hy)
 			var tx := -0.19 + (float(i * nics + k) / float(maxi(1, n * nics))) * 0.38
 			var pts := PackedVector3Array([Vector3(px, hy, -0.35), Vector3(px, hy, bz), Vector3(bx, hy, bz), Vector3(bx, tor_y - 0.07 - float(sl % 3) * 0.004, bz), Vector3(tx, tor_y - 0.07 - float(sl % 3) * 0.004, bz), Vector3(tx, tor_y - 0.07 - float(sl % 3) * 0.004, -0.26), Vector3(tx, tor_y, -0.24)])
 			_add_tube(by_col, colr, _rounded(pts, 0.035), r_out)
@@ -212,6 +214,7 @@ static func _make_tubes(spec: Dictionary, ys: Array, tor_y: float, detail: int, 
 		if detail == 2:   # management cable: thin grey, tied into the same manager
 			var sl2: int = slot[lane]; slot[lane] += 1
 			var mx := sgn * (0.2 + (sl2 % 4) * pitch); var mz := -0.42 - float((sl2 / 4) % 3) * pitch
+			low[lane] = minf(low[lane], cy + 0.05)
 			var mp := PackedVector3Array([Vector3(sgn * 0.2, cy + 0.05, -0.35), Vector3(sgn * 0.2, cy + 0.05, mz), Vector3(mx, cy + 0.05, mz), Vector3(mx, tor_y - 0.03, mz), Vector3(sgn * 0.1, tor_y - 0.03, mz), Vector3(sgn * 0.1, tor_y - 0.03, -0.27)])
 			_add_tube(by_col, LINK_MGMT, _rounded(mp, 0.03), 0.004); counts.mgmt += 1
 		if spine:
@@ -227,7 +230,7 @@ static func _make_tubes(spec: Dictionary, ys: Array, tor_y: float, detail: int, 
 		if int(slot[lane]) == 0: continue
 		var sgn2 := -1.0 if lane == 0 else 1.0; var cols := mini(4, int(slot[lane])); var rows := mini(3, ceili(float(slot[lane]) / 4.0))
 		var cx := sgn2 * (0.2 + (cols - 1) * pitch * 0.5); var cz := -0.42 - (rows - 1) * pitch * 0.5
-		var yy := 0.25
+		var yy: float = low[lane] + 0.06
 		while yy < tor_y - 0.1: _add_box(by_col, Color(0.9, 0.45, 0.1), Vector3(cx, yy, cz), Vector3(cols * pitch + 0.016, 0.02, rows * pitch + 0.016)); yy += 0.22
 
 ## A modelled plug (QSFP/OSFP style): metal body in the port, strain-relief boot behind it, and a pull tab in the link colour.
@@ -310,6 +313,12 @@ static func _emit(c: Color, energy: float) -> StandardMaterial3D:
 	var k := "e%s%s" % [c.to_html(), energy]
 	if _mats.has(k): return _mats[k]
 	var m := StandardMaterial3D.new(); m.albedo_color = c; m.emission_enabled = true; m.emission = c; m.emission_energy_multiplier = energy; _mats[k] = m; return m
+
+## Cable jacket: plain coloured plastic (no glow, so looms don't read as neon frames from across the hall). Down/burn-in racks: greyed.
+static func _cable_mat(c: Color, dim := false) -> StandardMaterial3D:
+	var k := "j%s%s" % [c.to_html(), dim]
+	if _mats.has(k): return _mats[k]
+	var m := StandardMaterial3D.new(); m.albedo_color = c.darkened(0.3).lerp(Color(0.22, 0.23, 0.25), 0.7 if dim else 0.35); m.roughness = 0.5; m.metallic = 0.0; _mats[k] = m; return m
 
 static func _emit_mat(c: Color, energy := 0.4) -> StandardMaterial3D:
 	var k := "c%s%s" % [c.to_html(), energy]

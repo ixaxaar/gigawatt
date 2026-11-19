@@ -25,31 +25,38 @@ static func body(parent: Control, k: Dictionary, with_parts := true) -> void:
 			var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 8); parent.add_child(r)
 			r.add_child(state_chip(str(it.state), int(it.ships), int(it.opens))); r.add_child(Kit.label(str(it.name), 13, Kit.TX, true))
 
+## Sized like every dialog (app.fit_dialog): at most ~1280 px wide, as tall as its content, the body scrolling when the screen is short.
 func open(k: Dictionary, more: int) -> void:
 	for c in get_children(): c.queue_free()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); mouse_filter = Control.MOUSE_FILTER_STOP; visible = true
-	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.72); dim.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(dim)
-	var vsz := get_viewport().get_visible_rect().size; var side := maxf(24.0, (vsz.x - 1280.0) * 0.5) if vsz.x > 1500.0 else (200.0 if vsz.x > 1100.0 else 24.0)   # never wider than ~1280 px, even on an ultrawide
-	var pc := PanelContainer.new(); pc.set_anchors_preset(Control.PRESET_FULL_RECT); pc.offset_left = side; pc.offset_right = -side; pc.offset_top = 56 if vsz.y > 600.0 else 16.0; pc.offset_bottom = -56 if vsz.y > 600.0 else -16.0
-	pc.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.BG, 3, 20)); add_child(pc)
+	move_to_front()   # top of the modal stack: toasts, the tutorial card or the drawer divider added later can never take its clicks
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.72); dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var ins: Vector4 = app.inset if app != null else Vector4.ZERO
+	dim.offset_left = -ins.x; dim.offset_top = -ins.y; dim.offset_right = ins.z; dim.offset_bottom = ins.w; add_child(dim)
+	var pc := PanelContainer.new()
+	pc.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.BG, 3, 20 if not Layout.phone else 14)); add_child(pc)
 	var outer := VBoxContainer.new(); outer.add_theme_constant_override("separation", 10); pc.add_child(outer)
-	var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 12); outer.add_child(hd)
+	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 12); hd.add_theme_constant_override("v_separation", 6); outer.add_child(hd)
 	hd.add_child(Kit.chip("📣 KEYNOTE · %s · %s" % [str(k.venue).to_upper(), Kit.date_of(int(k.month))], Kit.AM, 14))
-	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hd.add_child(sp)
-	if more > 0: hd.add_child(Kit.label("+%d more after this" % more, 12, Kit.DIM))
-	outer.add_child(Kit.label(str(k.title), 28, Kit.TX, true))
-	outer.add_child(Kit.label(str(k.headline), 15, Kit.DIM, true))
+	if more > 0: hd.add_child(Kit.label("+%d more after this" % more, 13, Kit.DIM))
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; outer.add_child(sc)
 	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 8); sc.add_child(v)
+	v.add_child(Kit.label(str(k.title), 28 if not Layout.phone else 22, Kit.TX, true))
+	v.add_child(Kit.label(str(k.headline), 15, Kit.DIM, true))
 	body(v, k)
-	var ft := HBoxContainer.new(); ft.add_theme_constant_override("separation", 10); outer.add_child(ft)
+	var ft := HFlowContainer.new(); ft.add_theme_constant_override("h_separation", 10); ft.add_theme_constant_override("v_separation", 8); outer.add_child(ft)
 	var pre: bool = k.items.any(func(i): return i.state == "preorder")
-	var got := Kit.btn("Got it", func(): _ack(false), "" if pre else "pri", 17); got.custom_minimum_size = Vector2(160, 48); ft.add_child(got)
+	var bh := maxf(48.0, Layout.tap())
+	var got := Kit.btn("Got it", _ack.bind(false), "go" if not pre else "", 17); got.custom_minimum_size = Vector2(160, bh); ft.add_child(got)
 	if pre:
-		var go := Kit.btn("Pre-order in Supply →", func(): _ack(true), "go", 17); go.custom_minimum_size = Vector2(260, 48); ft.add_child(go)
-	var roadmap := Kit.btn("Roadmap", func(): _ack(true, true), "", 15); roadmap.custom_minimum_size = Vector2(120, 48); ft.add_child(roadmap)
+		var go := Kit.btn("Pre-order in Supply →", _ack.bind(true), "go", 17); go.custom_minimum_size = Vector2(260, bh); ft.add_child(go)
+	var roadmap := Kit.btn("Roadmap", _ack.bind(true, true), "", 17); roadmap.custom_minimum_size = Vector2(140, bh); ft.add_child(roadmap)
+	if more >= 2:   # a long queue (a loaded save, fast-forward): one press clears it; every keynote stays in the Roadmap
+		var skip := Kit.btn("Skip all (%d)" % (more + 1), func(): app.skip_all_keynotes(), "", 17); skip.custom_minimum_size = Vector2(150, bh); ft.add_child(skip)
+	if app != null: app.fit_dialog(pc, 1280.0, v)
 
 func _ack(go_supply: bool, roadmap := false) -> void:
+	if not visible: return
 	visible = false
 	app.b.act("ackNews")
 	if go_supply:

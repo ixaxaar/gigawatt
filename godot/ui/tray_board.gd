@@ -2,6 +2,8 @@ class_name TrayBoard
 extends Control
 ## Motherboard view of a server tray. Same placement algorithm as the web Design Lab; click a socket to target it.
 signal socket_clicked(kind: String, idx: int)
+## Arrow keys / D-pad moved the selection to another socket (no picker jump).
+signal socket_moved(kind: String, idx: int)
 ## Sizes are real parts at ~1.6 units per mm: SXM module 105x135, SP5-class socket 72x76, DDR5 DIMM 8.5x133, half-length NIC 167x69, E1.S drive 31x118, CRPS PSU 185x39.
 const SOCK := {"accelerator": Vector2(168, 216), "cpu": Vector2(118, 122), "dimm": Vector2(14, 213), "nic": Vector2(267, 96), "dpu": Vector2(267, 96), "nvme": Vector2(190, 50), "psu": Vector2(296, 64), "coldplate": Vector2(160, 110), "switchchip": Vector2(84, 84), "fan": Vector2(100, 100)}
 const ZONE := {"accelerator": "ACCELERATOR", "cpu": "CPU", "dimm": "DIMM", "nic": "PCIe NIC", "dpu": "PCIe DPU", "nvme": "NVMe BAY", "psu": "PSU BAY", "coldplate": "COLD PLATE", "switchchip": "SWITCH CHIP", "fan": "FAN"}
@@ -20,8 +22,31 @@ var _rects: Array = []
 var bounds := {}
 var bx0 := 0.0; var bx1 := 0.0; var top := 64.0; var bottom := 0.0
 var nvW := 0.0; var psW := 0.0
+## Narrow layouts: the board takes its column's width and sets its own height from the board's aspect (the page scrolls).
+var fit_width := false
+## A socket that just received a part glows for a moment so the change is visible.
+var flash_kind := ""
+var flash_idx := -1
+var flash_a := 0.0:
+	set(v): flash_a = v; queue_redraw()
 
-func _init() -> void: custom_minimum_size = Vector2(0, 420); mouse_filter = Control.MOUSE_FILTER_STOP
+func _init() -> void:
+	custom_minimum_size = Vector2(0, 420); mouse_filter = Control.MOUSE_FILTER_STOP; focus_mode = Control.FOCUS_ALL
+	set_meta("key", "board")
+	resized.connect(_fit_height)
+	focus_entered.connect(queue_redraw); focus_exited.connect(queue_redraw)
+
+func _ready() -> void:
+	_fit_height()
+	if flash_kind != "" and not Settings.reduced_motion:
+		var tw := create_tween(); tw.tween_property(self, "flash_a", 0.0, 1.1).from(1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	elif flash_kind != "": flash_a = 0.6; get_tree().create_timer(0.5).timeout.connect(func(): if is_instance_valid(self): flash_a = 0.0)
+
+func _fit_height() -> void:
+	if not fit_width or ch.is_empty() or size.x < 10.0: return
+	compute()
+	var h := ceilf(size.x * H / W)
+	if absf(custom_minimum_size.y - h) > 1.0: custom_minimum_size.y = h
 
 func _has(k: String) -> bool: return _cnt(k) > 0
 func _cnt(k: String) -> int:
@@ -53,12 +78,12 @@ func compute() -> void:
 		for i in dl: var r: int = i / per; var c: int = i % per; place["dimm"].append(Vector2(lx + side_w - (c + 1) * dw - dw, y + 18 + r * (SOCK.dimm.y + 12)))
 		for i in dr: var r2: int = i / per; var c2: int = i % per; place["dimm"].append(Vector2(rx + 24 + c2 * dw, y + 18 + r2 * (SOCK.dimm.y + 12)))
 		for i in nC:
-			var p: Vector2 = place["cpu"][i]; silk.append([Vector2(p.x + SOCK.cpu.x / 2, p.y - 6), "CPU%d · SOCKET" % i, true])
+			var p: Vector2 = place["cpu"][i]; silk.append([Vector2(p.x + SOCK.cpu.x / 2, p.y - 6), "CPU%d · SOCKET" % i, true, SOCK.cpu.x + 30.0, "CPU%d" % i])
 			if i > 0: traces.append([Vector2(place["cpu"][i - 1].x + SOCK.cpu.x, p.y + 60), Vector2(p.x, p.y + 60), 4, 6.0, false])
 		if nC > 0 and dl > 0: traces.append([Vector2(lx + side_w - 6, y + 110), Vector2(place["cpu"][0].x, y + 110), 6, 9.0, false])
 		if nC > 0 and dr > 0: traces.append([Vector2(place["cpu"][nC - 1].x + SOCK.cpu.x, y + 110), Vector2(rx + 24, y + 110), 6, 9.0, false])
-		if dl > 0: silk.append([Vector2(lx + side_w / 2, y + 6), "DDR · CH A–%s" % char(64 + maxi(1, int(ceil(dl / 2.0)))), true])
-		if dr > 0: silk.append([Vector2(rx + 24 + side_w / 2, y + 6), "DDR · CH %s–%s" % [char(65 + int(ceil(dl / 2.0))), char(64 + int(ceil(dl / 2.0)) + int(ceil(dr / 2.0)))], true])
+		if dl > 0: silk.append([Vector2(lx + side_w / 2, y + 6), "DDR · CH A–%s" % char(64 + maxi(1, int(ceil(dl / 2.0)))), true, side_w, "DDR"])
+		if dr > 0: silk.append([Vector2(rx + 24 + side_w / 2, y + 6), "DDR · CH %s–%s" % [char(65 + int(ceil(dl / 2.0))), char(64 + int(ceil(dl / 2.0)) + int(ceil(dr / 2.0)))], true, side_w, "DDR"])
 		cpu_band = {"y": y, "h": band_h}; y += band_h + 24.0
 	if _has("accelerator"):
 		var n := _cnt("accelerator"); var sk: Vector2 = SOCK.accelerator
@@ -79,7 +104,7 @@ func compute() -> void:
 			for i in n:
 				if i % per < per - 1 and i + 1 < n: var p2: Vector2 = place["accelerator"][i]; var q2: Vector2 = place["accelerator"][i + 1]; traces.append([Vector2(p2.x + sk.x, p2.y + sk.y / 2), Vector2(q2.x, q2.y + sk.y / 2), 3, 6.0, false])
 		var scale_up := str(bb.get("scaleUp", "pcie")).to_upper()
-		for i in n: var p3: Vector2 = place["accelerator"][i]; silk.append([Vector2(p3.x + sk.x / 2, p3.y - 6), "%s · GPU%d" % [scale_up, i], true])
+		for i in n: var p3: Vector2 = place["accelerator"][i]; silk.append([Vector2(p3.x + sk.x / 2, p3.y - 6), "%s · GPU%d" % [scale_up, i], true, pitch - 8.0, "GPU%d" % i, 30.0])
 		if cpu_band != null and place.has("cpu"):
 			for p4 in place["cpu"]: traces.append([Vector2(p4.x + SOCK.cpu.x / 2, p4.y + SOCK.cpu.y + 40), Vector2(p4.x + SOCK.cpu.x / 2, y + 6), 5, 6.0, true])
 		y += band_h + 24.0
@@ -89,7 +114,7 @@ func compute() -> void:
 		var x := bx0 + 30.0
 		for k in misc:
 			place[k] = []
-			for i in _cnt(k): place[k].append(Vector2(x, y + 18)); silk.append([Vector2(x, y + 12), "%s %d" % [k.to_upper(), i + 1], false]); x += SOCK[k].x + 18.0
+			for i in _cnt(k): place[k].append(Vector2(x, y + 18)); silk.append([Vector2(x, y + 12), "%s %d" % [k.to_upper(), i + 1], false, SOCK[k].x + 14.0, "%s%d" % [k.to_upper().left(3), i + 1]]); x += SOCK[k].x + 18.0
 		y += 160.0
 	var nic_kinds := []; for k in ["nic", "dpu"]:
 		if _has(k): nic_kinds.append(k)
@@ -99,10 +124,10 @@ func compute() -> void:
 			place[kind] = []
 			for i in _cnt(kind):
 				var idx := k; k += 1
-				var p5 := Vector2(bx0 + 36 + (idx % per) * wslot, y + 30 + (idx / per) * (SOCK.nic.y + 18)); place[kind].append(p5); silk.append([Vector2(p5.x, p5.y - 5), "PCIE5 x16 #%d" % (idx + 1), false])
+				var p5 := Vector2(bx0 + 36 + (idx % per) * wslot, y + 30 + (idx / per) * (SOCK.nic.y + 26)); place[kind].append(p5); silk.append([Vector2(p5.x, p5.y - 6), "PCIE5 x16 #%d" % (idx + 1), false, wslot - 10.0, "#%d" % (idx + 1), 24.0])
 		var rows2: int = int(ceil(k / float(per)))
 		if cpu_band != null and place.has("cpu"): traces.append([Vector2(bx0 + 20, cpu_band.y + cpu_band.h / 2), Vector2(bx0 + 20, y + 20), 6, 5.0, true])
-		y += rows2 * (SOCK.nic.y + 18.0) + 54.0
+		y += rows2 * (SOCK.nic.y + 26.0) + 54.0
 	bottom = y + 6.0
 	chips.append([Vector2(bx0 + 300, bottom + 40), Vector2(54, 30), "BMC", false]); chips.append([Vector2(bx0 + 368, bottom + 40), Vector2(54, 30), "PCH", false]); chips.append([Vector2(bx0 + 436, bottom + 40), Vector2(40, 30), "TPM", false])
 	H = maxf(bottom + 128.0, top + 40.0 + maxf(minf(_cnt("nvme"), NV_PER) * (SOCK.nvme.y + 8) if _has("nvme") else 0.0, minf(_cnt("psu"), PS_PER) * (SOCK.psu.y + 8) if _has("psu") else 0.0) + 30.0)
@@ -112,8 +137,36 @@ func _o() -> Vector2: var k := _k(); return Vector2((size.x - W * k) * 0.5, (siz
 func _p(v: Vector2) -> Vector2: return _o() + v * _k()
 func _r(pos: Vector2, sz: Vector2) -> Rect2: return Rect2(_p(pos), sz * _k())
 func _txt(pos: Vector2, t: String, px: int, col: Color, center := false) -> void:
-	var fnt: Font = Fonts.regular; var s := maxi(8, int(px * _k())); var w := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
-	draw_string(fnt, _p(pos) + Vector2(-w * 0.5 if center else 0.0, 0), t, HORIZONTAL_ALIGNMENT_LEFT, -1, s, col)
+	_fit(_p(pos), [t], 1e9, px, col, center)
+
+## Text size for a label designed at `px` board units: scales with the board but never below 10 px (readable) or far above its design size.
+func _fs(px: int) -> int: return clampi(int(round(px * _k() * 1.2)), 10, px + 5)
+
+## Draw the first of `cands` that fits in `max_w` screen px (one size step down allowed); draw nothing if none fits, so labels never overlap.
+func _fit(at: Vector2, cands: Array, max_w: float, px: int, col: Color, center := false) -> bool:
+	var fnt: Font = Fonts.regular; var s0 := _fs(px)
+	for t in cands:
+		for s in [s0, maxi(9, s0 - 2)]:
+			var w := fnt.get_string_size(str(t), HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
+			var wm := fnt.get_string_size(_wide_digits(str(t)), HORIZONTAL_ALIGNMENT_LEFT, -1, s).x   # same choice for GPU0 and GPU1
+			if wm <= max_w:
+				draw_string(fnt, at + Vector2(-w * 0.5 if center else 0.0, 0), str(t), HORIZONTAL_ALIGNMENT_LEFT, -1, s, col); return true
+	return false
+
+func _wide_digits(t: String) -> String:
+	var o := ""
+	for c in t: o += "8" if c >= "0" and c <= "9" else c
+	return o
+
+## Draw `t` cut with "…" to fit `max_w` px (part names inside a socket).
+func _ell(at: Vector2, t: String, max_w: float, s: int, col: Color, center := false) -> void:
+	var fnt: Font = Fonts.regular
+	if max_w < s * 1.5: return
+	var cur := t
+	while cur.length() > 1 and fnt.get_string_size(cur, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x > max_w:
+		cur = cur.trim_suffix("…"); cur = cur.left(cur.length() - 1).strip_edges() + "…"
+	var w := fnt.get_string_size(cur, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
+	draw_string(fnt, at + Vector2(-w * 0.5 if center else 0.0, 0), cur, HORIZONTAL_ALIGNMENT_LEFT, -1, s, col)
 
 # ---------- flat, iconic rendering: charcoal board; grey, white and blue parts ----------
 const BD := Color(0.105, 0.105, 0.115)
@@ -149,9 +202,11 @@ func _vrm(rc: Rect2) -> void:   # a row of white inductors over grey caps
 		_inductor(Rect2(rc.position + Vector2(2 + i * 14 * k, 2), Vector2(11 * k, 11 * k)))
 		_cap(rc.position + Vector2(8 * k + i * 14 * k, rc.size.y - 6 * k), 4.0 * k, GY)
 
-func _label(rc: Rect2, t: String, col: Color, size: int) -> void:
-	var fnt: Font = Fonts.regular; var fs := maxi(8, int(size * _k())); var w := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	draw_string(fnt, rc.position + Vector2((rc.size.x - w) * 0.5, rc.size.y * 0.5 + fs * 0.35), t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+func _label(rc: Rect2, t: String, col: Color, size: int, short := "") -> void:
+	var fs := _fs(size)
+	if rc.size.y < fs * 0.8: return
+	var c := [t]; if short != "": c.append(short)
+	_fit(Vector2(rc.get_center().x, rc.position.y + rc.size.y * 0.5 + fs * 0.35), c, rc.size.x - 2.0, size, col, true)
 
 func _heatsink(rc: Rect2, light := false) -> void:   # blue finned block
 	var base := BLL if light else BL
@@ -184,7 +239,7 @@ func _draw_gpu(rc: Rect2, it: Dictionary, vc: Color) -> void:
 func _draw_cpu(rc: Rect2, it: Dictionary) -> void:
 	_fill(rc, GY); _pin_array(rc.grow(-rc.size.x * 0.05), DK, maxf(4.0, 5.0 * _k()))
 	var ih := rc.grow(-rc.size.x * 0.22); _fill(ih, WH)
-	_label(ih, str(it.get("name", "")).replace("AMD ", "").replace("Intel ", "").left(10), DK, 9)
+	var cn := str(it.get("name", "")).replace("AMD ", "").replace("Intel ", ""); _label(ih, cn.split(" ")[0] if cn.length() > 10 else cn, DK, 9, cn.left(4))
 
 func _draw_dimm(rc: Rect2, filled: bool, vc: Color) -> void:
 	if filled:
@@ -221,7 +276,7 @@ func _draw_psu(rc: Rect2, filled: bool) -> void:
 func _draw_chip(rc: Rect2, text: String, hot: bool) -> void:
 	if hot: _heatsink(rc, false)
 	else: _soic(rc, GY)
-	var plate := Rect2(rc.position + rc.size * Vector2(0.22, 0.32), rc.size * Vector2(0.56, 0.36)); _label(plate, text, WH if hot else DK, 8)
+	var plate := Rect2(rc.position + rc.size * Vector2(0.06, 0.32), rc.size * Vector2(0.88, 0.36)); _label(plate, text, WH if hot else DK, 8, text.left(4))
 
 func _decor(rc: Rect2, keep: Array) -> void:   # SMD resistors, caps and ICs filling the bare board, like the reference
 	var k := _k()
@@ -248,11 +303,19 @@ func _draw() -> void:
 	# chassis tray + header
 	_fill(_r(Vector2(4, 4), Vector2(W - 8, H - 8)), Color(0.075, 0.075, 0.085))
 	draw_rect(_r(Vector2(4, 4), Vector2(W - 8, H - 8)), RIM if cooled else GYD, false, 3.0)
-	_fill(_r(Vector2(12, 12), Vector2(W - 24, 30)), Color(0.06, 0.12, 0.18))
-	_txt(Vector2(26, 32), "◀ FRONT · %s · %sU · %s · REAR ▶" % [str(ch.name).to_upper().left(56), int(ch.rackUnits), str(ch.cooling).to_upper()], 14, Color(0.62, 0.78, 0.92))
-	_txt(Vector2(W - 380, 32), "click a socket, then choose a part →", 12, Color(0.45, 0.58, 0.7))
-	if _has("nvme"): var nr := _r(Vector2(30, top + 8), Vector2(nvW + 20, minf(_cnt("nvme"), 8) * (SOCK.nvme.y + 8) + 44)); _fill(nr, BD); draw_rect(nr, GYD, false, 1.0); _txt(Vector2(40, top + 24), "NVME CAGE", 10, GY)
-	if _has("psu"): var pr := _r(Vector2(bx1 + 16, top + 8), Vector2(psW + 20, minf(_cnt("psu"), 4) * (SOCK.psu.y + 8) + 44)); _fill(pr, BD); draw_rect(pr, GYD, false, 1.0); _txt(Vector2(bx1 + 26, top + 24), "REAR PSU BAY", 10, GY)
+	var hb := _r(Vector2(12, 12), Vector2(W - 24, 30)); hb.size.y = maxf(hb.size.y, _fs(14) + 8.0); _fill(hb, Color(0.06, 0.12, 0.18))
+	var hy := _p(Vector2(26, 32)).y; var hx := _p(Vector2(26, 0)).x; var hw := (W - 52.0) * k
+	var sel_txt := _sel_text()
+	if sel_txt != "": _ell(Vector2(hx, hy), sel_txt, hw, _fs(13), Color(0.75, 0.93, 1.0))   # the selected socket, in full
+	else:
+		var nm := str(ch.name).to_upper()
+		var head_w := hw if Layout.compact else hw * 0.64
+		_fit(Vector2(hx, hy), ["◀ FRONT · %s · %sU · %s · REAR ▶" % [nm, int(ch.rackUnits), str(ch.cooling).to_upper()], "◀ FRONT · %s · REAR ▶" % nm, nm, "◀ FRONT · REAR ▶"], head_w, 14, Color(0.62, 0.78, 0.92))
+		if not Layout.compact:
+			var hint := "click a socket, then choose a part →"; var fs := _fs(12); var w := Fonts.regular.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			if w < hw * 0.34: draw_string(Fonts.regular, Vector2(_p(Vector2(W - 30, 0)).x - w, hy), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.45, 0.58, 0.7))
+	if _has("nvme"): var nr := _r(Vector2(30, top + 8), Vector2(nvW + 20, minf(_cnt("nvme"), 8) * (SOCK.nvme.y + 8) + 44)); _fill(nr, BD); draw_rect(nr, GYD, false, 1.0); _fit(_p(Vector2(40, top + 24)), ["NVME CAGE", "NVME"], nr.size.x - 8.0, 10, GY)
+	if _has("psu"): var pr := _r(Vector2(bx1 + 16, top + 8), Vector2(psW + 20, minf(_cnt("psu"), 4) * (SOCK.psu.y + 8) + 44)); _fill(pr, BD); draw_rect(pr, GYD, false, 1.0); _fit(_p(Vector2(bx1 + 26, top + 24)), ["REAR PSU BAY", "PSU"], pr.size.x - 8.0, 10, GY)
 	# the PCB: charcoal with a bright rim and grey mounting circles
 	var pcb := _r(Vector2(bx0 - 8, top), Vector2(bx1 - bx0 + 16, H - top - 18))
 	var sbx := StyleBoxFlat.new(); sbx.bg_color = BD; sbx.border_color = RIM; sbx.set_border_width_all(maxi(3, int(4 * k))); sbx.set_corner_radius_all(int(18 * k)); draw_style_box(sbx, pcb)
@@ -284,7 +347,9 @@ func _draw() -> void:
 	draw_circle(ec, er, GY); draw_circle(ec, er * 0.78, WH); draw_circle(ec, er * 0.56, BL)
 	draw_polyline(PackedVector2Array([ec + Vector2(er * 0.15, -er * 0.4), ec + Vector2(-er * 0.2, er * 0.05), ec + Vector2(er * 0.2, er * 0.05), ec + Vector2(-er * 0.15, er * 0.4)]), WH, maxf(2.0, 3.0 * k))
 	for c in chips: _draw_chip(_r(c[0], c[1]), c[2], c[3])
-	for s in silk: _txt(s[0], s[1], 9, Color(0.72, 0.75, 0.8, 0.9), s[2])
+	for s in silk:
+		if s.size() > 5 and _fs(9) > float(s[5]) * k * 1.15: continue   # no room above the socket at this size: the header names the selected one
+		_fit(_p(s[0]), [s[1], s[4]], float(s[3]) * k, 9, Color(0.72, 0.75, 0.8, 0.9), s[2])
 	# VRMs flanking each accelerator / CPU
 	for kind in ["accelerator", "cpu"]:
 		for pos in place.get(kind, []):
@@ -310,14 +375,61 @@ func _draw() -> void:
 				"switchchip": _draw_chip(rr, str(it.get("name", "SW")).left(8), true) if filled else _socket_frame(rr, false)
 				"coldplate": _heatsink(rr, true) if filled else _socket_frame(rr, false)
 				_: _fill(rr, BD); draw_rect(rr, GYD, false, 1.0)
-			if filled and s.kind in ["accelerator", "nic", "dpu"]: _txt(p + Vector2(5, sk.y + 12), str(it.name).left(int(sk.x / 6.0)), 9, Color(0.88, 0.92, 0.96))
-			if not filled and s.kind in ["accelerator", "cpu", "nic", "dpu"]: _label(rr, "%s%d" % [str(s.kind).to_upper().left(5), i], DK if s.kind in ["accelerator", "cpu"] else GY, 9)
+			if filled and s.kind in ["accelerator", "nic", "dpu"]:   # the part's name on a strip INSIDE the socket (below it would collide with the next row)
+				var fs := _fs(9); var sh := minf(rr.size.y * 0.34, fs + 6.0)
+				if rr.size.x > fs * 3.0 and sh >= fs:
+					var strip := Rect2(rr.position.x, rr.end.y - sh, rr.size.x, sh); _fill(strip, Color(0.02, 0.03, 0.05, 0.86))
+					_ell(Vector2(strip.get_center().x, strip.end.y - (sh - fs) * 0.5 - 2.0), str(it.name), rr.size.x - 6.0, fs, Color(0.9, 0.94, 0.98), true)
+			if not filled and s.kind in ["accelerator", "cpu", "nic", "dpu"]: _label(rr, "%s%d" % [str(s.kind).to_upper().left(5), i], DK if s.kind in ["accelerator", "cpu"] else GY, 9, str(i))
 			var selected: bool = sel_kind == s.kind and sel_idx == i
 			if selected:
 				draw_rect(rr.grow(4.0 * k), Color(1, 1, 1, 0.95), false, 2.5); draw_rect(rr.grow(7.0 * k), Color(0.3, 0.9, 1.0, 0.4), false, 4.0)
+			if flash_a > 0.01 and flash_kind == s.kind and (flash_idx == i or flash_idx < 0):
+				draw_rect(rr, Color(0.4, 1.0, 0.7, 0.45 * flash_a), true); draw_rect(rr.grow(6.0 + 10.0 * (1.0 - flash_a)), Color(0.4, 1.0, 0.7, flash_a), false, 3.0)
 			_rects.append({"kind": s.kind, "idx": i, "rect": rr})
+
+	if has_focus(): draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), Color(1.0, 0.92, 0.35), false, 2.0)
+
+## Full description of the selected socket for the header strip ("GPU3 · ACCELERATOR · NVIDIA A100 80GB SXM4").
+func _sel_text() -> String:
+	if sel_kind == "" or sel_idx < 0: return ""
+	var arr: Array = cells.get(sel_kind, [])
+	var id = arr[sel_idx] if sel_idx < arr.size() else null
+	var nm := str(items.get(id, {}).get("name", "")) if id != null else "empty"
+	return "▶ %s #%d · %s" % [ZONE.get(sel_kind, sel_kind.to_upper()), sel_idx + 1, nm]
 
 func _gui_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
-		for r in _rects:
-			if r.rect.grow(4.0).has_point(e.position): socket_clicked.emit(r.kind, r.idx); return
+		grab_focus()   # the arrow keys work on the board you just clicked (focus survives the rebuild)
+		var best = null; var bd := 1e9
+		for r in _rects:   # exact hit first; tiny sockets (DIMMs on a phone) take the nearest one within a finger's reach
+			var rc: Rect2 = r.rect
+			if rc.has_point(e.position): best = r; break
+			var d := rc.get_center().distance_to(e.position)
+			if rc.grow(maxf(4.0, 14.0 - minf(rc.size.x, rc.size.y) * 0.5)).has_point(e.position) and d < bd: bd = d; best = r
+		if best != null: socket_clicked.emit(best.kind, best.idx); accept_event()
+		return
+	if _rects.is_empty(): return
+	var dir := Vector2.ZERO
+	if e.is_action_pressed("ui_left", true): dir = Vector2.LEFT
+	elif e.is_action_pressed("ui_right", true): dir = Vector2.RIGHT
+	elif e.is_action_pressed("ui_up", true): dir = Vector2.UP
+	elif e.is_action_pressed("ui_down", true): dir = Vector2.DOWN
+	elif e.is_action_pressed("ui_accept"):
+		if sel_kind != "" and sel_idx >= 0: socket_clicked.emit(sel_kind, sel_idx)
+		else: socket_clicked.emit(_rects[0].kind, _rects[0].idx)
+		accept_event(); return
+	if dir == Vector2.ZERO: return
+	var cur = null
+	for r in _rects:
+		if r.kind == sel_kind and r.idx == sel_idx: cur = r
+	if cur == null: socket_moved.emit(_rects[0].kind, _rects[0].idx); accept_event(); return
+	var c0: Vector2 = cur.rect.get_center(); var best2 = null; var score := 1e12
+	for r in _rects:
+		if r == cur: continue
+		var dv: Vector2 = (r.rect as Rect2).get_center() - c0
+		var along := dv.dot(dir); var perp := absf(dv.dot(Vector2(dir.y, dir.x)))
+		if along <= 1.0: continue
+		var sc := along + perp * 2.5
+		if sc < score: score = sc; best2 = r
+	if best2 != null: socket_moved.emit(best2.kind, best2.idx); accept_event()   # at the edge: let focus leave the board

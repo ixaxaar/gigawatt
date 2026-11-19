@@ -36,7 +36,8 @@ func _gauge(parent: Control, label: String, v: float, mx: float, unit: String) -
 	var h := HBoxContainer.new(); parent.add_child(h); h.add_child(Kit.label(label, 13, Kit.DIM)); var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(sp)
 	h.add_child(Kit.label("%s / %s %s" % [Kit.num(v), Kit.num(mx), unit], 13)); parent.add_child(Kit.bar(v, mx))
 
-func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+const BK := preload("res://ui/build_keep.gd")
+func refresh() -> void: BK.refresh(self, app, _rebuild)
 
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
@@ -46,10 +47,12 @@ func _rebuild() -> void:
 	# ---- right column
 	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -app.overlay_w() + 20.0; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var rv := VBoxContainer.new(); rv.add_theme_constant_override("separation", 8); rp.add_child(rv)
-	rv.add_child(app.tab_strip("facility"))
-	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 10 if Layout.phone else 6); hd.add_theme_constant_override("v_separation", 10 if Layout.phone else 4); rv.add_child(hd); hd.add_child(Kit.label("BUILD", 22, Kit.CY))
-	for i in g.halls.size(): hd.add_child(Kit.btn("%s · %s" % [g.halls[i].name, g.halls[i].coolingClass], func(): app.hall.hall_i = i; app.hall.rebuild(); refresh(), "pri" if i == hi else "", 13))
+	rv.add_child(app.tab_strip("facility"))   # the only part that stays put: everything else scrolls (and is clipped by the scroller)
 	var col := Kit.column(rv, 0, true)
+	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 10 if Layout.phone else 6); hd.add_theme_constant_override("v_separation", 10 if Layout.phone else 4); col.add_child(hd)
+	if not Layout.phone: hd.add_child(Kit.label("BUILD", 22, Kit.CY))   # phone: the tab already says Build
+	if g.halls.size() > 1 or not Layout.phone:
+		for i in g.halls.size(): hd.add_child(Kit.btn("%s · %s" % [BK.ell(g.halls[i].name, 22), g.halls[i].coolingClass], func(): app.hall.hall_i = i; app.hall.rebuild(); refresh(), "pri" if i == hi else "", 13))
 	if g.get("mode", "operator") == "learner":
 		var cp := Kit.panel("Datacenter 101 — do I need this?", true, col); ConceptsView.build(app, cp[1], ["power", "cooling", "chiller", "liquid", "rdhx", "pue", "ups"], func(): refresh())
 	var pc := Kit.panel("Power & cooling", true, col)
@@ -151,12 +154,16 @@ func _rebuild() -> void:
 	nr.add_child(_tap(Kit.option(["air", "rdhx", "dlc", "immersion"], nh_cool, func(v): nh_cool = v))); nr.add_child(_tap(Kit.spin(nh_slots, 4, 200, 1, func(v): nh_slots = int(v))))
 	nr.add_child(Kit.btn("Build", func(): msg = b.act("buildHall", [nh_name, nh_cool, nh_slots]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 13))
 	# ---- bottom-left placement strip
-	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); bl.offset_left = 8; bl.offset_bottom = -8; bl.grow_vertical = Control.GROW_DIRECTION_BEGIN; bl.offset_top = -8; bl.offset_right = 760 if not Layout.phone else 8.0 + maxf(320.0, app.vw() - app.RAIL_W - 8.0 - app.overlay_w() - 56.0); bl.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.94), Kit.CY, 12, 1, 12)); add_child(bl)
+	# placement strip: top-left, right of the camera buttons, so toasts and the rack inspector (both bottom-left) never cover it
+	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_TOP_LEFT); bl.offset_left = 70.0; bl.offset_top = 2.0; bl.offset_bottom = 2.0
+	var room: float = app.vw() - (app.RAIL_W + 14.0 if Layout.phone else 28.0) - app.overlay_w() - 70.0 - 24.0
+	bl.offset_right = 70.0 + clampf(room, 260.0, 720.0); bl.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.94), Kit.CY, 12, 1, 10 if Layout.compact else 12)); add_child(bl)
 	var bv := VBoxContainer.new(); bv.add_theme_constant_override("separation", 6); bl.add_child(bv)
 	bv.add_child(Kit.label(("%s floor — choose a rack design, then PLACE RACK (or click the hall): it goes in the next free slot. Click a rack to inspect it." if not Layout.phone else "%s floor: pick a design, then place") % hall.name, 14, Kit.CY, true))
 	var dr := _pair(); bv.add_child(dr)
 	var dopts := [["", "choose rack design…"]]; for d in g.racks: dopts.append([d.id, d.name])
-	dr.add_child(_tap(Kit.option(dopts, design, func(v): design = v; refresh())))
+	if g.racks.is_empty(): bv.add_child(Kit.label("No rack designs yet: buy a system in Supply or save one in the Design Lab.", 12, Kit.DIM, true))
+	dr.add_child(_tap(BK.slim(Kit.option(dopts, design, func(v): design = v; refresh()), 180.0)))
 	var missing := []
 	var ready_now := true   # the engine's own answer (it counts only parts not reserved for other designs)
 	if design != "":
@@ -165,11 +172,13 @@ func _rebuild() -> void:
 			if g.inventory.get(id, 0) < bom[id]: missing.append(id)
 		var rr = b.q("rackReadiness", [design, 1])
 		if rr is Dictionary: ready_now = bool(rr.get("buildableNow", true))
-	var pb := Kit.btn("PLACE RACK", func(): msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0 or not ready_now; dr.add_child(pb)
+	var pb := Kit.btn("PLACE RACK", func():
+		if not BK.gate("place", 700): return
+		msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0 or not ready_now; dr.add_child(pb)
 	if design != "" and missing.size() == 0 and not ready_now: dr.add_child(Kit.label("these parts are reserved for another design", 12, Kit.AM))
 	if missing.size() > 0: dr.add_child(Kit.label("missing %d part type(s)" % missing.size(), 12, Kit.AM))
 	if design != "" and missing.size() > 0:
-		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170 if not Layout.phone else 80); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)
+		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170 if not Layout.compact else 90); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)
 		MissingParts.build(app, mv, design, 1, func(m): msg = m; refresh(), sp_state)
 	if msg != "": bv.add_child(Kit.label(msg, 12, Kit.DIM, true))
 	if _focus != "" and _scroll != null:

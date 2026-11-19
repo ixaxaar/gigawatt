@@ -5,7 +5,15 @@ extends Node
 ## A wrapping control always gets an explicit minimum width, so a row can never squeeze it into a thin tall sliver.
 
 func _ready() -> void:
-	get_tree().node_added.connect(func(n: Node): if n is Label or (n is Button and not n is OptionButton): call_deferred("_fit", n))
+	get_tree().node_added.connect(_added)
+
+func _added(n: Node) -> void:
+	if n is Label or (n is Button and not n is OptionButton): call_deferred("_fit", n)
+	if n is OptionButton or n is CheckBox or n is HSlider or n is SpinBox: call_deferred("_style", n)
+
+## Stock controls made outside the kit (the Settings sliders and dropdowns) get the kit's themed look too.
+func _style(n) -> void:
+	if is_instance_valid(n) and n.is_inside_tree(): Kit.style_control(n)
 
 ## A row of buttons wider than the screen becomes a flowing row that wraps onto more lines.
 func _flowify(row: HBoxContainer, avail: float) -> void:
@@ -24,6 +32,7 @@ func _flowify(row: HBoxContainer, avail: float) -> void:
 ## A table row wider than the screen sits in its own sideways scroller, so it cannot stretch the whole screen.
 func _wide(row: Container, avail: float) -> void:
 	if not (row.get_class() in ["HBoxContainer", "GridContainer"]) or row.get_parent() == null or row.get_parent() is ScrollContainer: return
+	if row.has_meta("kit_table") or row.get_parent().has_meta("kit_stepper"): return   # kit tables reflow themselves
 	if row.get_minimum_size().x <= avail: return
 	var par := row.get_parent(); var idx := row.get_index()
 	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER

@@ -1,7 +1,6 @@
 class_name DesignScreen
 extends Control
 ## Design Lab: tray bench (motherboard) and rack bench (42U elevation), with live engine validation.
-var _reveal_picker := false
 var app
 var tab := "tray"
 # tray lab
@@ -26,6 +25,14 @@ const RC := {"tray": Color("#76b900"), "switch": Color("#4fd1ff"), "storage": Co
 
 var _gwfilled := false
 var _folds := {}
+const BK := preload("res://ui/build_keep.gd")
+var _flash := []          # [kind, idx] tray socket(s) that just got a part (idx -1 = every socket of that kind)
+var _rflash := []         # [u, h] rack device just placed
+var _rcur := -1           # rack keyboard / controller cursor (a U)
+var _scroll_u := -1       # bring this U into view after a keyboard move on a tall rack
+var _focus_part := false  # controller: after Ⓐ on a socket, focus the first part in the picker
+var _rack_sc: ScrollContainer
+var _rack_bd: RackBoard
 ## Phone helpers: tap-height controls, roomier spacing, and a drop-prose-on-phone label.
 func _tap(c: Control) -> Control:
 	if Layout.phone: c.custom_minimum_size.y = maxf(c.custom_minimum_size.y, Layout.tap())
@@ -40,17 +47,74 @@ func _pair() -> BoxContainer:
 	var r: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); r.add_theme_constant_override("separation", 10 if Layout.phone else 8); return r
 func _prose(p: Control, t: String, size := 11, col: Color = Kit.DIM) -> void:
 	if not Layout.phone: p.add_child(Kit.label(t, size, col, true))
-func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+func refresh() -> void: BK.refresh(self, app, _rebuild)
 
+# ---- layout model ----
+# Desktop: bench (tools + board) on the left, a scrolling column (picker, validation, advisor, saved) on the right; on very wide
+#   screens the right side splits into two columns so the board can grow instead of sitting in dead margins.
+# Compact / touch: ONE page that scrolls (bottom padding included). When there is room the board and its picker sit side by side
+#   at the height of the screen, so tapping a socket and picking a part never leaves the view; on narrow screens the picker sits
+#   directly under the board.
+func _paged() -> bool: return Layout.compact or Layout.touch
+func _avail_w() -> float: return app.vw() - (app.RAIL_W + 14.0 if Layout.phone else 28.0) - 40.0
+func _side() -> bool: return _avail_w() >= 820.0
+func _row_h() -> float:
+	var hh: float = app.holder.size.y if app.get("holder") != null else get_viewport().get_visible_rect().size.y
+	return clampf(hh - 28.0 - maxf(48.0, Layout.tap()) - 26.0, 260.0, 1100.0)
+func _side_w() -> float: return clampf(_avail_w() * 0.4, 340.0, 520.0)
+## A fixed-height scrolling column (the picker beside the board).
+func _side_col(parent: Control, w: float, h: float) -> VBoxContainer:
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size = Vector2(w, h); sc.follow_focus = true; parent.add_child(sc)
+	var v := VBoxContainer.new(); v.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_theme_constant_override("separation", 10); sc.add_child(v); return v
+## Two columns when there is room, else one (validation / advisor / saved lists under the bench).
+func _info_cols(body: Control) -> Array:
+	if _avail_w() < 900.0: var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); body.add_child(v); return [v, v]
+	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 12); body.add_child(h)
+	var a := VBoxContainer.new(); a.size_flags_horizontal = Control.SIZE_EXPAND_FILL; a.add_theme_constant_override("separation", 10); h.add_child(a)
+	var c := VBoxContainer.new(); c.size_flags_horizontal = Control.SIZE_EXPAND_FILL; c.add_theme_constant_override("separation", 10); h.add_child(c)
+	return [a, c]
+
+var _gwrack := false
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
+	_rack_sc = null; _rack_bd = null
+	if OS.get_environment("GW_DTAB") != "" and not _gwrack:   # screenshots: GW_DTAB=rack opens the rack bench with a pre-built rack loaded
+		_gwrack = true; tab = OS.get_environment("GW_DTAB")
+		if tab == "rack":
+			for t in app.b.templates:
+				if t.availableFrom <= app.b.year():
+					var r: Dictionary = app.b.act("adoptTemplate", [t.id])
+					if r.ok: _load_rack("rack-" + t.id)
+					break
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := Kit.head_row(8 if not Layout.phone else 10); root.add_child(hd)
 	hd.add_child(Kit.label("DESIGN LAB", 26, Kit.CY))
-	hd.add_child(Kit.btn("① Tray bench" if not Layout.phone else "① Tray", func(): tab = "tray"; refresh(), "pri" if tab == "tray" else ""))
-	hd.add_child(Kit.btn("② Rack bench" if not Layout.phone else "② Rack", func(): tab = "rack"; refresh(), "pri" if tab == "rack" else ""))
-	if tab == "tray": _tray(root)
-	else: _rack(root)
+	hd.add_child(Kit.btn("① Tray bench" if not Layout.compact else "① Tray", func(): tab = "tray"; refresh(), "pri" if tab == "tray" else ""))
+	hd.add_child(Kit.btn("② Rack bench" if not Layout.compact else "② Rack", func(): tab = "rack"; refresh(), "pri" if tab == "rack" else ""))
+	var body: VBoxContainer = null
+	if _paged():
+		if Kit._wrapped(self): body = root   # the drawer already scrolls as one page (touch)
+		else:
+			var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.follow_focus = true; root.add_child(sc)
+			body = VBoxContainer.new(); body.size_flags_horizontal = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 10); sc.add_child(body)
+	if tab == "tray": _tray(root, body)
+	else: _rack(root, body)
+	if body != null: var pad := Control.new(); pad.custom_minimum_size.y = 40.0; body.add_child(pad)   # the end of the page clears the dock / rounded corners
+	if _focus_part:
+		_focus_part = false; call_deferred("_focus_first_part")
+	if _scroll_u >= 0: var u := _scroll_u; _scroll_u = -1; _bring_u(u)
+
+func _focus_first_part() -> void:
+	for b in find_children("*", "Button", true, false):
+		if not b.is_queued_for_deletion() and b.has_meta("part") and not (b as Button).disabled and b.is_visible_in_tree(): (b as Button).grab_focus(); return
+
+## Keep the keyboard cursor visible on a rack taller than its frame.
+func _bring_u(u: int) -> void:
+	for i in 4: await get_tree().process_frame   # after the rebuild has restored the old scroll positions
+	if not is_instance_valid(_rack_sc) or not is_instance_valid(_rack_bd): return
+	var y := _rack_bd.row_center(u); var sc := _rack_sc
+	if y - 40.0 < sc.scroll_vertical: sc.scroll_vertical = int(y - 40.0)
+	elif y + 40.0 > sc.scroll_vertical + sc.size.y: sc.scroll_vertical = int(y + 40.0 - sc.size.y)
 
 # ======================= TRAY LAB =======================
 func _chassis_list() -> Array:
@@ -76,7 +140,7 @@ func _install(ch: Dictionary, id: String) -> void:
 	var kind := _active(ch); var arr := _cells(ch, kind)
 	var idx := sel_idx if (sel_kind == kind and sel_idx >= 0) else arr.find(null)
 	if idx < 0: tmsg = "All %s sockets are full — click one to replace it." % kind; return
-	arr[idx] = id; sock[kind] = arr; tmsg = ""; sel_kind = kind
+	arr[idx] = id; sock[kind] = arr; tmsg = ""; sel_kind = kind; _flash = [kind, idx]
 	var nxt := -1
 	for i in arr.size():
 		if arr[i] == null and i != idx: nxt = i; break
@@ -105,7 +169,7 @@ func _load_template(tid: String) -> void:
 			if arr[i] == null and k < int(p.count): arr[i] = p.itemId; k += 1
 	sock = nxt; tname = t.name; sel_kind = ""; sel_idx = -1
 
-func _tray(root: Control) -> void:
+func _tray(root: Control, body: VBoxContainer) -> void:
 	var b: Bridge = app.b; var g: Dictionary = b.g
 	var chl := _chassis_list()
 	if cid == "" or b.item(cid).is_empty(): _load_chassis(chl[0].id)
@@ -121,34 +185,77 @@ func _tray(root: Control) -> void:
 		if it.kind == "accelerator": bf16 += float(it.tflops.get("bf16", it.tflops.get("fp16", 0))) * p.count
 	var design := {"id": "draft", "name": tname, "chassisId": cid, "parts": parts}
 	var v: Dictionary = b.q("validateTray", [design])
-	var cols := Kit.cols_row(); root.add_child(cols)
-	# --- bench
-	var bench := Kit.panel("Tray bench", true, cols); bench[0].size_flags_stretch_ratio = 1.6; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); _gap(tools); bench[1].add_child(tools)
-	var copts := []; for c in chl: copts.append([c.id, "%s (%s, %sU)" % [c.name, c.cooling, int(c.rackUnits)]])
-	tools.add_child(_tap(Kit.option(copts, cid, func(id): _load_chassis(id); refresh())))
-	if Layout.phone: tools.get_child(0).custom_minimum_size.x = 300
-	var topts := [["", "load pre-built system…"]]
-	for t in b.templates:
-		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
-	var to := Kit.option(topts, "", func(id): if id != "": _load_template(id); refresh()); tools.add_child(_tap(to))
 	if OS.get_environment("GW_FILL") != "" and not _gwfilled: _gwfilled = true; _autofill(ch)
-	tools.add_child(Kit.btn("Auto-fill", func(): _autofill(ch); refresh(), "", 13)); tools.add_child(Kit.btn("Clear", func(): sock = {}; refresh(), "", 13))
-	if Layout.phone: tools.get_child(tools.get_child_count() - 2).custom_minimum_size.x = 140; tools.get_child(tools.get_child_count() - 1).custom_minimum_size.x = 140
 	var bd := TrayBoard.new(); bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; bd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bd.ch = ch; bd.sel_kind = _active(ch) if sel_idx >= 0 else ""; bd.sel_idx = sel_idx
 	for s in ch.slots: bd.cells[s.kind] = _cells(ch, s.kind)
 	for id in b.items: if b.items[id].kind != "chassis": bd.items[id] = b.items[id]
-	bd.socket_clicked.connect(func(k, i): sel_kind = k; sel_idx = i; _reveal_picker = Layout.touch; refresh())
-	bench[1].add_child(bd)
-	_prose(bench[1], str(ch.codex.summary), 12)
-	if tmsg != "": bench[1].add_child(Kit.label(tmsg, 13, Kit.AM, true))
-	# --- right column
-	var col := Kit.column(cols, 560, false, true); Kit.fit_split(cols, app, [760, 560])
-	if not Layout.phone: col.add_child(Kit.tip("This is a server tray. Click a socket on the board and pick a part. Watch the Sizing advisor: GPUs set the power and NIC needs, CPUs set PCIe lanes and memory channels — and everything you add costs money per GPU-hour."))
+	if not _flash.is_empty(): bd.flash_kind = _flash[0]; bd.flash_idx = _flash[1]; _flash = []
+	bd.socket_clicked.connect(func(k, i): sel_kind = k; sel_idx = i; _focus_part = Kit.pad_mode; app.sfx("click"); refresh())
+	bd.socket_moved.connect(func(k, i): sel_kind = k; sel_idx = i; refresh())
+	var info: Array
+	if body == null:   # desktop: bench | right column(s)
+		var cols := Kit.cols_row(); root.add_child(cols)
+		var bench := Kit.panel("Tray bench", true, cols); bench[0].size_flags_stretch_ratio = 1.6; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_tray_tools(bench[1], ch, chl, false)
+		bench[1].add_child(bd)
+		_prose(bench[1], str(ch.codex.summary), 12)
+		if tmsg != "": bench[1].add_child(Kit.label(tmsg, 13, Kit.AM, true))
+		var col := Kit.column(cols, 640 if app.vw() > 2300.0 else 560, false, true)
+		var col2 := Kit.column(cols, 600, false, true) if app.vw() > 2300.0 else col   # ultrawide: two columns, the board gets the rest
+		col.add_child(Kit.tip("This is a server tray. Click a socket on the board and pick a part. Watch the Sizing advisor: GPUs set the power and NIC needs, CPUs set PCIe lanes and memory channels — and everything you add costs money per GPU-hour."))
+		_tray_picker(col, ch)
+		info = [col2, col2]
+	elif _side():   # board and picker side by side, both the height of the screen
+		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); body.add_child(row)
+		var bench := Kit.panel("Tray bench", true, row); bench[0].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var fr := ScrollContainer.new(); fr.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; fr.custom_minimum_size.y = _row_h() - 64.0; fr.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bench[1].add_child(fr)
+		bd.fit_width = true; bd.custom_minimum_size.y = 200.0; bd.size_flags_vertical = Control.SIZE_FILL; fr.add_child(bd)   # finger-sized sockets: the board takes the width and scrolls in its frame
+		var side := _side_col(row, _side_w(), _row_h())
+		if tmsg != "": side.add_child(Kit.label(tmsg, 13, Kit.AM, true))
+		_tray_picker(side, ch)   # the picker first: a tapped socket's parts are at the top of the column, beside the board
+		var tp := Kit.panel("Board", false, side); _tray_tools(tp[1], ch, chl, true)
+		info = _info_cols(body)
+	else:   # narrow: tools, the board at full width, its picker right under it
+		var bench := Kit.panel("Tray bench", true, body)
+		_tray_tools(bench[1], ch, chl, true)
+		bd.fit_width = true; bd.custom_minimum_size.y = 200.0; bd.size_flags_vertical = Control.SIZE_FILL; bench[1].add_child(bd)
+		if tmsg != "": bench[1].add_child(Kit.label(tmsg, 13, Kit.AM, true))
+		_tray_picker(body, ch)
+		info = _info_cols(body)
+	var vp := Kit.panel("Live validation", true, info[0])
+	var req_pcie: int = int(ch.pcieLanesAvail)
+	vp[1].add_child(Kit.stats([["Power", "%.1f kW" % (v.stats.watts / 1000.0)], ["Cost", Kit.usd(v.stats.costUSD)], ["Accelerators", str(int(v.stats.accels))], ["FP8 / BF16", "%s / %s PF" % [Kit.num(v.stats.tflopsFp8 / 1000.0, 1), Kit.num(bf16 / 1000.0, 1)]], ["HBM", "%s GB" % Kit.num(v.stats.memGB)], ["PCIe lanes", "%d/%d" % [int(v.stats.pcieLanesUsed), req_pcie]]], 2))
+	if parts.is_empty(): vp[1].add_child(Kit.issue("info", "Empty tray", "Nothing installed yet. Pick a socket and add accelerators, CPUs, memory and NICs — or press Auto-fill."))
+	else: Kit.issues(vp[1], v.issues)
+	var sr := _pair(); vp[1].add_child(sr)
+	var le := LineEdit.new(); _tap(le); le.text = tname; le.placeholder_text = "Tray name"; le.set_meta("key", "tname"); le.custom_minimum_size.x = 120; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): tname = t); sr.add_child(le)
+	var has_err: bool = v.issues.any(func(i): return i.severity == "error")
+	var save := Kit.btn("SAVE TRAY", func(): var d := design.duplicate(); d["id"] = "tray-%d" % (g.trays.size() + 1); d["name"] = tname; tmsg = b.act("saveTray", [d]).message; app.sfx("buy"); refresh(), "go", 14); save.disabled = has_err or parts.is_empty(); sr.add_child(save)
+	_sizing(info[1], design)
+	var sp := Kit.panel("Saved trays", false, info[1])
+	if g.trays.is_empty(): sp[1].add_child(Kit.label("None yet. Fill the sockets, name the tray and press SAVE TRAY; saved trays go into racks on the Rack bench.", 12, Kit.DIM, true))
+	for t in g.trays: sp[1].add_child(Kit.label(("%s · %s · %s" % [t.id, t.name, b.item(t.chassisId).get("name", "")]) if not Layout.phone else str(t.name), 12, Kit.TX, true))
+
+func _tray_tools(parent: Control, ch: Dictionary, chl: Array, stacked: bool) -> void:
+	var b: Bridge = app.b
+	var tools: Container = VBoxContainer.new() if stacked else HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); tools.add_theme_constant_override("separation", 8); _gap(tools); parent.add_child(tools)
+	var copts := []; for c in chl: copts.append([c.id, "%s (%s, %sU)" % [c.name, c.cooling, int(c.rackUnits)]])
+	var co := BK.slim(Kit.option(copts, cid, func(id): _load_chassis(id); refresh()), 260.0 if not stacked else 150.0); tools.add_child(_tap(co))
+	var topts := [["", "load pre-built system…"]]
+	for t in b.templates:
+		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
+	var to := BK.slim(Kit.option(topts, "", func(id): if id != "": _load_template(id); refresh()), 220.0 if not stacked else 150.0); tools.add_child(_tap(to))
+	var br := HBoxContainer.new(); br.add_theme_constant_override("separation", 8); tools.add_child(br)
+	var af := Kit.btn("Auto-fill", func(): _autofill(ch); _flash = [ch.slots[0].kind, -1]; refresh(), "", 13); var cl := Kit.btn("Clear", func(): sock = {}; refresh(), "", 13)
+	br.add_child(af); br.add_child(cl)
+	if stacked: af.size_flags_horizontal = Control.SIZE_EXPAND_FILL; cl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+## Part picker for the selected socket: zone buttons, compatible parts (available first), remove / codex.
+func _tray_picker(col: Control, ch: Dictionary) -> void:
+	var b: Bridge = app.b
 	var active := _active(ch)
 	var ip := Kit.panel("Install into: %s%s" % [ZONE.get(active, active), (" #%d" % (sel_idx + 1)) if sel_idx >= 0 else ""], true, col)
-	if _reveal_picker: _reveal_picker = false; Kit.reveal(ip[0])
 	if Layout.phone: ip[1].add_theme_constant_override("separation", 12)
 	var sk := HFlowContainer.new(); sk.add_theme_constant_override("h_separation", 5); sk.add_theme_constant_override("v_separation", 5); _gap(sk); ip[1].add_child(sk)
 	for s in ch.slots:
@@ -157,33 +264,29 @@ func _tray(root: Control) -> void:
 	for s in ch.slots:
 		if s.kind == active:
 			ip[1].add_child(Kit.label(("Needs ≥ %d" % int(s.required) if s.get("required") != null else "Optional") + ((" · accepts " + " / ".join(s.accepts)) if s.get("accepts") != null else ""), 11, Kit.DIM, true))
-	var opts: Array = b.q("slotOptions", [cid, active]); var cur_id = null
+	var opts: Array = b.q("slotOptions", [cid, active]).duplicate(); var cur_id = null
+	opts.sort_custom(func(x, y): return x.available and not y.available)   # what you can buy now first
 	if sel_idx >= 0: cur_id = _cells(ch, active)[sel_idx] if sel_idx < _cells(ch, active).size() else null
+	var ar := HBoxContainer.new(); ar.add_theme_constant_override("separation", 10)
+	if cur_id != null:   # what is in the socket now, and how to take it out: above the long list so it is never scrolled away
+		ip[1].add_child(Kit.label("In socket: " + str(b.item(cur_id).get("name", cur_id)), 13, Kit.TX, true))
+		ip[1].add_child(ar)
+		ar.add_child(Kit.btn("Remove" if Layout.compact else "Remove from socket", func(): var arr := _cells(ch, active); arr[sel_idx] = null; sock[active] = arr; refresh(), "", 12)); ar.add_child(Kit.btn("Codex", func(): app.learn(cur_id), "", 12))
 	if opts.is_empty(): ip[1].add_child(Kit.label("Nothing compatible exists for this socket.", 13, Kit.DIM))
-	var shown := 0
+	var shown := 0; var later := 0
 	for o in opts:
+		if not o.available:
+			later += 1
+			if later > (6 if Layout.compact else 30): continue
 		shown += 1
 		if shown > 60: break
 		var it: Dictionary = o.item; var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 6); ip[1].add_child(r)
 		var specs := " · ".join(Kit.specs_of(it).slice(0, 3 if not Layout.phone else 2).map(func(x): return "%s: %s" % [x[0], x[1]]))
-		var rb := Kit.btn("%s\n%s · %s" % [str(it.name).left(46), specs.left(60), Kit.usd(o.unitPrice) if o.available else "ships %d" % int(it.availableFrom)], func(): if o.available: _install(ch, it.id); refresh(), "pri" if cur_id == it.id else "", 12)
-		rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; rb.disabled = not o.available; r.add_child(rb)
-		if o.available and not Layout.phone: r.add_child(Kit.btn("fill all", func(): var arr := _cells(ch, active).map(func(x): return x if x != null else it.id); sock[active] = arr; tmsg = ""; refresh(), "", 11))
-	var ar := HBoxContainer.new(); ar.add_theme_constant_override("separation", 10); ip[1].add_child(ar)
-	if cur_id != null: ar.add_child(Kit.btn("Remove" if Layout.phone else "Remove from socket", func(): var arr := _cells(ch, active); arr[sel_idx] = null; sock[active] = arr; refresh(), "", 12)); ar.add_child(Kit.btn("Codex", func(): app.learn(cur_id), "", 12))
-	if not Layout.phone: ip[1].add_child(Kit.label("Click a socket on the board to target it, then click a part to install it there (it advances to the next empty socket). “fill all” populates every empty socket of that type.", 11, Kit.DIM, true))
-	var vp := Kit.panel("Live validation", true, col)
-	var req_pcie: int = int(ch.pcieLanesAvail)
-	vp[1].add_child(Kit.stats([["Power", "%.1f kW" % (v.stats.watts / 1000.0)], ["Cost", Kit.usd(v.stats.costUSD)], ["Accelerators", str(int(v.stats.accels))], ["FP8 / BF16", "%s / %s PF" % [Kit.num(v.stats.tflopsFp8 / 1000.0, 1), Kit.num(bf16 / 1000.0, 1)]], ["HBM", "%s GB" % Kit.num(v.stats.memGB)], ["PCIe lanes", "%d/%d" % [int(v.stats.pcieLanesUsed), req_pcie]]], 2))
-	Kit.issues(vp[1], v.issues)
-	var sr := _pair(); vp[1].add_child(sr)
-	var le := LineEdit.new(); _tap(le); le.text = tname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): tname = t); sr.add_child(le)
-	var has_err: bool = v.issues.any(func(i): return i.severity == "error")
-	var save := Kit.btn("SAVE TRAY", func(): var d := design.duplicate(); d["id"] = "tray-%d" % (g.trays.size() + 1); d["name"] = tname; tmsg = b.act("saveTray", [d]).message; app.sfx("buy"); refresh(), "go", 14); save.disabled = has_err; sr.add_child(save)
-	_sizing(col, design)
-	var sp := Kit.panel("Saved trays", false, col)
-	if g.trays.is_empty(): sp[1].add_child(Kit.label("None yet", 12, Kit.DIM))
-	for t in g.trays: sp[1].add_child(Kit.label(("%s · %s · %s" % [t.id, t.name, b.item(t.chassisId).get("name", "")]) if not Layout.phone else str(t.name), 12, Kit.TX, true))
+		var rb := BK.wrap_btn(Kit.btn("%s\n%s · %s" % [str(it.name), specs, Kit.usd(o.unitPrice) if o.available else "ships %d" % int(it.availableFrom)], func(): if o.available: _install(ch, it.id); app.sfx("click"); refresh(), "pri" if cur_id == it.id else "", 12))
+		rb.disabled = not o.available; rb.set_meta("part", true); r.add_child(rb)
+		if o.available: r.add_child(Kit.btn("fill all", func(): var arr := _cells(ch, active).map(func(x): return x if x != null else it.id); sock[active] = arr; tmsg = ""; _flash = [active, -1]; refresh(), "", 11))
+	if later > (6 if Layout.compact else 30): ip[1].add_child(Kit.label("+%d more that are not shipping yet." % (later - (6 if Layout.compact else 30)), 11, Kit.DIM))
+	if not Layout.compact: ip[1].add_child(Kit.label("Click a socket on the board to target it, then click a part to install it there (it advances to the next empty socket). “fill all” populates every empty socket of that type. Arrow keys move between sockets.", 11, Kit.DIM, true))
 
 func _row(parent: Control, ok, text: String) -> void:
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 6); parent.add_child(h)
@@ -268,7 +371,7 @@ func _place_at(units: int, a: Dictionary, u: int) -> void:
 	if u >= 0: s = u if _fits(units, ritems, h, u) else (u - h + 1 if _fits(units, ritems, h, u - h + 1) else -1)
 	else: s = _first_free(units, ritems, h, a.kind == "switch")
 	if s < 0: rmsg = "%s needs %d free U%s — free some space or pick another spot." % [_meta(it).label, h, " at that position" if u >= 0 else ""]; return
-	it["u"] = s; ritems.append(it); rmsg = ""; sel_u = -1
+	it["u"] = s; ritems.append(it); rmsg = ""; sel_u = -1; _rflash = [s, h]
 func _layout(units: int, list: Array) -> Array:
 	var copy := list.duplicate(true); var bottom := []; var mid := []; var topl := []
 	for x in copy:
@@ -286,7 +389,7 @@ func _load_rack(id: String) -> void:
 			rid = d.rackId; var units: int = int(app.b.item(rid).units); var needs: bool = d.items.any(func(i): return i.get("u") == null)
 			ritems = _layout(units, d.items) if needs else d.items.duplicate(true); cool = d.coolingInterface; rname = d.name + " (copy)"; return
 
-func _rack(root: Control) -> void:
+func _rack(root: Control, body: VBoxContainer) -> void:
 	var b: Bridge = app.b; var g: Dictionary = b.g; var offers: Dictionary = b.q("offersAll")
 	var racks := []; for it in b.items.values():
 		if it.kind == "rack" and offers[it.id].available: racks.append(it)
@@ -299,47 +402,62 @@ func _rack(root: Control) -> void:
 	var sorted_items := ritems.duplicate(true); sorted_items.sort_custom(func(a, c): return a.get("u", 0) < c.get("u", 0))
 	var design := {"id": "draft", "name": rname, "rackId": rid, "items": sorted_items, "coolingInterface": cool}
 	var v: Dictionary = b.q("validateRack", [design, g.trays])
-	var cols := Kit.cols_row(); root.add_child(cols)
-	var bench := Kit.panel("Rack bench", true, cols); bench[0].size_flags_stretch_ratio = 1.0; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); _gap(tools); bench[1].add_child(tools)
-	var ropts := []; for r in racks: ropts.append([r.id, "%s (%dU, %s kW)" % [r.name, int(r.units), r.maxKW]])
-	tools.add_child(_tap(Kit.option(ropts, rid, func(id): rid = id; ritems = []; sel_dev = -1; refresh())))
-	tools.add_child(_tap(Kit.option(["air", "rdhx", "dlc", "immersion"], cool, func(c): cool = c; refresh())))
-	var topts := [["", "pre-built rack…"]]
-	for t in b.templates:
-		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
-	tools.add_child(_tap(Kit.option(topts, "", func(id): _adopt(id))))
-	if g.racks.size() > 0:
-		var sopts := [["", "open saved…"]]; for r in g.racks: sopts.append([r.id, r.name])
-		tools.add_child(_tap(Kit.option(sopts, "", func(id): if id != "": _load_rack(id); refresh())))
-	tools.add_child(Kit.btn("Clear", func(): ritems = []; sel_dev = -1; refresh(), "", 13))
-	if Layout.phone: tools.get_child(tools.get_child_count() - 1).custom_minimum_size.x = 140
 	var bd := RackBoard.new(); bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; bd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bd.units = units; bd.rack_name = rk.name; bd.max_kw = rk.maxKW; bd.kw = v.stats.kW; bd.sel_u = sel_u; bd.sel_dev = sel_dev; bd.occ = _occ(units, ritems)
+	bd.units = units; bd.rack_name = rk.name; bd.max_kw = rk.maxKW; bd.kw = v.stats.kW; bd.sel_u = sel_u; bd.sel_dev = sel_dev; bd.occ = _occ(units, ritems); bd.cursor = _rcur
+	if not _rflash.is_empty(): bd.flash_u = _rflash[0]; bd.flash_h = _rflash[1]; _rflash = []
 	for i in ritems.size():
 		var it: Dictionary = ritems[i]; var m := _meta(it); var cnt := int(it.count)
 		bd.devices.append({"i": i, "u": int(it.get("u", 0)), "h": _height(it), "label": m.label, "sub": ("%s · %.1f kW" % [m.sub, m.kw / maxf(1, cnt) if it.type == "tray" else m.kw]), "color": RC[it.type], "kind": it.type, "count": cnt, "unit_h": _unit_per(it) if it.type == "tray" else _height(it)})
-	bd.u_clicked.connect(func(u): if not armed.is_empty(): _place_at(units, armed, u) else: sel_u = -1 if sel_u == u else u; sel_dev = -1; refresh())
-	bd.device_clicked.connect(func(i): sel_dev = i; refresh())
-	bench[1].add_child(bd)
-	if rmsg != "": bench[1].add_child(Kit.label(rmsg, 13, Kit.AM, true))
-	var col := Kit.column(cols, 560, false, true); Kit.fit_split(cols, app, [760, 560])
+	bd.u_clicked.connect(func(u): _rcur = u; if not armed.is_empty(): _place_at(units, armed, u) else: sel_u = -1 if sel_u == u else u; sel_dev = -1; refresh())
+	bd.device_clicked.connect(func(i): sel_dev = i; sel_u = -1; refresh())
+	bd.u_moved.connect(func(u):
+		_rcur = u; var o := _occ(units, ritems)
+		if o[u] >= 0: sel_dev = o[u]; sel_u = -1
+		else: sel_u = u; sel_dev = -1
+		_scroll_u = u; refresh())
+	_rack_bd = bd
+	var side: VBoxContainer; var info: Array; var tools_last := false
+	if body == null:   # desktop: bench | right column(s)
+		var cols := Kit.cols_row(); root.add_child(cols)
+		var bench := Kit.panel("Rack bench", true, cols); bench[0].size_flags_stretch_ratio = 1.0; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_rack_tools(bench[1], racks, false)
+		bench[1].add_child(bd)
+		if rmsg != "": bench[1].add_child(Kit.label(rmsg, 13, Kit.AM, true))
+		side = Kit.column(cols, 560, false, true)
+		var col2 := Kit.column(cols, 600, false, true) if app.vw() > 2300.0 else side
+		info = [col2, col2]
+	elif _side():   # the rack in its own scrolling frame beside the parts, both at screen height
+		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); body.add_child(row)
+		var fr := ScrollContainer.new(); fr.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; fr.custom_minimum_size.y = _row_h(); fr.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(fr)
+		bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; fr.add_child(bd); _rack_sc = fr
+		side = _side_col(row, _side_w(), _row_h())
+		if rmsg != "": side.add_child(Kit.label(rmsg, 13, Kit.AM, true))
+		tools_last = true
+		info = _info_cols(body)
+	else:   # narrow: tools, the rack (own frame, a finger per U), its parts right under it
+		var bench := Kit.panel("Rack bench", true, body)
+		_rack_tools(bench[1], racks, true)
+		var fr := ScrollContainer.new(); fr.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; fr.custom_minimum_size.y = minf(_row_h() * 0.85, 50.0 + units * bd.min_row + 26.0); bench[1].add_child(fr)
+		fr.add_child(bd); _rack_sc = fr
+		if rmsg != "": bench[1].add_child(Kit.label(rmsg, 13, Kit.AM, true))
+		side = VBoxContainer.new(); side.add_theme_constant_override("separation", 10); body.add_child(side)
+		info = _info_cols(body)
 	if sel_dev >= 0 and sel_dev < ritems.size():
-		var it: Dictionary = ritems[sel_dev]; var sp := Kit.panel("Selected: %s   U%d–%d" % [_meta(it).label, int(it.get("u", 0)) + 1, int(it.get("u", 0)) + _height(it)], true, col)
-		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 6); _gap(h); sp[1].add_child(h)
+		var it: Dictionary = ritems[sel_dev]; var sp := Kit.panel("Selected: %s   U%d–%d" % [BK.ell(_meta(it).label, 26), int(it.get("u", 0)) + 1, int(it.get("u", 0)) + _height(it)], true, side)
+		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 6); h.add_theme_constant_override("v_separation", 6); _gap(h); sp[1].add_child(h)
 		if it.type != "power":
 			h.add_child(Kit.btn("− count", func(): _bump(units, sel_dev, -1); refresh(), "", 12)); h.add_child(Kit.label(str(int(it.count)), 15)); h.add_child(Kit.btn("+ count", func(): _bump(units, sel_dev, 1); refresh(), "", 12))
 		h.add_child(Kit.btn("▲ up", func(): _nudge(units, sel_dev, 1); refresh(), "", 12)); h.add_child(Kit.btn("▼ down", func(): _nudge(units, sel_dev, -1); refresh(), "", 12))
-		if Layout.phone: sp[1].add_child(Kit.hsep())
-		(sp[1] if Layout.phone else h).add_child(Kit.btn("remove", func(): ritems.remove_at(sel_dev); sel_dev = -1; refresh(), "danger", 12))
-	var ip := Kit.panel("Install into rack", true, col)
+		if Layout.compact: sp[1].add_child(Kit.hsep())
+		(sp[1] if Layout.compact else h).add_child(Kit.btn("remove", func(): ritems.remove_at(sel_dev); sel_dev = -1; refresh(), "danger", 12))
+	var tap_place := Layout.touch or Layout.compact   # touch: a tap on a part places it (at the chosen U, else the best free spot)
+	var ip := Kit.panel("Install into rack", true, side)
 	if Layout.phone: ip[1].add_theme_constant_override("separation", 12)
-	var tb: Container = GridContainer.new() if Layout.phone else HBoxContainer.new(); tb.add_theme_constant_override("separation", 5)
-	if Layout.phone: (tb as GridContainer).columns = 2; tb.add_theme_constant_override("h_separation", 10); tb.add_theme_constant_override("v_separation", 10)
+	var tb := GridContainer.new(); tb.columns = 2 if (Layout.compact or body != null) else 4; tb.add_theme_constant_override("h_separation", 6 if not Layout.phone else 10); tb.add_theme_constant_override("v_separation", 6 if not Layout.phone else 10)
 	ip[1].add_child(tb)
 	for k in [["switch", "ToR / switches"], ["tray", "Compute trays"], ["power", "Power"], ["storage", "Storage"]]:
 		var kb := Kit.btn(k[1], func(): rtab = k[0]; refresh(), "pri" if rtab == k[0] else "", 12 if not Layout.phone else 13); kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tb.add_child(kb)
-	if not Layout.phone: ip[1].add_child(Kit.label(("Target: U%d. " % (sel_u + 1) if sel_u >= 0 else "No U selected — Add puts it in the best free spot (switches go to the top). ") + ("A part is armed — click an empty U to place it." if not armed.is_empty() else ""), 11, Kit.DIM, true))
+	if not tap_place: ip[1].add_child(Kit.label(("Target: U%d. " % (sel_u + 1) if sel_u >= 0 else "No U selected — Add puts it in the best free spot (switches go to the top). ") + ("A part is armed — click an empty U to place it." if not armed.is_empty() else ""), 11, Kit.DIM, true))
 	var palette := []
 	if rtab == "tray":
 		for t in g.trays:
@@ -350,25 +468,44 @@ func _rack(root: Control) -> void:
 			if rtab == "switch" and it.kind == "switch" and it.rackUnits > 0: palette.append({"id": it.id, "name": it.name, "sub": "%s · %sU" % [it.role, int(it.rackUnits)], "kind": "switch", "ok": o.available, "price": o.unitPrice})
 			elif rtab == "storage" and it.kind == "storage": palette.append({"id": it.id, "name": it.name, "sub": "%s PB · %s GB/s · %sU" % [it.capacityPB, it.readGBs, int(it.rackUnits)], "kind": "storage", "ok": o.available, "price": o.unitPrice})
 			elif rtab == "power" and it.kind == "power" and ["pdu", "power-shelf"].has(it.get("powerType", "")): palette.append({"id": it.id, "name": it.name, "sub": "%s · %s kW" % [it.powerType, it.capacityKW], "kind": "power", "ok": o.available, "price": o.unitPrice})
-	if Layout.phone: palette = palette.filter(func(x): return x.ok)
+	if Layout.compact: palette = palette.filter(func(x): return x.ok)
 	if palette.is_empty(): ip[1].add_child(Kit.label("No saved trays — build one on the Tray bench or load a pre-built rack." if rtab == "tray" else "Nothing here yet.", 12, Kit.DIM, true))
-	if Layout.phone and sel_u >= 0: ip[1].add_child(Kit.label("Adds at U%d (tap a part)" % (sel_u + 1), 12, Kit.DIM))
+	if tap_place: ip[1].add_child(Kit.label(("Adds at U%d — tap a part" % (sel_u + 1)) if sel_u >= 0 else "Tap a part to add it in the best free spot, or tap an empty U on the rack first.", 12, Kit.DIM, true))
 	for p in palette:
 		var on: bool = armed.get("id", "") == p.id; var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 6); ip[1].add_child(r)
-		var rb := Kit.btn("%s\n%s%s" % [str(p.name).left(46), p.sub, (" · " + Kit.usd(p.price)) if p.price > 0 else ""], (func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh()) if Layout.phone else (func(): armed = {} if on else {"kind": p.kind, "id": p.id}; refresh()), "pri" if on else "", 12)
-		rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; rb.disabled = not p.ok; r.add_child(rb)
-		if not Layout.phone: var ab := Kit.btn("Add", func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh(), "", 12); ab.disabled = not p.ok; r.add_child(ab)
-	if not Layout.phone: ip[1].add_child(Kit.label("Click a part to arm it and click the U where it should sit, or press Add. Zones are hints: ToR switches at the top, compute in the middle, power/storage at the bottom.", 11, Kit.DIM, true))
-	var vp := Kit.panel("Rack validation", true, col)
+		var rb := BK.wrap_btn(Kit.btn("%s\n%s%s" % [str(p.name), p.sub, (" · " + Kit.usd(p.price)) if p.price > 0 else ""], (func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh()) if tap_place else (func(): armed = {} if on else {"kind": p.kind, "id": p.id}; refresh()), "pri" if on else "", 12))
+		rb.disabled = not p.ok; rb.set_meta("part", true); r.add_child(rb)
+		if not tap_place: var ab := Kit.btn("Add", func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh(), "", 12); ab.disabled = not p.ok; r.add_child(ab)
+	if not tap_place: ip[1].add_child(Kit.label("Click a part to arm it and click the U where it should sit, or press Add. Zones are hints: ToR switches at the top, compute in the middle, power/storage at the bottom. Arrow keys move along the rack.", 11, Kit.DIM, true))
+	if tools_last: var rp := Kit.panel("Rack", false, side); _rack_tools(rp[1], racks, true)   # beside the rack: parts first, rack type below
+	var vp := Kit.panel("Rack validation", true, info[0])
 	vp[1].add_child(Kit.stats([["Power", "%d / %s kW" % [int(v.stats.kW), rk.maxKW], Kit.RD if v.stats.kW > rk.maxKW else Kit.TX], ["Units", "%d/%d" % [int(v.stats.units), units]], ["Weight", "%s kg" % Kit.num(v.stats.weightKg)], ["Cost", Kit.usd(v.stats.costUSD)], ["Accels", str(int(v.stats.accels))], ["Scale-up", str(int(v.stats.scaleUpDomain))]], 3))
-	Kit.issues(vp[1], v.issues)
+	if ritems.is_empty(): vp[1].add_child(Kit.issue("info", "Empty rack", "Nothing installed yet. Add compute trays (save one on the Tray bench first), a ToR switch at the top and power at the bottom — or load a pre-built rack."))
+	else: Kit.issues(vp[1], v.issues)
 	var sr := _pair(); vp[1].add_child(sr)
-	var le := LineEdit.new(); _tap(le); le.text = rname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): rname = t); sr.add_child(le)
+	var le := LineEdit.new(); _tap(le); le.text = rname; le.placeholder_text = "Rack name"; le.set_meta("key", "rname"); le.custom_minimum_size.x = 120; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): rname = t); sr.add_child(le)
 	var has_err: bool = v.issues.any(func(i): return i.severity == "error")
 	var save := Kit.btn("SAVE RACK", func(): var d := design.duplicate(true); d["id"] = "rack-%d" % (g.racks.size() + 1); d["name"] = rname; rmsg = b.act("saveRack", [d]).message; app.sfx("buy"); refresh(), "go", 14); save.disabled = has_err or ritems.is_empty(); sr.add_child(save)
-	var sv := Kit.panel("Saved racks", false, col)
-	if g.racks.is_empty(): sv[1].add_child(Kit.label("None yet", 12, Kit.DIM))
+	var sv := Kit.panel("Saved racks", false, info[1])
+	if g.racks.is_empty(): sv[1].add_child(Kit.label("None yet. Saved racks can be bought and deployed from Supply and the Warehouse.", 12, Kit.DIM, true))
 	for r in g.racks: sv[1].add_child(Kit.label(("%s · %s" % [r.id, r.name]) if not Layout.phone else str(r.name), 12, Kit.TX, true))
+
+func _rack_tools(parent: Control, racks: Array, stacked: bool) -> void:
+	var b: Bridge = app.b; var g: Dictionary = b.g
+	var tools: Container = GridContainer.new() if stacked else HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); tools.add_theme_constant_override("v_separation", 8); _gap(tools); parent.add_child(tools)
+	if stacked: (tools as GridContainer).columns = 2
+	var mw := 130.0 if stacked else 200.0
+	var ropts := []; for r in racks: ropts.append([r.id, "%s (%dU, %s kW)" % [r.name, int(r.units), r.maxKW]])
+	tools.add_child(_tap(BK.slim(Kit.option(ropts, rid, func(id): rid = id; ritems = []; sel_dev = -1; refresh()), mw)))
+	tools.add_child(_tap(BK.slim(Kit.option(["air", "rdhx", "dlc", "immersion"], cool, func(c): cool = c; refresh()), 100.0)))
+	var topts := [["", "pre-built rack…"]]
+	for t in b.templates:
+		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
+	tools.add_child(_tap(BK.slim(Kit.option(topts, "", func(id): _adopt(id)), mw)))
+	if g.racks.size() > 0:
+		var sopts := [["", "open saved…"]]; for r in g.racks: sopts.append([r.id, r.name])
+		tools.add_child(_tap(BK.slim(Kit.option(sopts, "", func(id): if id != "": _load_rack(id); refresh()), mw)))
+	var cb := Kit.btn("Clear", func(): ritems = []; sel_dev = -1; refresh(), "", 13); cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL if stacked else Control.SIZE_FILL; tools.add_child(cb)
 
 func _adopt(id: String) -> void:
 	if id == "": return

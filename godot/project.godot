@@ -22,6 +22,9 @@ window/stretch/aspect="expand"
 window/handheld/orientation=4
 
 [rendering]
+
+reflections/reflection_atlas/reflection_count=4
+reflections/reflection_atlas/reflection_size=128
 renderer/rendering_method="forward_plus"
 textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.02, 0.03, 0.05, 1)

@@ -2,6 +2,10 @@ class_name DashScreen
 extends Control
 ## Datacenter: the 3D hall with plaques, easy-path projects, missions, customers, log.
 var app
+
+## Rich text in the palette's text colour (the engine default is near-white: unreadable on the light themes).
+static func _rich(t: String, size := 15) -> RichTextLabel:
+	var r := Kit.rich(t, size); r.add_theme_color_override("default_color", Kit.TX); return r
 const STAGES := ["building", "commissioning", "clustering", "assigning", "done"]
 const STAGE_LBL := {"building": "Order & build", "commissioning": "Burn-in", "clustering": "Cluster", "assigning": "Assign", "done": "LIVE"}
 
@@ -12,15 +16,17 @@ func _preview(col: Control, pv: Dictionary) -> void:
 	if pv.is_empty(): return
 	var pp := Kit.panel("Next month · %s" % Kit.date_of(int(pv.nextMonth)), false, col)
 	var delta := float(pv.cashDelta)
-	pp[1].add_child(Kit.rich("Cash after: [b]%s[/b]  [color=%s]%s%s[/color]" % [Kit.usd(float(pv.cashAfter)), "#4be3a1" if delta >= 0 else "#ff6b6b", "+" if delta >= 0 else "", Kit.usd(delta)], 14))
+	pp[1].add_child(_rich("Cash after: [b]%s[/b]  [color=#%s]%s%s[/color]" % [Kit.usd(float(pv.cashAfter)), (Kit.GR if delta >= 0 else Kit.RD).to_html(false), "+" if delta >= 0 else "", Kit.usd(delta)], 14))
 	if not Layout.phone: pp[1].add_child(Kit.label("Revenue %s · running costs %s · interest %s" % [Kit.usd(float(pv.revenue)), Kit.usd(float(pv.opex)), Kit.usd(float(pv.interest))], 11, Kit.DIM, true))
-	if pv.runwayMonths != null:
+	if delta >= 0: pp[1].add_child(Kit.label("Profitable this month", 13, Kit.GR))
+	elif pv.runwayMonths != null:   # a runway is only news when you are burning cash and it is short
 		var rm := int(pv.runwayMonths)
-		pp[1].add_child(Kit.label("Runway: %d month%s at this burn" % [rm, "" if rm == 1 else "s"], 13, Kit.RD if rm <= 6 else Color("#ffb454")))
+		if rm < 36: pp[1].add_child(Kit.label("Runway: %s at this burn" % Kit.plural(rm, "month"), 13, Kit.RD if rm <= 6 else Kit.AM))
+		else: pp[1].add_child(Kit.label("Runway: %s at this burn" % ("10+ years" if rm >= 120 else "%d years" % int(rm / 12.0)), 13, Kit.DIM))
 	var bits := []
 	if pv.deliveries.size() > 0:
 		var n := 0; for d in pv.deliveries: n += int(d.qty)
-		bits.append("%d part%s arriving" % [n, "" if n == 1 else "s"])
+		bits.append("%s arriving" % Kit.plural(n, "part"))
 	if int(pv.racks.commissioning) > 0: bits.append(Kit.plural(pv.racks.commissioning, "rack") + " start burn-in")
 	if int(pv.racks.online) > 0: bits.append(Kit.plural(pv.racks.online, "rack") + " go online")
 	if int(pv.racks.repaired) > 0: bits.append(Kit.plural(pv.racks.repaired, "rack") + " repaired")
@@ -36,6 +42,7 @@ static var folds := {}
 
 ## The one thing to do next, with a button; the rest of the list is a short bullet list beneath it.
 func _needs(col: Control, needs: Array) -> void:
+	if str(app.b.g.get("mode", "operator")) == "tycoon": needs = needs.filter(func(x): return x.level != "info")   # tycoons get alerts, not hand-holding
 	if needs.is_empty(): return
 	var n: Dictionary = needs[0]
 	var tint: Color = Kit.RD if n.level == "crit" else (Kit.AM if n.level == "warn" else Kit.CY)
@@ -82,6 +89,38 @@ func _net_card(col: Control, nh) -> void:
 
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
+func _cust_of(g: Dictionary, x: Dictionary) -> String:
+	var cust := "Spec build"
+	for c in g.availableContracts:
+		if c.id == x.contractId: cust = c.customer
+	for a in g.activeContracts:
+		if a.contract.id == x.contractId: cust = a.contract.customer
+	return cust
+
+## One Easy-path build: a one-line summary (tap to expand) or, when it is the only one, the full stage strip.
+func _project(parent: Control, x: Dictionary, summary: bool) -> void:
+	var g: Dictionary = app.b.g
+	var cust := _cust_of(g, x)
+	var at: int = -1 if x.stage == "failed" else STAGES.find(x.stage)
+	var key := "pj" + str(x.contractId)
+	var open: bool = not summary or bool(folds.get(key, false))
+	if summary:
+		var lbl: String = STAGE_LBL.get(x.stage, "Failed")
+		var hb := Kit.btn(("▾ " if open else "▸ ") + "%s · %d× build · %s" % [cust, int(x.racks), lbl], func(): folds[key] = not open; refresh(), "", 12)
+		hb.alignment = HORIZONTAL_ALIGNMENT_LEFT; hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; parent.add_child(hb)
+		if not open: return
+	else: parent.add_child(Kit.label("%s · %d× build" % [cust, int(x.racks)], 13))
+	var sr := HFlowContainer.new(); sr.add_theme_constant_override("h_separation", 4); sr.add_theme_constant_override("v_separation", 4); parent.add_child(sr)   # flows onto a second line in a narrow drawer
+	if Layout.phone and x.stage == "done": sr.add_child(Kit.chip(STAGE_LBL["done"], Kit.GR, 12))
+	else:
+		for i in STAGES.size():
+			var failed: bool = x.stage == "failed"
+			if failed or i <= at:
+				var pc: Color = Kit.RD if failed else (Kit.GR if i < at or x.stage == "done" else Kit.CY)
+				sr.add_child(Kit.chip(STAGE_LBL[STAGES[i]], pc, 12))
+			else: sr.add_child(Kit.label(STAGE_LBL[STAGES[i]], 12, Kit.DIM))
+	if not Layout.phone or x.stage == "failed": parent.add_child(Kit.label(("✗ " if x.stage == "failed" else "") + str(x.notes[x.notes.size() - 1] if x.notes.size() > 0 else ""), 11, Kit.DIM, true))
+
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var b: Bridge = app.b; var g: Dictionary = b.g
@@ -94,27 +133,15 @@ func _rebuild() -> void:
 	_preview(col, b.q("preview"))
 	var projs: Array = g.get("projects", []).filter(func(x): return x.stage != "done" or g.month - x.startMonth < 24)
 	if g.get("projects", []).size() > 0:
-		var pp := _fold("Easy-path projects (%d)" % projs.size(), "easy", col, projs.filter(func(x): return x.stage != "done").is_empty())
+		var active: Array = projs.filter(func(x): return x.stage != "done"); var finished := projs.size() - active.size()
+		var pp := _fold("Easy-path projects (%d active%s)" % [active.size(), (" · %d finished" % finished) if finished > 0 else ""], "easy", col, active.is_empty())
 		pp[1].add_child(Kit.btn("Check now", func(): b.act("stepEasy"), "", 12))
 		if Layout.phone: pp[1].add_theme_constant_override("separation", 10)
-		for x in projs.slice(maxi(0, projs.size() - 3)):
-			var cust := "Spec build"
-			for c in g.availableContracts:
-				if c.id == x.contractId: cust = c.customer
-			for a in g.activeContracts:
-				if a.contract.id == x.contractId: cust = a.contract.customer
-			pp[1].add_child(Kit.label("%s · %d× build" % [cust, int(x.racks)], 13))
-			var at: int = -1 if x.stage == "failed" else STAGES.find(x.stage)
-			var sr := HFlowContainer.new(); sr.add_theme_constant_override("h_separation", 4); sr.add_theme_constant_override("v_separation", 4); pp[1].add_child(sr)   # flows onto a second line in a narrow drawer
-			if Layout.phone and x.stage == "done": sr.add_child(Kit.chip(STAGE_LBL["done"], Kit.GR, 12))
-			else:
-				for i in STAGES.size():
-					var failed: bool = x.stage == "failed"
-					if failed or i <= at:
-						var pc: Color = Kit.RD if failed else (Kit.GR if i < at or x.stage == "done" else Kit.CY)
-						sr.add_child(Kit.chip(STAGE_LBL[STAGES[i]], pc, 12))
-					else: sr.add_child(Kit.label(STAGE_LBL[STAGES[i]], 12, Kit.DIM))
-			if not Layout.phone or x.stage == "failed": pp[1].add_child(Kit.label(("✗ " if x.stage == "failed" else "") + str(x.notes[x.notes.size() - 1] if x.notes.size() > 0 else ""), 11, Kit.DIM, true))
+		for x in active.slice(maxi(0, active.size() - 4)): _project(pp[1], x, active.size() >= 2)   # 2+: one line each, tap to expand
+		if finished > 0 and not active.is_empty(): pp[1].add_child(Kit.label("%d finished and live" % finished, 12, Kit.DIM))
+		elif finished > 0:
+			if finished <= 2: for x in projs.slice(maxi(0, projs.size() - 2)): _project(pp[1], x, false)
+			else: pp[1].add_child(Kit.label("%d projects finished and live" % finished, 13, Kit.GR))
 	var ms: Array = b.q("missions"); var nxt := ms.filter(func(m): return not m.done and not g.missionsDone.has(m.id)).slice(0, 3 if g.get("mode", "operator") == "learner" else 1)
 	var mp := _fold("Next mission · %d of %d done" % [g.missionsDone.size(), ms.size()], "missions", col, false)
 	if nxt.is_empty(): mp[1].add_child(Kit.label("All missions complete — you run a hyperscaler.", 13, Kit.GR))
@@ -124,13 +151,17 @@ func _rebuild() -> void:
 		if not Layout.phone: tv.add_child(Kit.label(m.hint, 11, Kit.DIM, true))
 		r.add_child(Kit.btn("Go →", func(): app.go(m.go if m.go != "finance" else "dash"), "", 12))
 	_net_card(col, b.q("netHealth"))
-	var cp := _fold("Customers (%d)" % g.activeContracts.size(), "customers", col, g.activeContracts.size() > 4)
-	if g.activeContracts.is_empty(): cp[1].add_child(Kit.label("None yet — open Customers.", 13, Kit.DIM))
+	var live: Array = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0); var wait: Array = g.activeContracts.filter(func(a): return a.clusterIds.size() == 0)
+	var ct := "Customers · %d serving" % live.size() + ((" · %d signed, awaiting deployment" % wait.size()) if wait.size() > 0 else "")
+	var cp := _fold(ct, "customers", col, g.activeContracts.size() > 4)
+	if g.activeContracts.is_empty():
+		cp[1].add_child(Kit.label("No customers yet — sign your first offer.", 13, Kit.DIM, true))
+		var ob := Kit.btn("Open Clients", func(): app.go("contracts"), "pri", 13); ob.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN; cp[1].add_child(ob)
 	for a in g.activeContracts:
 		var sub := ("%d/%d mo · SLA misses %d" % [int(a.monthsServed), int(a.contract.durationMonths), int(a.slaMisses)]) if a.clusterIds.size() > 0 else "awaiting deployment (by %s)" % Kit.date_of(a.get("deployBy", a.startMonth + 4))
 		var cr := HBoxContainer.new(); cr.add_theme_constant_override("separation", 8); cp[1].add_child(cr)
 		cr.add_child(Logo.make(str(a.contract.customer), 24.0))
-		cr.add_child(Kit.rich("[b]%s[/b] · %s  [color=#8fb0c8]%s · %s[/color]" % [a.contract.customer, a.contract.model.name, a.contract.kind, sub], 12))
+		var rt := _rich("[b]%s[/b] · %s  [color=#%s]%s · %s[/color]" % [a.contract.customer, a.contract.model.name, Kit.DIM.to_html(false), a.contract.kind, sub], 12); rt.size_flags_horizontal = Control.SIZE_EXPAND_FILL; cr.add_child(rt)
 	var lp := _fold("Log", "log", col, true)
 	var logs: Array = g.log.duplicate(); logs.reverse()
 	for e in logs.slice(0, 40): lp[1].add_child(Kit.label("%s — %s" % [Kit.date_of(e.month), e.text], 12, Kit.GR if e.level == "good" else (Kit.RD if e.level == "bad" else Kit.DIM), true))

@@ -125,7 +125,7 @@ export function needsOf(g: GameState): Need[] {
 
   if (g.story?.open) {
     const d = DILEMMAS.find((x) => x.id === g.story!.open!.id);
-    if (d) out.push({ id: 'dilemma', level: 'warn', title: `Decision: ${d.title}`, detail: `Answer within ${Math.max(0, 3 - (g.month - g.story.open.month))} months or the offer lapses.`, go: 'story', button: 'Decide' });
+    if (d) out.push({ id: 'dilemma', level: 'warn', title: `Decision: ${d.title}`, detail: ((n) => n <= 0 ? 'Answer this month or the offer lapses.' : `Answer within ${n} month${n === 1 ? '' : 's'} or the offer lapses.`)(Math.max(0, 3 - (g.month - g.story.open.month))), go: 'story', button: 'Decide' });
   }
 
   const nh = netHealth(g);

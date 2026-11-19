@@ -46,17 +46,17 @@ func _design_row(parent: Control, d: Dictionary) -> void:
 		box.add_child(Kit.label(d.name, 16, Kit.TX, true))
 		var tf := HFlowContainer.new(); tf.add_theme_constant_override("h_separation", 8); tf.add_theme_constant_override("v_separation", 8); box.add_child(tf); h1 = tf
 	else:
-		h1 = HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1); h1.add_child(Kit.label(d.name, 15))
+		h1 = HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1); var nl := BK.one_line(Kit.label(d.name, 15)); nl.tooltip_text = str(d.name); nl.mouse_filter = Control.MOUSE_FILTER_PASS; h1.add_child(nl)   # a 60-character name ends in "…" instead of pushing Deploy off-screen
 	h1.add_child(Kit.tag("%d ready to deploy" % int(r.buildableNow), Kit.GR)); h1.add_child(Kit.tag("%d deployed" % placed_n))
 	if int(g.get("rackReserve", {}).get(d.id, 0)) > 0: h1.add_child(Kit.tag("%d reserved" % int(g.rackReserve[d.id]), Kit.CY))
-	if not Layout.phone:
-		var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h1.add_child(sp)
 	if r.buildableNow > 0:
 		if Layout.phone: h1 = box
 		var opts := []; for h in g.halls: opts.append([h.id, "%s (%d/%d)" % [h.name, h.racks.size(), int(h.rackSlots)]])
-		var ho := Kit.option(opts, hall_id, func(v): hall_id = v); if Layout.phone: ho.custom_minimum_size.y = Layout.tap()
+		var ho := BK.slim(Kit.option(opts, hall_id, func(v): hall_id = v), 140.0); ho.size_flags_horizontal = Control.SIZE_FILL; if Layout.phone: ho.custom_minimum_size.y = Layout.tap()
 		h1.add_child(ho)
-		h1.add_child(Kit.btn("DEPLOY 1", func(): msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("rack_place"); refresh(), "go", 14))
+		h1.add_child(Kit.btn("DEPLOY 1", func():
+			if not BK.gate("deploy", 700): return
+			msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("rack_place"); refresh(), "go", 14))
 	var active: bool = int(g.get("rackReserve", {}).get(d.id, 0)) > 0 or int(r.buildableNow) > 0 or open_missing.has(d.id)
 	for l in r.lines:
 		if l.have > 0 or l.onOrder > 0: active = true
@@ -64,12 +64,30 @@ func _design_row(parent: Control, d: Dictionary) -> void:
 	else: box.add_child(Kit.btn("Order more of this design…", func(): open_missing[d.id] = true; refresh(), "", 12))
 
 
+## The design list under the filter (rebuilt on its own while typing).
+func _fill_designs() -> void:
+	if not is_instance_valid(_designs): return
+	for c in _designs.get_children(): c.queue_free()
+	var b: Bridge = app.b; var g: Dictionary = b.g
+	var used := []; var unused := []
+	for d in g.racks:
+		if design_q != "" and not str(d.name).to_lower().contains(design_q.to_lower()): continue
+		(used if _in_use(b, g, d) else unused).append(d)
+	for d in used: _design_row(_designs, d)
+	if used.is_empty() and unused.is_empty() and not g.racks.is_empty(): _designs.add_child(Kit.label("No design name contains “%s”." % design_q, 13, Kit.DIM, true))
+	elif used.is_empty() and not unused.is_empty(): _designs.add_child(Kit.label("Nothing in progress — all designs below are unused.", 13, Kit.DIM))
+	if not unused.is_empty():
+		var up := Kit.fold_panel("Unused designs (%d)" % unused.size(), "unused", folds, refresh, false, _designs, unused.size() > 0 and design_q == "")
+		for d in unused: _design_row(up[1], d)
+
 ## Section: a plain panel on desktop, a collapsed fold on phone for the long reference lists.
 func _sec(title: String, key: String, parent: Control, fold_on_phone: bool) -> Array:
 	if Layout.phone and fold_on_phone: return Kit.fold_panel(title, key, folds, refresh, false, parent, true)
 	return Kit.panel(title, false, parent)
 
-func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+const BK := preload("res://ui/build_keep.gd")
+func refresh() -> void: BK.refresh(self, app, _rebuild)
+var _designs: VBoxContainer
 
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
@@ -77,7 +95,8 @@ func _rebuild() -> void:
 	if hall_id == "" or b.hall(hall_id).is_empty(): hall_id = g.halls[0].id
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := Kit.head_row(12); root.add_child(hd)
-	if Layout.phone: hd.add_child(Kit.label("On order → warehouse → deployed", 14, Kit.DIM, true))
+	if Layout.phone:
+		var cap := Kit.label("On order → warehouse → deployed", 14, Kit.DIM, true); cap.custom_minimum_size.y = 30; cap.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM; hd.add_child(cap)   # breathing room under the tab bar
 	else:
 		hd.add_child(Kit.label("WAREHOUSE & ASSEMBLY", 26, Kit.CY))
 		hd.add_child(Kit.label("Parts live in one of three states: on order (paid, in transit) → warehouse (arrived) → deployed (racked on the floor or installed in a hall).", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
@@ -85,20 +104,19 @@ func _rebuild() -> void:
 	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
 	if not Layout.phone: left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
 	var ra := Kit.panel("Rack assembly" if Layout.phone else "Rack assembly — your designs", true, left)
+	# The filter sits at the top of the list and filters as you type: only the list below it is rebuilt, so the field keeps its
+	# text, focus and caret (and the phone keyboard stays up). The × clears it.
 	if g.racks.is_empty(): ra[1].add_child(Kit.label("No rack designs yet. Buy a system in Procure (it saves its design automatically) or build one in the Design Lab.", 14, Kit.DIM, true))
-	var le := LineEdit.new(); le.placeholder_text = "Filter designs by name (Enter)"; le.text = design_q; le.custom_minimum_size = Vector2(300 if not Layout.compact else 180, 0); le.text_submitted.connect(func(t): design_q = t; refresh()); if Layout.phone: le.custom_minimum_size.y = Layout.tap()
-	ra[1].add_child(le)
-	var used := []; var unused := []
-	for d in g.racks:
-		if design_q != "" and not d.name.to_lower().contains(design_q.to_lower()): continue
-		(used if _in_use(b, g, d) else unused).append(d)
-	for d in used: _design_row(ra[1], d)
-	if used.is_empty() and not unused.is_empty(): ra[1].add_child(Kit.label("Nothing in progress — all designs below are unused.", 13, Kit.DIM))
-	if not unused.is_empty():
-		var up := Kit.fold_panel("Unused designs (%d)" % unused.size(), "unused", folds, refresh, false, ra[1], true)
-		for d in unused: _design_row(up[1], d)
+	else:
+		var le := LineEdit.new(); le.placeholder_text = "Filter designs by name"; le.text = design_q; le.clear_button_enabled = true; le.set_meta("key", "design_q")
+		le.custom_minimum_size = Vector2(160, Layout.tap() if Layout.compact else 0.0); le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		le.text_changed.connect(func(t): design_q = t; _fill_designs())
+		le.text_submitted.connect(func(_t): le.release_focus())
+		ra[1].add_child(le)
+	_designs = VBoxContainer.new(); _designs.add_theme_constant_override("separation", 6); ra[1].add_child(_designs)
+	_fill_designs()
 	if not g.racks.is_empty():
-		var h2 := HBoxContainer.new(); h2.add_theme_constant_override("separation", 8); ra[1].add_child(h2)
+		var h2: Container = HFlowContainer.new() if Layout.compact else HBoxContainer.new(); h2.add_theme_constant_override("separation", 8); h2.add_theme_constant_override("h_separation", 8); h2.add_theme_constant_override("v_separation", 6); ra[1].add_child(h2)
 		h2.add_child(Kit.label("Plan for", 13, Kit.DIM)); h2.add_child(Kit.spin(n, 1, 500, 1, func(v): n = int(v); refresh())); h2.add_child(Kit.label("racks each" if Layout.phone else "rack(s) of each design.", 13, Kit.DIM))
 	# --- spares
 	var sv: Dictionary = b.q("sparesView"); var spp := _sec("Spares — parts WILL break", "spares", right, false)
@@ -145,7 +163,7 @@ func _rebuild() -> void:
 		for r in led:
 			if r.kind != k: continue
 			if not led_all and not (r.warehouse > 0 or r.get("spares", 0) > 0 or r.onOrder > 0 or r.get("deployed", 0) > 0): continue
-			var nm := VBoxContainer.new(); nm.add_child(Kit.link(r.name, func(): app.learn(r.id), 13)); nm.add_child(Kit.label(r.vendor, 10, Kit.DIM))
+			var nm := VBoxContainer.new(); nm.add_child(Kit.link(BK.ell(r.name, 40), func(): app.learn(r.id), 13)); nm.add_child(Kit.label(r.vendor, 10, Kit.DIM))
 			rows2.append([nm, r.kind, ("%d%s" % [int(r.warehouse), (" +%d spare" % int(r.spares)) if r.get("spares", 0) > 0 else ""]) if (r.warehouse > 0 or r.get("spares", 0) > 0) else "—", ("%d · %s" % [int(r.onOrder), Kit.date_of(r.nextEta)]) if r.onOrder > 0 else "—", str(int(r.deployed)) if r.deployed > 0 else "—"])
 	if rows2.is_empty(): lp[1].add_child(Kit.label("Empty. Buy something in Procure.", 13, Kit.DIM))
 	else: lp[1].add_child(Kit.table(["Part", "Kind", "Warehouse", "On order", "Deployed"], rows2))

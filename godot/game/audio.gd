@@ -69,14 +69,17 @@ func _cue(kind: String) -> AudioStream:
 
 ## Play a cue by name. Legacy aliases (the old procedural names) keep working.
 const UI_CUES := ["click", "hover", "tab", "confirm", "cancel", "toggle_on", "toggle_off", "tick"]
+const UI_GAP_MS := {"hover": 70, "tick": 55, "click": 90, "tab": 120, "confirm": 150, "cancel": 150, "toggle_on": 90, "toggle_off": 90}
 func play(kind: String) -> void:
 	if muted: return
-	if kind in UI_CUES and (TouchScroll.is_busy() or (kind == "hover" and Layout.touch)): return   # a scrolling finger is not clicking
+	var ui := kind in UI_CUES
+	if ui and (TouchScroll.is_busy() or (kind == "hover" and Layout.touch)): return   # a scrolling or gliding list is not clicking; touch has no hover
 	var s := _cue(kind)
 	if s == null: return
 	var meta: Dictionary = catalog.sfx.get(kind, {})
 	var t := Time.get_ticks_msec()
-	if t - int(_last_play.get(kind, -1000)) < (35 if meta.get("jitter", false) else 60): return
+	# identical cues in a burst play once (hover sweeps, a rebuild that toggles many boxes, rapid slider ticks)
+	if t - int(_last_play.get(kind, -1000)) < (UI_GAP_MS.get(kind, 90) if ui else (35 if meta.get("jitter", false) else 60)): return
 	_last_play[kind] = t
 	var p: AudioStreamPlayer = null
 	for v in _voices:
@@ -90,14 +93,18 @@ func hook_ui(tree: SceneTree) -> void:
 	tree.node_added.connect(_wire)
 
 func _wire(n: Node) -> void:
+	if n.has_meta("aw"): return   # a control re-parented by the kit (sliders get step buttons) is already wired
+	if n is OptionButton or n is CheckBox or n is CheckButton or n is Button or n is HSlider or n is TabBar: n.set_meta("aw", true)
 	if n is OptionButton:
 		n.item_selected.connect(func(_i): play("tab")); n.mouse_entered.connect(func(): play("hover"))
 	elif n is CheckBox or n is CheckButton:
 		n.toggled.connect(func(on): play("toggle_on" if on else "toggle_off"))
 	elif n is Button:
 		if n.get_meta("silent", false): return
-		n.pressed.connect(func(): play("confirm" if n.get_meta("kind", "") == "go" else ("cancel" if n.get_meta("kind", "") == "danger" else "click")))
-		n.mouse_entered.connect(func(): if not n.disabled: play("hover"))
+		n.pressed.connect(func():
+			if n.get_meta("_dup", false): return   # the kit ignored this press (double click on a money button)
+			play("confirm" if n.get_meta("kind", "") == "go" else ("cancel" if n.get_meta("kind", "") == "danger" else "click")))
+		n.mouse_entered.connect(func(): if not n.disabled and not Layout.touch: play("hover"))
 	elif n is HSlider:
 		n.value_changed.connect(func(_v): play("tick"))
 	elif n is TabBar:

@@ -58,11 +58,14 @@ func _input(e: InputEvent) -> void:
 		JOY_BUTTON_RIGHT_STICK: if m == null and app.started: app.hall.labels_on = not app.hall.labels_on; app.hall.rebuild(); get_viewport().set_input_as_handled()
 		JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT: ensure_focus(false)
 
-## B: close the topmost thing — overlay, inspector, then the open drawer.
+## B, Esc and Android Back share one rule: dismiss the topmost modal with its safe choice (keynote: Got it · chapter: continue ·
+## decision: Decide later · end screen: look around · dialogs: close / cancel), then the rack inspector, then the open drawer.
 func _back() -> void:
 	var m: Control = app.modal()
 	if m != null:
 		if m == app.keynote: app.keynote._ack(false)
+		elif m == app.story_ui: app.story_ui.back()
+		elif m == app.end_ui: app.close_end()
 		elif m == app.guide: app.guide.visible = false
 		elif m == app.settings_ui: app._settings()
 		elif m == app.menu_ui: app._menu()

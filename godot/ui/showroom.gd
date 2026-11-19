@@ -9,7 +9,7 @@ var model: RackModel
 var stage: Node3D
 var key_light: DirectionalLight3D
 var yaw := float(OS.get_environment("GW_SR_YAW")) if OS.has_environment("GW_SR_YAW") else 0.35
-var zoom := 3.5
+var zoom := 4.2
 var _drag := false
 var _key := ""
 var door_open := true
@@ -20,18 +20,18 @@ var _sil: StandardMaterial3D
 
 func _init() -> void:
 	stretch = true; custom_minimum_size = Vector2(0, 400 if not Layout.compact else (190 if Layout.phone else 280)); mouse_filter = Control.MOUSE_FILTER_STOP; size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vp = SubViewport.new(); vp.own_world_3d = true; vp.transparent_bg = false; vp.handle_input_locally = false; vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS; add_child(vp)
+	vp = SubViewport.new(); vp.own_world_3d = true; vp.transparent_bg = false; vp.handle_input_locally = false; vp.render_target_update_mode = SubViewport.UPDATE_WHEN_PARENT_VISIBLE; add_child(vp)
 	vp.msaa_3d = Viewport.MSAA_4X if Settings.quality >= 2 else (Viewport.MSAA_2X if Settings.quality == 1 else Viewport.MSAA_DISABLED); vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if Settings.quality <= 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	var env := Environment.new(); env.background_mode = Environment.BG_SKY
 	var sky_m := ProceduralSkyMaterial.new(); sky_m.sky_top_color = Color(0.015, 0.025, 0.045); sky_m.sky_horizon_color = Color(0.07, 0.1, 0.16); sky_m.ground_horizon_color = Color(0.05, 0.07, 0.1); sky_m.ground_bottom_color = Color(0.01, 0.015, 0.02); sky_m.sky_energy_multiplier = 0.8
 	var sky := Sky.new(); sky.sky_material = sky_m; sky.radiance_size = Sky.RADIANCE_SIZE_128; env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY; env.ambient_light_energy = 1.4; env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.05; env.glow_enabled = Settings.tier().glow; env.glow_intensity = 0.5; env.glow_bloom = 0.08
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX; env.tonemap_exposure = 1.1; env.glow_enabled = Settings.tier().glow; env.glow_intensity = 0.5; env.glow_bloom = 0.08
 	if Settings.tier().ssao: env.ssao_enabled = true; env.ssao_radius = 0.6; env.ssao_intensity = 2.2
 	if Settings.tier().reflections: env.ssr_enabled = true; env.ssr_max_steps = 48; env.ssr_fade_in = 0.3
 	var we := WorldEnvironment.new(); we.environment = env; vp.add_child(we)
 	stage = Node3D.new(); vp.add_child(stage)
-	cam = Camera3D.new(); cam.fov = 36.0; cam.current = true; vp.add_child(cam)
+	cam = Camera3D.new(); cam.fov = 40.0; cam.current = true; vp.add_child(cam)
 	key_light = DirectionalLight3D.new(); key_light.light_energy = 2.3; key_light.light_color = Color(1.0, 0.96, 0.9); key_light.rotation_degrees = Vector3(-40, -28, 0); key_light.shadow_enabled = Settings.quality >= 1; key_light.directional_shadow_max_distance = 9.0; vp.add_child(key_light)
 	var rim := OmniLight3D.new(); rim.position = Vector3(-1.8, 1.9, -1.9); rim.light_energy = 2.4; rim.omni_range = 7.0; rim.light_color = Color(0.45, 0.65, 1.0); vp.add_child(rim)
 	var rim2 := OmniLight3D.new(); rim2.position = Vector3(1.9, 1.4, -1.7); rim2.light_energy = 1.4; rim2.omni_range = 7.0; rim2.light_color = Color(1.0, 0.6, 0.35); vp.add_child(rim2)
@@ -47,7 +47,8 @@ func _init() -> void:
 	if Settings.quality <= 0: stretch_shrink = 2
 
 func _place_cam() -> void:
-	cam.look_at_from_position(Vector3(0, 1.3 + (zoom - 3.5) * 0.12, zoom), Vector3(0, 0.96, 0))
+	# frame the whole 2 m rack (top plate included) with a little headroom at every zoom
+	cam.look_at_from_position(Vector3(0, 1.25 + (zoom - 4.2) * 0.12, zoom), Vector3(0, 1.0, 0))
 
 ## Show a rack spec; rebuilds the model only when the spec changed.
 func set_spec(spec: Dictionary, is_locked := false) -> void:
@@ -84,6 +85,7 @@ func _gui_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton:
 		var mb := e as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT: _drag = mb.pressed
-		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP: zoom = maxf(2.2, zoom - 0.25); _place_cam()
-		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN: zoom = minf(7.0, zoom + 0.25); _place_cam()
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			if mb.pressed: zoom = clampf(zoom + (-0.25 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 0.25), 2.6, 7.0); _place_cam()
+			accept_event()   # the wheel zooms the turntable; it must not also scroll the drawer underneath
 	elif e is InputEventMouseMotion and _drag: yaw += (e as InputEventMouseMotion).relative.x * 0.01

@@ -13493,7 +13493,7 @@ function needsOf(g) {
   if (b && b.strikes > 0) out.push({ id: "board", level: "warn", title: `Board strike ${b.strikes} of ${BOARD_STRIKES}`, detail: `Revenue is under target. The next review is in ${12 - (month - b.startMonth) % 12} months and wants about ${usd(boardTarget(b.baseNW, Math.round((month - b.startMonth) / 12) + 1))}/mo.`, go: "contracts", button: "Find contracts" });
   if (g.story?.open) {
     const d = DILEMMAS.find((x) => x.id === g.story.open.id);
-    if (d) out.push({ id: "dilemma", level: "warn", title: `Decision: ${d.title}`, detail: `Answer within ${Math.max(0, 3 - (g.month - g.story.open.month))} months or the offer lapses.`, go: "story", button: "Decide" });
+    if (d) out.push({ id: "dilemma", level: "warn", title: `Decision: ${d.title}`, detail: ((n) => n <= 0 ? "Answer this month or the offer lapses." : `Answer within ${n} month${n === 1 ? "" : "s"} or the offer lapses.`)(Math.max(0, 3 - (g.month - g.story.open.month))), go: "story", button: "Decide" });
   }
   const nh = netHealth(g);
   const hurt = nh.clusters.filter((c) => c.down > 0);

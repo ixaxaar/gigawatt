@@ -11,6 +11,10 @@ var seen := {}                     # dock keys visited since the tutorial starte
 var card: PanelContainer
 var ring: PanelContainer
 var _tw: Tween
+var forced := false        # started from the pause menu ("Restart tutorial"): shown even in Tycoon
+var _tight := false        # the free part of the hall is small: the card folds to a pill
+var _open := false         # the player tapped the pill open (until the step changes)
+var _folded := false       # the player folded the card (stays folded until tapped)
 
 ## kind: "read" = press Got it · "visit" = open a drawer · "state" = a condition on the game
 ## target: "dock:<key>" | "next" | ""
@@ -45,15 +49,15 @@ const STEPS := [
 ]
 
 func _ready() -> void:
-	card = PanelContainer.new(); card.visible = false; card.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); card.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	card.mouse_filter = Control.MOUSE_FILTER_STOP; _place()
+	card = PanelContainer.new(); card.visible = false; card.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.CY, Kit.BG, 3, 14)); app.root.add_child(card)
 	ring = PanelContainer.new(); ring.visible = false; ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var rs := StyleBoxFlat.new(); rs.bg_color = Color(0, 0, 0, 0); rs.border_color = Kit.AM; rs.set_border_width_all(4); rs.set_corner_radius_all(12); ring.add_theme_stylebox_override("panel", rs); app.root.add_child(ring)
 	_tw = create_tween().set_loops(); _tw.tween_property(ring, "modulate:a", 0.25, 0.55); _tw.tween_property(ring, "modulate:a", 1.0, 0.55)
 
-func start(at := 0) -> void:
-	active = true; idx = at; seen = {}; base_month = int(app.b.g.month)
+func start(at := 0, force := false) -> void:
+	active = true; idx = at; seen = {}; base_month = int(app.b.g.month); forced = force; _open = false; _folded = false
 	Settings.tutorial = "on"; Settings.tutorial_step = at; Settings.save_all()
 	_advance_if_done(); _build()
 
@@ -87,30 +91,39 @@ func _advance_if_done() -> bool:
 ## Called whenever the game changes or a drawer opens.
 func tick() -> void:
 	if not active: return
-	if _advance_if_done(): app.audio.play("good")
+	if _advance_if_done(): app.audio.play("good"); _open = false
 	_build()
 
+## Tycoon is "no hand-holding": the tutorial stays out of it unless the player restarted it from the menu.
+func _muted() -> bool:
+	return not forced and str(app.b.g.get("mode", "operator")) == "tycoon"
+
 func _next() -> void:
-	idx += 1; app.audio.play("click")
+	idx += 1; app.audio.play("click"); _open = false
 	if idx >= STEPS.size(): stop(); return
 	_advance_if_done(); _build()
 
 func _build() -> void:
 	if active and Settings.tutorial_step != idx: Settings.tutorial_step = idx; Settings.save_all()   # so a later session resumes at this step
 	for c in card.get_children(): c.queue_free()
-	if not active or idx >= STEPS.size(): card.visible = false; ring.visible = false; return
+	if not active or idx >= STEPS.size() or _muted(): card.visible = false; ring.visible = false; return
 	var s: Dictionary = STEPS[idx]
 	card.visible = true
+	if _folded or (_tight and not _open):   # a pill: one line, tap to open the card
+		var pill := Kit.btn("TUTORIAL %d/%d · %s  ▴" % [idx + 1, STEPS.size(), str(s.title)], func(): _open = true; _folded = false; _build(), "", 14)
+		pill.clip_text = true; pill.alignment = HORIZONTAL_ALIGNMENT_LEFT; pill.custom_minimum_size = Vector2(150, maxf(40.0, Layout.tap() * 0.85)); card.add_child(pill)
+		_fit(); return
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); card.add_child(v)
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)
 	h.add_child(Kit.chip("TUTORIAL  %d / %d" % [idx + 1, STEPS.size()], Kit.CY, 12))
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(sp)
 	var dots := ""; for i in STEPS.size(): dots += "●" if i <= idx else "○"
 	h.add_child(Kit.label(dots, 11, Kit.CY))
+	var fold := Kit.btn("▾", func(): _folded = true; _open = false; _build(), "", 14); fold.tooltip_text = "Fold the tutorial to a small pill"; fold.custom_minimum_size = Vector2(maxf(36.0, Layout.tap() * 0.8), maxf(30.0, Layout.tap() * 0.8)); h.add_child(fold)
 	v.add_child(Kit.label(str(s.title), 20, Kit.TX, true))
 	v.add_child(Kit.label(_adapt(str(s.body)), 14, Kit.DIM, true))
 	v.add_child(Kit.label("Why: " + str(s.why), 13, Kit.AM, true))
-	var f := HBoxContainer.new(); f.add_theme_constant_override("separation", 8); v.add_child(f)
+	var f := HFlowContainer.new(); f.add_theme_constant_override("h_separation", 8); f.add_theme_constant_override("v_separation", 6); v.add_child(f)
 	if s.kind == "read":
 		if s.id == "path":
 			f.add_child(Kit.btn("Open the Learning path", func(): _next(); app.guide.visible = true; app.guide.open(), "go", 15))
@@ -119,33 +132,34 @@ func _build() -> void:
 			var got := Kit.btn("Got it ▶", _next, "go", 15); f.add_child(got)
 			if Kit.pad_mode: got.call_deferred("grab_focus")   # a controller can always dismiss the card
 	else:
-		f.add_child(Kit.label("Do it in the game; this advances by itself.", 12, Kit.DIM))
-		var sp2 := Control.new(); sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; f.add_child(sp2)
-		f.add_child(Kit.btn("Skip", _next, "", 13))
-		f.add_child(Kit.btn("Hide tutorial", func(): stop(), "", 13))
-	call_deferred("_fit"); get_tree().create_timer(0.15).timeout.connect(_fit)
+		f.add_child(Kit.label("Do it in the game; this advances by itself.", 13, Kit.DIM, true))
+		f.add_child(Kit.btn("Skip", _next, "", 14))
+		f.add_child(Kit.btn("Hide tutorial", func(): stop(), "", 14))
+	_fit()
 
 func _fit() -> void:
-	card.size = Vector2(_width(), 0)
+	card.size = Vector2(_width(), 0.0)
 	_place()
 
-## Left edge for floating cards: clear of the phone dock rail and of the camera buttons on touch screens.
+## Left edge for floating cards: the free part of the hall (clear of the rail, the camera buttons and the open drawer).
 func _left_edge() -> float:
-	if Layout.touch: return (app.RAIL_W if Layout.phone else 0.0) + 12.0 + 56.0 + 10.0
-	return 16.0
+	return app.free_hall_rect().position.x if app.is_inside_tree() else 16.0
 
-## The card stays in the part of the hall that the open drawer leaves free.
+## The card stays in the part of the hall that the open drawer leaves free; folded, it is a short pill.
 func _width() -> float:
 	if not app.is_inside_tree(): return 420.0
-	return clampf(app.vw() - app.hall.cover_px - _left_edge() - 14.0, 250.0, 420.0)
+	var fw: float = app.free_hall_rect().size.x
+	if card.get_child_count() > 0 and card.get_child(card.get_child_count() - 1) is Button: return clampf(fw, 150.0, 340.0)
+	return clampf(fw, 220.0, 420.0)
 
-## Bottom-left above the dock: never over a drawer's header or the hall's first racks. (Toasts stack above it.)
+## Bottom-left of the free hall area: never over a drawer, the dock, the Build placement bar or the rack inspector. (Toasts stack above it.)
 func _place() -> void:
 	if not app.is_inside_tree(): return
-	var rail: bool = Layout.phone
-	card.offset_left = _left_edge()
-	card.offset_right = card.offset_left + _width()
-	card.offset_bottom = -12.0 if rail else -(app._dock_h + 16.0); card.offset_top = card.offset_bottom
+	var fr: Rect2 = app.free_hall_rect()
+	var w := _width()
+	var h := card.get_combined_minimum_size().y
+	card.size = Vector2(w, h)
+	card.position = Vector2(fr.position.x, maxf(fr.position.y, fr.end.y - h))
 
 func _target(s: Dictionary) -> Control:
 	var t := str(s.get("target", ""))
@@ -155,8 +169,12 @@ func _target(s: Dictionary) -> Control:
 
 func _process(_dt: float) -> void:
 	var full_page: bool = app.FULL.has(app.cur)   # Design Lab, Supercomputer and Codex use the whole screen: the card would sit on their content
-	if not active or idx >= STEPS.size() or app.modal() != null: ring.visible = false; card.visible = active and idx < STEPS.size() and app.modal() == null and not full_page; return
+	var live := active and idx < STEPS.size() and not _muted()
+	if not live or app.modal() != null: ring.visible = false; card.visible = live and app.modal() == null and not full_page; return
 	card.visible = not full_page
+	var fr: Rect2 = app.free_hall_rect()
+	var tight: bool = Layout.phone or fr.size.x < 300.0 or fr.size.y < 340.0   # phones, or little hall left beside the drawer (handhelds, Procure): fold to a pill
+	if tight != _tight: _tight = tight; _build()
 	_place()
 	var tg := _target(STEPS[idx])
 	if tg == null or not tg.is_visible_in_tree(): ring.visible = false; return

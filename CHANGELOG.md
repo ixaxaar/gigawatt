@@ -2,6 +2,32 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Third review round: five reviewers (real Pixel 9a, desktop 720p to 4K, handheld/tablet/odd windows, graphics, website), then fixes in five lanes.
+
+### Changed
+- **The hall is a building now.** Walls (the Site screen's wall options work again), columns, a ceiling with beams and sprinkler pipes, hung lamp housings and ladder trays, glass cold-aisle containment with frames, and darkness beyond the walls instead of a grey void. Racks are black instead of blue, the floor no longer blows out to white, cables no longer glow. New tonemapping and a colour grade; the four light moods are clearly different.
+- **Status reads at a glance.** Idle racks get a thin amber rim instead of a full orange lid, down racks a red one; HEAT view uses a real blue-to-red ramp and hides everything else; cluster tags never overlap; rack labels turn to face the camera; smoke is soft puffs, not grey spheres.
+- **Camera.** It no longer snaps back to the hall centre every month or on HEAT/TAGS. Zoom goes toward the cursor or pinch, the view cannot drift outside the hall or into the cable trays, TOP is a flat view fitted to the hall, and the hall re-centres in the free area when a drawer opens.
+- **Speed control** is a clear ⏸ / 1x / 2x / 3x on every layout.
+- **Clients:** one primary action per offer; "Sign now" turns quiet with a warning and a confirm when nothing you can buy would serve the contract; offers open one at a time with the money line and action on top; collapsed rows show model, $/mo and months.
+- **Design Lab:** finger-sized rack rows, labels that never overlap, board and part picker side by side on phones with no surprise scrolling, and the boards work with arrow keys / D-pad.
+- **Website:** see the site commit (lightbox, gallery arrows, video clips instead of 5 MB of animated images, wiki restyled to match, hero capped).
+
+### Fixed
+- **Touch scrolling has momentum** and never loses distance on fast flicks; a tap on a gliding list only stops it. Scroll areas reach their end, with a scroll cue.
+- **Keynote "Got it" ignored taps** (hidden toasts were catching them). Esc, Android Back and controller B now close every card with its safe choice. Old story cards no longer queue up after a fast-forward or a load; "Skip all" when several are waiting.
+- **Every dialog fits every screen and text size** (pause menu, Settings, Load, chapter/decision/keynote cards, end screen); the top bar always keeps Pause, speed, Next and Menu; UI size is capped to what the screen can hold.
+- **The on-screen keyboard no longer covers the text field** you are typing in.
+- **Light themes** (Paper, Sand, Mist) pass a contrast check everywhere; no more white-on-white.
+- Tutorial card and toasts never cover controls; Tycoon has no tutorial; tablets get a readable layout; confirm dialogs are real modals; double presses on spend buttons count once; tables fit narrow drawers; Home no longer shows "Runway: 2748 months" or "Customers (0)" with a signed contract; Cluster topology fits; Codex entries open in place; many empty states.
+- Draw calls in a 168-rack hall roughly halved (1017 to 467 on Ultra).
+
+### Known gaps
+- Not measured on a real Steam Deck; phone checks covered the title, Home, Clients, Warehouse and the hall view only. Controller use of the new confirm dialog and Design Lab boards was tested with a keyboard, not a pad.
+- Rack furniture is still one mesh per part (no instancing yet).
+
 ## [0.9.2] - 2026-11-19 (alpha 3)
 
 ### Fixed

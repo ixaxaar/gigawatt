@@ -7,8 +7,9 @@ static var volume := 0.8
 static var music_volume := 0.7
 static var sfx_volume := 0.9
 static var music_mode := "auto"
-## UI scale on top of the automatic window stretch. 0 = auto (handhelds and small laptops are scaled up to native size).
-static var ui_scale := 0.0
+## UI size relative to the automatic size for this screen (1.0 = auto). Text boost multiplies on top. Both are limited so the
+## interface never gets narrower than its layout needs (Layout.MIN_LOGICAL); see effective_ui_scale().
+static var ui_scale := 1.0
 static var text_boost := 1.0
 ## Layout class: "auto" picks desktop, handheld or phone from the device; or force one.
 static var layout := "auto"
@@ -140,9 +141,7 @@ static func load_all() -> void:
 	if c.load(PATH) != OK: return
 	volume = clampf(float(c.get_value("a", "volume", 0.8)), 0.0, 1.0)
 	music_volume = clampf(float(c.get_value("a", "music_volume", 0.7)), 0.0, 1.0); sfx_volume = clampf(float(c.get_value("a", "sfx_volume", 0.9)), 0.0, 1.0); music_mode = str(c.get_value("a", "music_mode", "auto"))
-	var us := float(c.get_value("a", "ui_scale", 0.0))
-	ui_scale = 0.0 if us < 0.8 else clampf(us, 0.8, 2.0)   # old files stored 1.0 meaning "default": keep an explicit choice only when it was changed
-	if c.get_value("a", "ui_scale_auto", true): ui_scale = 0.0
+	ui_scale = clampf(float(c.get_value("a", "ui_size", 1.0)), 0.7, 2.0)   # relative to auto (older files stored an absolute "ui_scale": ignored)
 	text_boost = clampf(float(c.get_value("a", "text_boost", 1.0)), 1.0, 1.5)
 	colorblind = bool(c.get_value("a", "colorblind", false)); reduced_motion = bool(c.get_value("a", "reduced_motion", false)); high_contrast = bool(c.get_value("a", "high_contrast", false))
 	theme = str(c.get_value("a", "theme", "midnight")); drawer_frac = float(c.get_value("a", "drawer_frac", -1.0)); if drawer_frac > 0.0: drawer_frac = clampf(drawer_frac, 0.2, 0.92)
@@ -156,19 +155,33 @@ static func load_all() -> void:
 static func save_all() -> void:
 	var c := ConfigFile.new()
 	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode)
-	c.set_value("a", "ui_scale", ui_scale); c.set_value("a", "ui_scale_auto", ui_scale <= 0.0); c.set_value("a", "text_boost", text_boost)
+	c.set_value("a", "ui_size", ui_scale); c.set_value("a", "text_boost", text_boost)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "high_contrast", high_contrast)
 	c.set_value("a", "theme", theme); c.set_value("a", "layout", layout); c.set_value("a", "drawer_frac", drawer_frac); c.set_value("a", "gpu", gpu); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
 	c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)
 	c.save(PATH)
 
-## UI scale actually used: the explicit choice, or auto (undo the window stretch on small windows so text stays native-size).
+## UI scale actually used (the window's content_scale_factor): the automatic size for this screen and layout, times the player's
+## UI size and text boost, limited so the logical viewport never gets smaller than the layout needs. Monotonic in both sliders.
 static func effective_ui_scale(window: Window) -> float:
-	if ui_scale > 0.0: return ui_scale * text_boost
 	Layout.update(window)
 	var sz := Vector2(window.size)
 	var s0 := maxf(minf(sz.x / 1920.0, sz.y / 1080.0), 0.01)   # the project's canvas_items stretch scale
-	return clampf(Layout.total_scale(window) / s0, 0.3, 6.0) * text_boost
+	return total_ui_scale(window) / s0
+
+## Pixels per logical pixel after UI size and text boost (clamped).
+static func total_ui_scale(window: Window) -> float:
+	var auto_t := Layout.total_scale(window)
+	var t := auto_t * ui_scale * text_boost
+	return clampf(t, 0.25, maxf(Layout.max_total(window), 0.25))
+
+## What the two sliders actually give on this screen, relative to auto (1.0 = auto): for the Settings readout.
+static func ui_pct_used(window: Window) -> float:
+	return total_ui_scale(window) / maxf(0.01, Layout.total_scale(window))
+
+## The largest UI size x text boost this screen allows (relative to auto).
+static func ui_pct_max(window: Window) -> float:
+	return Layout.max_total(window) / maxf(0.01, Layout.total_scale(window))
 
 ## Push the current values into the engine (call after load and after every change).
 static func apply(window: Window) -> void:

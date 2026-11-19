@@ -1,4 +1,5 @@
 class_name MissingParts
+const BK := preload("res://ui/build_keep.gd")
 ## "What am I missing for this rack design" with one-click ordering. Used by Warehouse and Build.
 
 static func build(app, parent: Control, design_id: String, racks: int, on_msg: Callable, sp_state: Dictionary) -> void:
@@ -10,7 +11,7 @@ static func build(app, parent: Control, design_id: String, racks: int, on_msg: C
 	var rows := []
 	for l in r.lines:
 		if l.short <= 0: continue
-		var nm := VBoxContainer.new(); nm.add_child(Kit.link(l.name, func(): app.learn(l.id), 13))
+		var nm := VBoxContainer.new(); var lk := Kit.link(BK.ell(l.name, 40), func(): app.learn(l.id), 13); lk.tooltip_text = str(l.name); nm.add_child(lk)
 		if not l.buyable: nm.add_child(Kit.label(str(l.get("reason", "Unavailable now")), 11, Kit.RD, true))
 		rows.append([nm, str(int(l.need)), str(int(l.have)), str(int(l.onOrder)) if l.onOrder > 0 else "—", Kit.usd(l.unitPrice) if l.buyable else "—", ("%s mo" % l.leadMonths) if l.buyable else "—"])
 	if Layout.phone:   # no 6-column table in a drawer: one small card per part
@@ -25,6 +26,7 @@ static func build(app, parent: Control, design_id: String, racks: int, on_msg: C
 		var spc := Kit.check("+ spares", sp_state.get("sp", true), func(on): sp_state["sp"] = on); if Layout.phone: spc.custom_minimum_size.y = Layout.tap()
 		h.add_child(spc)
 		var order := Kit.btn("ORDER ALL MISSING · %s" % Kit.usd(r.cost), func():
+			if not BK.gate("order_missing", 1200): return   # a double click never orders twice
 			var out := []
 			for l in r.toBuy:
 				if l.buyable:

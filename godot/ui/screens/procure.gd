@@ -23,7 +23,8 @@ const TIER := {"diy": ["DIY", "Build it yourself"], "oem": ["OEM", "OEM integrat
 
 func _ready() -> void: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
+const BK := preload("res://ui/build_keep.gd")
+func refresh() -> void: BK.refresh(self, app, _rebuild)
 
 func _rebuild() -> void:
 	if showroom != null and showroom.get_parent() != null: showroom.get_parent().remove_child(showroom)   # keep the turntable (and its spin) across refreshes
@@ -68,6 +69,8 @@ func _showroom(c1: VBoxContainer, platforms: Array, t: Dictionary, f: Dictionary
 	row.add_theme_constant_override("separation", 10); c1.add_child(row)
 	var left := VBoxContainer.new(); left.size_flags_horizontal = Control.SIZE_EXPAND_FILL; left.size_flags_stretch_ratio = 1.7; left.add_theme_constant_override("separation", 6); row.add_child(left)
 	left.add_child(showroom)
+	var vh := get_viewport().get_visible_rect().size.y   # short landscape phones: a smaller turntable, the facts stay in view
+	showroom.custom_minimum_size.y = 400.0 if not Layout.compact else clampf(vh * 0.27, 120.0, 280.0)
 	showroom.set_spec(RackModel.spec_from_template(b, t, f), not st.live)
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 8); left.add_child(tb)
 	var door_b := Kit.btn("Door: open" if showroom.door_open else "Door: closed", func(): showroom.set_door(not showroom.door_open); app.sfx("click"); refresh(), "pri" if showroom.door_open else "", 14)
@@ -82,13 +85,20 @@ func _showroom(c1: VBoxContainer, platforms: Array, t: Dictionary, f: Dictionary
 	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 8); cv.add_child(hr); hr.add_child(Logo.make(vend.capitalize(), 34.0)); hr.add_child(Kit.label(plat, 17, Kit.TX if st.live else Kit.DIM, true))
 	var status := "In stock" if st.live and not st.pre else ("PRE-ORDER · ships %s" % Kit.date_of(st.ships) if st.pre else ("Ships %d (locked)" % int(st.from) if st.future else "End of sale"))
 	cv.add_child(Kit.chip(status.to_upper(), Kit.GR if st.live else Kit.AM, 12))
-	cv.add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Power", "%d kW" % int(f.kWPerRack)], ["Memory", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Cooling", str(t.rack.cooling)]], 2))
+	cv.add_child(Kit.stats([["Accel / rack", str(int(f.accels))], ["Power", "%d kW" % int(f.kWPerRack)], ["Memory", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Cooling", str(t.rack.cooling)]], 2))
 	var ok := true; for c in checks: if not c.ok: ok = false
 	var lamp := HBoxContainer.new(); lamp.add_theme_constant_override("separation", 8); cv.add_child(lamp)
 	var dot := ColorRect.new(); dot.color = Kit.GR if ok else Kit.RD; dot.custom_minimum_size = Vector2(14, 14); dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER; lamp.add_child(dot)
 	lamp.add_child(Kit.label("Your hall can take it" if ok else "Your hall needs work first", 14, Kit.GR if ok else Kit.RD, true))
-	# carousel: one row, scroll sideways
-	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size = Vector2(0, 92); sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; c1.add_child(sc)
+	# carousel: one row that scrolls sideways, with ◀ ▶ that step to the previous / next platform. A vertical wheel or drag over it
+	# scrolls the page, never gets trapped turning into a sideways scroll.
+	var crow := HBoxContainer.new(); crow.add_theme_constant_override("separation", 6); c1.add_child(crow)
+	var pi := platforms.find(plat)
+	var prv := Kit.btn("◀", func(): plat = platforms[posmod(pi - 1, platforms.size())]; tier_sel = ""; app.sfx("click"); refresh(), "", 16); prv.custom_minimum_size.x = maxf(44.0, Layout.tap()); prv.tooltip_text = "Previous platform"
+	var nxt := Kit.btn("▶", func(): plat = platforms[posmod(pi + 1, platforms.size())]; tier_sel = ""; app.sfx("click"); refresh(), "", 16); nxt.custom_minimum_size.x = maxf(44.0, Layout.tap()); nxt.tooltip_text = "Next platform"
+	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size = Vector2(0, 92); sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	crow.add_child(prv); crow.add_child(sc); crow.add_child(nxt)
+	sc.gui_input.connect(_wheel_to_page.bind(sc))
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); sc.add_child(hb)
 	var sel_i := 0
 	for i in platforms.size():
@@ -141,18 +151,27 @@ func _planner(root: Control) -> void:
 		pa[1].add_child(Kit.label(str(t.codex.summary), 14, Kit.TX, true))
 		var mx := Kit.fold_panel("More: details", "p_more", folds, func(): refresh(), false, pa[1], true)
 		mx[1].add_child(Kit.label(t.codex.explain, 13, Kit.DIM, true))
-		mx[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]], 2))
+		mx[1].add_child(Kit.stats([["Accel / rack", str(int(f.accels))], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]], 2))
 	else:
 		pa[1].add_child(Kit.label(t.codex.explain, 14, Kit.TX, true))
-		pa[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]]))
+		pa[1].add_child(Kit.stats([["Accel / rack", str(int(f.accels))], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]]))
 	var ph := Kit.panel("2 · How many accelerators?", false, c2)
-	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 14); ph[1].add_child(hr)
-	var slh: float = Layout.tap() if Layout.phone else 0.0
-	var sl := Kit.slider(maxf(f.accels, racks * f.accels), f.accels, f.accels * 64, f.accels, func(_v): pass)
-	Kit.on_set(sl, func(v): want = int(v); app.sfx("click"); refresh())
-	sl.value_changed.connect(func(v): want = int(v); lbl_hint.text = "%s" % Kit.num(v))
-	if Layout.phone: sl.custom_minimum_size.y = slh; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hr.add_child(sl); lbl_hint = Kit.label(Kit.num(racks * f.accels), 28, Kit.CY); hr.add_child(lbl_hint)
+	# whole racks only: the slider runs from 1 rack to 64 racks of this platform; − / + step one rack; the number is the accelerator count
+	var per := maxi(1, int(f.accels))
+	var vr := HBoxContainer.new(); vr.add_theme_constant_override("separation", 10); ph[1].add_child(vr)
+	lbl_hint = Kit.label(Kit.num(racks * per), 28, Kit.CY); vr.add_child(lbl_hint)
+	vr.add_child(Kit.label("accelerators  ·  %s of %d" % ["1 rack" if racks == 1 else "%d racks" % racks, per], 14, Kit.DIM, true))
+	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 10); ph[1].add_child(hr)
+	# Kit.slider adds the − / + step buttons and a finger-sized thumb on touch layouts; one step = one rack.
+	var sl := Kit.slider(clampi(racks, 1, 64), 1, 64, 1, func(_v): pass)
+	sl.exp_edit = false; sl.set_value_no_signal(clampi(racks, 1, 64))   # linear: one notch per rack
+	if not Layout.touch:   # mouse / pad: explicit − / + as well
+		var mb := Kit.btn("−", func(): want = clampi(racks - 1, 1, 64) * per; app.sfx("click"); refresh(), "", 18); mb.disabled = racks <= 1; hr.add_child(mb)
+	Kit.on_set(sl, func(v): want = int(v) * per; app.sfx("click"); refresh())
+	sl.value_changed.connect(func(v): if is_instance_valid(lbl_hint): lbl_hint.text = Kit.num(int(v) * per))
+	hr.add_child(sl)
+	if not Layout.touch:
+		var pb := Kit.btn("+", func(): want = clampi(racks + 1, 1, 64) * per; app.sfx("click"); refresh(), "", 18); pb.disabled = racks >= 64; hr.add_child(pb)
 	var pf: float = f.tflopsFp8 if f.tflopsFp8 > 0 else f.tflopsBf16
 	ph[1].add_child(Kit.label(("= %d rack%s · %s PFLOPS · %d kW" % [racks, "s" if racks > 1 else "", Kit.num(racks * pf / 1000.0, 1), int(racks * f.kWPerRack)]) if Layout.phone else "= %d rack%s · %s PFLOPS %s · %s TB memory · %d kW" % [racks, "s" if racks > 1 else "", Kit.num(racks * pf / 1000.0, 1), "FP8" if f.tflopsFp8 > 0 else "BF16", Kit.num(racks * f.memGB / 1000.0, 1), int(racks * f.kWPerRack)], 14, Kit.DIM, true))
 	var pt := Kit.panel("3 · How do you want to buy it?", false, c2)
@@ -187,6 +206,7 @@ func _planner(root: Control) -> void:
 	if is_pre and Layout.phone: bm[1].add_child(Kit.label("PRE-ORDER: ships %s, cancel refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
 	elif is_pre: bm[1].add_child(Kit.label("PRE-ORDER: ships %s. You queue behind the hyperscalers at the launch premium, delivery lands after the ship date, and cancelling refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
 	var ob := Kit.btn("NOT ENOUGH CASH" if cant_afford else "%s %d RACK%s · %s" % ["PRE-ORDER" if is_pre else "ORDER", racks, "S" if racks > 1 else "", Kit.usd(q.cost)], func():
+		if not BK.gate("order", 1200): return   # a fast double click (or a second tap while the screen rebuilds) never orders twice
 		pmsg = b.act("buyTemplate", [t.id, racks]); app.sfx(("cash_big" if racks >= 20 else "order") if pmsg.ok else "error"); refresh(), "go", 17)
 	ob.disabled = cant_afford or q.unavailable.size() > 0 or not q.get("orderable", true); ob.custom_minimum_size = Vector2(0, 52)
 	if Layout.phone: bm[1].add_child(Control.new()); bm[1].get_child(bm[1].get_child_count() - 1).custom_minimum_size = Vector2(0, 6)
@@ -197,6 +217,16 @@ func _planner(root: Control) -> void:
 		if pmsg.ok: bm[1].add_child(Kit.btn("Next: deploy it from the Warehouse →", func(): app.go("stock"), "pri", 14))
 
 var lbl_hint: Label
+
+## A vertical wheel over the sideways carousel scrolls the page instead (Godot would turn it into a sideways scroll and trap it).
+func _wheel_to_page(e: InputEvent, sc: ScrollContainer) -> void:
+	var mb := e as InputEventMouseButton
+	if mb == null or not mb.pressed or mb.shift_pressed or not (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN): return
+	var p: Node = sc.get_parent()
+	while p != null and not p is ScrollContainer: p = p.get_parent()
+	if p != null: (p as ScrollContainer).scroll_vertical += int((-1.0 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0) * 60.0 * maxf(1.0, mb.factor))
+	sc.accept_event()
+
 
 # ---------- roadmap: keynotes, what shipped, what is coming ----------
 func _roadmap(root: Control) -> void:
@@ -270,7 +300,7 @@ func _parts(root: Control) -> void:
 	if Layout.phone and sel != "": cols.move_child(dc, 0)   # the picked part's detail and BUY sit above the long list
 	if sel != "" and offers.has(sel):
 		var o: Dictionary = offers[sel]; var it: Dictionary = o.item
-		var dp := Kit.panel(it.name, true, dc)
+		var dp := Kit.panel(BK.ell(it.name, 40), true, dc)
 		var rows := []; for s in Kit.specs_of(it): rows.append([Kit.label(s[0], 13, Kit.DIM), Kit.label(s[1], 13)])
 		dp[1].add_child(Kit.table([], rows)); Kit.codex_card(dp[1], it.codex)
 		if o.available:
@@ -279,6 +309,7 @@ func _parts(root: Control) -> void:
 			var h: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); h.add_theme_constant_override("separation", 10 if Layout.phone else 8); dp[1].add_child(h)
 			h.add_child(Kit.label("Qty", 14, Kit.DIM)); h.add_child(Kit.spin(qty, 1, 100000, 1, func(v): qty = int(v); refresh()))
 			var buy := Kit.btn("BUY %s" % Kit.usd(total + spare_cost), func():
+				if not BK.gate("buy", 1000): return
 				var m := b.act("buy", [it.id, qty])
 				if m.ok and spares and sq > 0: b.act("buy", [it.id, sq, true])
 				bmsg = m.message; app.sfx("buy" if m.ok else "bad"); refresh(), "go", 15)
