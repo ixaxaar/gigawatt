@@ -13,6 +13,7 @@ export const energyActions = (c: Ctx): Partial<GameStore> => {
         const i = (g.powerOffers ?? []).findIndex((o) => o.id === offerId);
         if (i < 0) return fail('Offer not found or expired.');
         const o = g.powerOffers![i];
+        if (mwOverride !== undefined && mwOverride !== null && !Number.isFinite(mwOverride)) return fail('Contract size (MW) must be a number.');
         const mw = Math.max(1, Math.min(o.mw * 2, Math.round(mwOverride ?? o.mw)));
         g.powerOffers!.splice(i, 1);
         (g.powerContracts ??= []).push({ ...o, mw, startMonth: g.month + 1, endMonth: g.month + o.termMonths });
@@ -39,7 +40,7 @@ export const energyActions = (c: Ctx): Partial<GameStore> => {
       }),
 
     setSpotReserve: (usd) =>
-      commit((g) => { g.spotReserve = Math.max(0, usd); return ok(`Reserve price $${Math.max(0, usd).toFixed(2)}/GPU-hr.`); }),
+      commit((g) => { if (!Number.isFinite(usd)) return fail('Reserve price must be a number.'); g.spotReserve = Math.max(0, usd); return ok(`Reserve price $${Math.max(0, usd).toFixed(2)}/GPU-hr.`); }),
 
   };
 };

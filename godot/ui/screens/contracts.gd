@@ -90,7 +90,7 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); box.add_child(v)
 	v.add_child(Kit.label("WHAT YOU NEED TO BUY", 12, Kit.CY))
 	for o in opts:
-		var afford: bool = o.cost <= b.g.cash
+		var afford: bool = float(o.get("orderCost", o.cost)) <= b.g.cash
 		if Layout.compact: v.add_child(Kit.label("%d × %s" % [int(o.racks), o.t.name], 14, Kit.TX, true))   # narrow drawer: the name gets its own wrapping line, the chips flow below
 		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 8); h.add_theme_constant_override("v_separation", 4); v.add_child(h)
 		if not Layout.compact: h.add_child(Kit.label("%d × %s" % [int(o.racks), o.t.name], 14))
@@ -98,12 +98,14 @@ func _needs(parent: Control, c: Dictionary, signed_at = null) -> void:
 		for t in o.tags: h.add_child(Kit.tag(str(t)))
 		var rows := []; for x in o.cover: rows.append([Kit.label("✓" if x.ok else "✗", 12, Kit.GR if x.ok else Kit.RD), x.label, "need %s" % x.need, str(x.have)])
 		v.add_child(Kit.table([], rows))
-		v.add_child(Kit.rich("%s · parts+install ready ≈ %s  [color=#%s](%s)[/color]" % [Kit.usd(o.cost), Kit.date_of(o.readyMonth), (Kit.GR if o.fitsRamp else Kit.RD).to_html(false), ("%d mo spare" % int(o.slack)) if o.fitsRamp else ("%d mo too late" % int(-o.slack))], 12))
+		v.add_child(Kit.rich("%s · parts+install ready ≈ %s  [color=#%s](%s)[/color]" % [Kit.usd(o.get("orderCost", o.cost)), Kit.date_of(o.readyMonth), (Kit.GR if o.fitsRamp else Kit.RD).to_html(false), ("%d mo spare" % int(o.slack)) if o.fitsRamp else ("%d mo too late" % int(-o.slack))], 12))
 		if not Layout.phone: v.add_child(Kit.label(("Earns ≈ %s/mo, power ≈ %s/mo → pays back in %d months" % [Kit.usd(o.revenueMo), Kit.usd(o.powerMo), int(o.paybackMo)]) if o.get("paybackMo") != null else "Does not pay back at this price", 11, Kit.DIM, true))
 		if o.hallGaps.size() > 0: v.add_child(Kit.label("Your hall also needs: " + " · ".join(o.hallGaps), 11, Kit.AM, true)); v.add_child(Kit.link("→ Build", func(): app.go("facility"), 11))
 		var bh := _btn_box(v, 6)
-		var easy := Kit.btn("EASY PATH — do it all for me" if afford else "Need more cash — take a loan", func(): Kit.confirm(self, "Easy path: order %d rack%s for %s to serve %s? %s" % [int(o.racks), "" if int(o.racks) == 1 else "s", Kit.usd(o.cost), str(c.customer), (("It earns about %s a month and pays back in %d months; this contract runs %d months, and the racks keep earning on the next ones." % [Kit.usd(o.revenueMo), int(o.paybackMo), int(c.get("durationMonths", 0))]) if o.get("paybackMo") != null else "At this price it does not pay back.")], func(): var r: Dictionary = b.act("startEasy", [c.id, o.t.id, int(o.racks)]); msg = str(r.get("message", "")); app.sfx("buy"); app.toast(msg, "good" if r.get("ok", false) else "bad"); refresh(), "Do it"), "go", 14 if Layout.phone else 12); easy.disabled = not afford; bh.add_child(easy)
-		var just := Kit.btn("Just order the racks (I'll do the rest)", func(): Kit.confirm(self, "Order %d rack%s for %s? You still have to deploy, cluster and assign them yourself." % [int(o.racks), "" if int(o.racks) == 1 else "s", Kit.usd(o.cost)], func(): var r: Dictionary = b.act("buyTemplate", [o.t.id, int(o.racks)]); msg = str(r.get("message", "")); app.sfx("buy"); app.toast(msg, "good" if r.get("ok", false) else "bad"); refresh(), "Order"), "", 12); just.disabled = not afford; bh.add_child(just)
+		var easy := Kit.btn(("EASY PATH — do it all for me" if o.get("canStartEasy", o.fitsRamp) else "Easy path unavailable") if afford else "Need more cash — take a loan", func(): Kit.confirm(self, "Easy path signs %s for you, orders what is needed (up to %d rack%s, %s) and sets everything up. %s" % [str(c.customer), int(o.racks), "" if int(o.racks) == 1 else "s", Kit.usd(o.get("orderCost", o.cost)), (("It earns about %s a month and pays back in %d months; this contract runs %d months, and the racks keep earning on the next ones." % [Kit.usd(o.revenueMo), int(o.paybackMo), int(c.get("durationMonths", 0))]) if o.get("paybackMo") != null else "At this price it does not pay back.")], func(): var r: Dictionary = b.act("startEasy", [c.id, o.t.id, int(o.racks)]); msg = str(r.get("message", "")); app.sfx("buy"); app.toast(msg, "good") if r.get("ok", false) else null; refresh(), "Do it"), "go", 14 if Layout.phone else 12); easy.disabled = not afford or not o.get("canStartEasy", o.fitsRamp); bh.add_child(easy)
+		var just := Kit.btn("Just order the racks (I'll do the rest)", func(): Kit.confirm(self, "Order %d rack%s for %s? This does NOT sign the contract: sign it yourself before the offer expires (%s), then deploy, cluster and assign the racks." % [int(o.racks), "" if int(o.racks) == 1 else "s", Kit.usd(o.get("orderCost", o.cost)), Kit.date_of(c.deadlineMonth)], func(): var r: Dictionary = b.act("buyTemplate", [o.t.id, int(o.racks)]); msg = str(r.get("message", "")); app.sfx("buy"); app.toast(msg, "good") if r.get("ok", false) else null; refresh(), "Order"), "", 12); just.disabled = not afford or not o.get("canOrder", true); bh.add_child(just)
+		if afford and easy.disabled and str(o.get("easyBlocker", "")) != "": v.add_child(Kit.label(str(o.easyBlocker), 12, Kit.AM, true))
+		elif afford and just.disabled and str(o.get("orderBlocker", "")) != "": v.add_child(Kit.label(str(o.orderBlocker), 12, Kit.AM, true))
 		v.add_child(Kit.hsep())
 	if Layout.phone: v.add_child(Kit.label("Easy path does everything for you as parts arrive.", 12, Kit.DIM, true))
 	else: v.add_child(Kit.label("Easy path = the game signs, buys, installs plant, deploys racks, builds the fabric and assigns the contract for you as parts arrive (watch Projects on the Datacenter screen). After a manual order: wait for delivery → Warehouse ▸ Deploy racks → wait for commissioning → Supercomputer ▸ build a cluster → come back here and assign it.", 11, Kit.DIM, true))
@@ -155,7 +157,7 @@ func _rack_assign(parent: Control, contract_id: String) -> void:
 			if d.id == r.designId: dn = d.name
 		fl.add_child(Kit.btn("%s · %s" % [dn.left(18), "RK-%04d" % int(r.get("serial", 0))], func(): sel = sel.filter(func(x): return x != r.id) if sel.has(r.id) else sel + [r.id]; rack_pick[contract_id] = sel; refresh(), "pri" if sel.has(r.id) else "", 12))
 	fl.add_child(Kit.btn("all", func(): rack_pick[contract_id] = free.map(func(r): return r.id); refresh(), "", 12))
-	var go := Kit.btn("SERVE FROM %s RACK%s" % [str(sel.size()) if sel.size() > 0 else "", "" if sel.size() == 1 else "S"], func(): msg = b.act("assignRacks", [contract_id, sel]).message; rack_pick.erase(contract_id); refresh(), "go", 12)
+	var go := Kit.btn("SERVE FROM %s RACK%s" % [str(sel.size()) if sel.size() > 0 else "", "" if sel.size() == 1 else "S"], func(): msg = _say(b.act("assignRacks", [contract_id, sel])); rack_pick.erase(contract_id); refresh(), "go", 12)
 	go.disabled = sel.is_empty(); v.add_child(go)
 
 func _pending(parent: Control, a: Dictionary) -> void:
@@ -167,7 +169,7 @@ func _pending(parent: Control, a: Dictionary) -> void:
 	var f := _checks(v, c)
 	if f.verdict != "ready": _needs(v, c, a.get("deployBy", a.startMonth + 4))
 	_rack_assign(v, c.id)
-	var base: Array = pick.get(c.id, [f.best.cluster.id] if f.get("best") != null else [])
+	var base: Array = pick.get(c.id, [f.best.cluster.id] if (f.verdict == "ready" and f.get("best") != null) else [])
 	if b.g.clusters.size() > 0:
 		var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 8); fl.add_theme_constant_override("v_separation", 8 if Layout.phone else 4); v.add_child(fl)
 		for cl in b.g.clusters:

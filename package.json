@@ -6,7 +6,8 @@
   "scripts": {
     "bridge": "vite build -c vite.bridge.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:interactions": "vitest run src/engine/interactions.test.ts"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

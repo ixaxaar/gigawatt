@@ -15,6 +15,7 @@ export const deployActions = (c: Ctx): Partial<GameStore> => {
     reserveRacks: (designId, racks) =>
       commit((g) => {
         if (!g.racks.some((r) => r.id === designId)) return fail('Unknown rack design.');
+        if (!Number.isFinite(racks) || Math.floor(racks) < 0) return fail('Reserve a whole number of racks (0 or more).');
         reserve(g, designId, Math.floor(racks));
         return ok(`Reserved ${Math.floor(racks)} rack(s) of this design.`);
       }),

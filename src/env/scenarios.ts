@@ -34,6 +34,7 @@ export function stressFill(racksPerTemplate: number, hallsPerClass = 1, only?: (
     const f = templateFacts(t); const cls = classes.find(c => c === t.rack.cooling) ?? 'air';
     const halls = hallOf[cls] ?? []; if (!halls.length) { report.skipped.push(t.id + ': no hall'); continue; }
     const hall = halls[rr++ % halls.length];
+    st().adoptTemplate(t.id); // keep every template's designs even when its order is skipped (buyTemplate is atomic)
     let n = racksPerTemplate, r = st().buyTemplate(t.id, n, false);
     while (!r.ok && n > 1 && /llocation/.test(r.message)) { n = Math.max(1, Math.floor(n / 2)); r = st().buyTemplate(t.id, n, false); }
     if (!r.ok) { report.skipped.push(`${t.id}: ${r.message.slice(0, 90)}`); continue; }

@@ -12,6 +12,8 @@ export const facilityActions = (c: Ctx): Partial<GameStore> => {
   return {
     buildHall: (name, coolingClass, rackSlots) =>
       commit((g) => {
+        if (!['air', 'rdhx', 'dlc', 'immersion'].includes(coolingClass)) return fail(`Unknown cooling class '${coolingClass}': pick air, rdhx, dlc or immersion.`);
+        if (!Number.isFinite(rackSlots)) return fail('Rack slots must be a number.');
         const slots = Math.floor(rackSlots);
         if (slots < 4 || slots > 200) return fail('A new hall starts with 4–200 rack slots; buy more floor space later in units.');
         const cost = 2_000_000 + 250_000 * slots;
@@ -64,6 +66,7 @@ export const facilityActions = (c: Ctx): Partial<GameStore> => {
         if (item.powerType === 'pdu' || item.powerType === 'power-shelf') {
           return fail(`${item.name} is a rack/tray-level part — it gets used when you place a rack, not installed in the hall. Keep it in the warehouse.`);
         }
+        if (!Number.isFinite(qty)) return fail('Quantity must be a number.');
         const n = Math.floor(qty);
         if (n <= 0) return fail('Quantity must be positive.');
         const have = g.inventory[itemId] ?? 0;
@@ -92,6 +95,7 @@ export const facilityActions = (c: Ctx): Partial<GameStore> => {
         if (!hall) return fail(`Hall '${hallId}' not found.`);
         const item = getItem(itemId);
         if (!item || item.kind !== 'cooling') return fail('Pick a cooling-equipment catalog item.');
+        if (!Number.isFinite(qty)) return fail('Quantity must be a number.');
         const n = Math.floor(qty);
         if (n <= 0) return fail('Quantity must be positive.');
         // Rear-door halls reject heat through the same chilled-water (air-class) plant; immersion loops can use warm-water (DLC-class) plant.

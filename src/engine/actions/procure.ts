@@ -6,19 +6,19 @@ import { rackIdOf, rackOf, templateBom, trayIdOf, trayOf } from '../../plan';
 import type { GameState } from '../../types';
 import { spareQty } from '../../sim/failures';
 import { fail, ok, usd } from './consts';
-import { offerFor, reserve, volumeDiscount } from '../pricing';
+import { offerFor, reserve, templateOrder, volumeDiscount } from '../pricing';
 import { frameworkFor, recordSpend, relDiscount } from '../../sim/vendors';
 import type { Ctx } from './ctx';
 
 export const procureActions = (c: Ctx): Partial<GameStore> => {
-  const { get, commit, logln } = c;
+  const { get, set, commit, logln } = c;
   return {
     buy: (itemId, qty, spare = false) =>
       commit((g) => {
         const item = getItem(itemId);
         if (!item) return fail(`Unknown item '${itemId}'.`);
         if (item.kind === 'uplink') return fail('Internet circuits are added on Build → Internet.');
-        if (!Number.isFinite(qty) || qty <= 0) return fail('Order quantity must be positive.');
+        if (!Number.isFinite(qty) || Math.floor(qty) < 1) return fail('Order at least one whole unit.');
         const offer = offerFor(g, item);
         if (!offer.available) {
           return fail(offer.reason ?? 'Not purchasable this month.', [
@@ -72,32 +72,22 @@ export const procureActions = (c: Ctx): Partial<GameStore> => {
       const nRacks = Math.floor(racks);
       if (!t) return { ok: false, message: 'Unknown template.' };
       if (!(nRacks >= 1)) return { ok: false, message: 'Order at least one rack.' };
+      // atomic: adopting the designs and placing the order succeed or fail together
+      const before = get().game;
       const adopted = get().adoptTemplate(templateId);
-      if (!adopted.ok) return adopted;
-      return commit((g) => {
-        const bom = templateBom(t, nRacks);
-        const spareBom: Record<string, number> = {};
-        if (spares) for (const id of Object.keys(bom)) { const sp = spareQty(id, bom[id]); if (sp) spareBom[id] = sp; }
-        let cost = 0, lead = 1;
-        const lines: { itemId: string; n: number; unit: number; lead: number; spare?: boolean }[] = [];
-        const wanted: [string, number, boolean][] = [...Object.entries(bom).map(([i, n]): [string, number, boolean] => [i, n, false]), ...Object.entries(spareBom).map(([i, n]): [string, number, boolean] => [i, n, true])];
+      if (!adopted.ok) { set({ game: before }); return adopted; }
+      const res = commit((g) => {
+        const order = templateOrder(g, t, nRacks, { spares });
+        if (order.blocker) return fail(order.blocker);
+        const { cost, lead, lines } = order;
         const vendorSpend = new Map<string, number>();
         let relNote = '', fwNote = '';
-        for (const [itemId, n, isSpare] of wanted) {
-          const item = getItem(itemId)!;
-          const offer = offerFor(g, item);
-          if (!offer.available) return fail(`${item.name} is not purchasable yet: ${offer.reason}`);
-          if (offer.qtyCap && n > offer.qtyCap) return fail(`Allocation: the vendor will only sell ${offer.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`);
-          const unit = Math.round(offer.unitPrice * (1 - volumeDiscount(item, n, offer.unitPrice)) * (1 + t.premium));
-          cost += unit * n;
-          vendorSpend.set(item.vendor, (vendorSpend.get(item.vendor) ?? 0) + unit * n);
-          const fw = frameworkFor(g, item.vendor);
+        for (const l of lines) {
+          vendorSpend.set(l.vendor, (vendorSpend.get(l.vendor) ?? 0) + l.unit * l.n);
+          const fw = frameworkFor(g, l.vendor);
           if (fw) fwNote = ` (framework -${Math.round(fw.discountPct)}%)`;
-          const rel = relDiscount(g, item.vendor);
+          const rel = relDiscount(g, l.vendor);
           if (rel > 0) relNote = ` (relationship -${Math.round(rel * 100)}%)`;
-          const l = Math.max(1, Math.round(offer.leadMonths * t.leadFactor));
-          lead = Math.max(lead, l);
-          lines.push({ itemId, n, unit, lead: l, spare: isSpare });
         }
         if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd(cost)} but you have $${usd(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
@@ -109,6 +99,8 @@ export const procureActions = (c: Ctx): Partial<GameStore> => {
         logln(g, 'info', `Ordered ${nRacks} × ${t.name} for $${usd(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium)${vendorNote}. Full bill of materials arrives by month ${g.month + lead}.`);
         return ok(`Ordered ${nRacks} racks: $${usd(cost)}, everything arrives by month ${g.month + lead}.${vendorNote}`);
       });
+      if (!res.ok) set({ game: before });
+      return res;
     },
 
 

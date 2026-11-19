@@ -124,6 +124,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the engine is organised and where
 
 ## Playtesting
 
+**Interaction graph.** [`docs/INTERACTIONS.md`](docs/INTERACTIONS.md) describes every player action (preconditions, side effects, feedback, the UI control that triggers it) and every entity lifecycle; `src/engine/interactions.ts` is the machine-readable version. `pnpm run test:interactions` checks the engine against it: a seeded random walk over all three modes verifies every action's result, atomicity, state transitions and side effects, and that every UI gate (verdicts, quotes, readiness) agrees with the action it enables. It runs in CI with the rest of the tests. **Any new action or UI control that calls `b.act(...)` must be added to `src/engine/interactions.ts`**; the test fails otherwise.
+
 `PLAYTEST=1 ./node_modules/.bin/vitest run src/playtest` plays full 97-month campaigns with six scripted players (idle, random, operator, tycoon, cautious, spot-only), checks whole-state invariants every month, verifies determinism and save/load round-trips, and writes `docs/playtest/report.md`. `GW_SMOKE=1 GW_SMOKE_YEARS=8 godot --headless --path godot` soak-tests the UI: a scripted player runs year by year and every screen must still build.
 
 ## Train agents on it

@@ -68,8 +68,10 @@ func _cue(kind: String) -> AudioStream:
 	return s
 
 ## Play a cue by name. Legacy aliases (the old procedural names) keep working.
+const UI_CUES := ["click", "hover", "tab", "confirm", "cancel", "toggle_on", "toggle_off", "tick"]
 func play(kind: String) -> void:
 	if muted: return
+	if kind in UI_CUES and (TouchScroll.is_busy() or (kind == "hover" and Layout.touch)): return   # a scrolling finger is not clicking
 	var s := _cue(kind)
 	if s == null: return
 	var meta: Dictionary = catalog.sfx.get(kind, {})

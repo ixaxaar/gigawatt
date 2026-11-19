@@ -17,7 +17,7 @@ export const DILEMMA_WINDOW_MONTHS = 3;
 export function applyEffect(g: GameState, e: StoryEffect): void {
   if (e.cash) g.cash = Math.round(g.cash + e.cash);
   if (e.rep) g.reputation = clamp(g.reputation + e.rep, 0, 100);
-  if (e.staff) g.staff = Math.max(0, g.staff + e.staff);
+  if (e.staff) g.staff = Math.max(Math.min(1, g.staff), g.staff + e.staff); // never below 1 (the fireStaff floor)
   if (e.utility) g.utilityUSDPerKWh = Math.round(g.utilityUSDPerKWh * e.utility * 1e4) / 1e4;
 }
 

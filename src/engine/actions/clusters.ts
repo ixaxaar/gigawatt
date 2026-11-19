@@ -19,6 +19,8 @@ export const clustersActions = (c: Ctx): Partial<GameStore> => {
         if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(', ')}.`);
         const claimed = ids.filter((id) => placed.get(id)?.clusterId);
         if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(', ')}.`);
+        const offline = ids.filter((id) => placed.get(id)!.status !== 'online');
+        if (offline.length) return fail(`Only online racks can be clustered; ${offline.map((id) => `${id} is ${placed.get(id)!.status}`).join(', ')}. Wait for them to finish installing and commissioning.`);
         // monotonic: ids are never reused, so stale references can't silently point at a different cluster
         const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m, c) => Math.max(m, parseInt(c.id.replace(/\D/g, '')) || 0), 0)) + 1;
         g.clusterSeq = nextN;

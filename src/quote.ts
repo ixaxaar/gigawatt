@@ -1,10 +1,30 @@
 import type { GameState, SystemTemplate } from './types';
 import { getItem } from './data';
-import { offerAt, volumeDiscount } from './store';
+import { offerAt, templateOrder, volumeDiscount } from './store';
 import { templateBom, templateFacts, racksFor } from './plan';
 
-export interface Quote { preorder?: boolean; ships?: number; cost: number; lead: number; lines: { id: string; name: string; n: number; unit: number; total: number }[]; unavailable: string[]; capped: string[] }
-export function quote(t: SystemTemplate, racks: number, month: number, preorder = false): Quote {
+export interface Quote {
+  preorder?: boolean; ships?: number; cost: number; lead: number;
+  lines: { id: string; name: string; n: number; unit: number; total: number; spare?: boolean }[]; unavailable: string[]; capped: string[];
+  /** Only with a game state: true when buyTemplate(t, racks) would pass every check except cash (nothing unavailable, nothing over allocation). */
+  orderable?: boolean;
+  /** Only with a game state: why buyTemplate would refuse regardless of cash (the exact message it returns), if anything. */
+  blocker?: string;
+}
+/** Price of `racks` × template. With a game state `g` this is exactly what buyTemplate charges (vendor discounts,
+ *  relationship-scaled allocation, bundled spares); without one it is the catalog list price (exports, launch tables). */
+export function quote(t: SystemTemplate, racks: number, month: number, preorder = false, g?: GameState): Quote {
+  if (g) {
+    const o = templateOrder({ ...g, month }, t, racks, { spares: true, preorder });
+    const lines: Quote['lines'] = o.lines.map((l) => ({ id: l.itemId, name: `${getItem(l.itemId)!.name}${l.spare ? ' (spares)' : ''}`, n: l.n, unit: l.unit, total: l.unit * l.n, ...(l.spare ? { spare: true } : {}) }));
+    lines.sort((a, b) => b.total - a.total);
+    const pre = o.lines.filter((l) => l.preorder);
+    return {
+      cost: o.cost, lead: o.lead, lines, unavailable: o.unavailable.map((u) => u.name), capped: o.capped.map((c) => `${c.name} (cap ${c.cap}/qtr)`),
+      orderable: !o.blocker, ...(o.blocker ? { blocker: o.blocker } : {}),
+      ...(pre.length ? { preorder: true, ships: Math.max(0, ...pre.map((l) => l.ships ?? 0)) } : {}),
+    };
+  }
   const lines: Quote['lines'] = []; const unavailable: string[] = []; const capped: string[] = []; let cost = 0, lead = 1; let pre = false, ships = 0;
   for (const [id, n] of Object.entries(templateBom(t, racks))) {
     const item = getItem(id)!; const o = offerAt(item, month, preorder);

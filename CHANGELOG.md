@@ -2,6 +2,20 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Scrolling on touch:** a drag that started on a button (collapsible headers, offer rows) also pressed it on release. Now the press is cancelled for certain. While a finger scrolls, UI sounds, screen rebuilds and auto-scroll hold off, and hover sounds are off on touch screens.
+- **"I click Serve and nothing happens":** every refused action now shows its reason in a toast wherever you are scrolled to (it used to appear only at the top of the drawer). "Ready" verdicts now only pick a cluster that is actually free, so SIGN & START SERVING no longer signs and then fails to assign.
+- **Easy Path and ordering are now consistent.** Easy Path is atomic: if it fails nothing stays signed. Quotes show the exact amount that is charged (spares and discounts included). EASY PATH, Just order, ORDER, PLACE RACK, ASSIGN & GO LIVE and Repay are enabled only when the action will succeed, with the reason shown when they are off. The confirm dialogs say plainly that Easy Path signs the contract and ordering racks does not.
+- Easy-path projects no longer advance twice a month from the UI; clusters can't be built from racks that aren't online; bad numbers (NaN, negatives, fractions) are refused instead of corrupting the game; a story decision can no longer fire your last operator.
+
+### Added
+- **Interaction graph and conformance test** (`docs/INTERACTIONS.md`, `src/engine/interactions.ts`, `npm run test:interactions`, part of CI): lifecycles for contracts, racks, orders, clusters, Easy Path and more, every action with its preconditions, effects and the UI control that triggers it. A seeded random walk checks the engine against it after every action. Adding an action or `b.act` call without updating the graph fails the build.
+
+### Known gaps
+- Easy Path on an already-signed contract does not use the contract's real deadline when called directly (the UI button is gated correctly); pinned as a known issue in the interaction test.
+
 ## [0.9.1] - 2026-11-19 (alpha 2)
 
 Phone and website pass, from feedback on the first alpha: too much text, too cramped, taps landing on the wrong thing.

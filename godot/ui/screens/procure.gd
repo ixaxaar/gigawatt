@@ -188,9 +188,10 @@ func _planner(root: Control) -> void:
 	elif is_pre: bm[1].add_child(Kit.label("PRE-ORDER: ships %s. You queue behind the hyperscalers at the launch premium, delivery lands after the ship date, and cancelling refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
 	var ob := Kit.btn("NOT ENOUGH CASH" if cant_afford else "%s %d RACK%s · %s" % ["PRE-ORDER" if is_pre else "ORDER", racks, "S" if racks > 1 else "", Kit.usd(q.cost)], func():
 		pmsg = b.act("buyTemplate", [t.id, racks]); app.sfx(("cash_big" if racks >= 20 else "order") if pmsg.ok else "error"); refresh(), "go", 17)
-	ob.disabled = cant_afford or q.unavailable.size() > 0; ob.custom_minimum_size = Vector2(0, 52)
+	ob.disabled = cant_afford or q.unavailable.size() > 0 or not q.get("orderable", true); ob.custom_minimum_size = Vector2(0, 52)
 	if Layout.phone: bm[1].add_child(Control.new()); bm[1].get_child(bm[1].get_child_count() - 1).custom_minimum_size = Vector2(0, 6)
 	bm[1].add_child(ob)
+	if ob.disabled and not cant_afford and str(q.get("blocker", "")) != "": bm[1].add_child(Kit.label(str(q.blocker), 13, Kit.AM, true))   # say why the button is off
 	if not pmsg.is_empty():
 		bm[1].add_child(Kit.label(pmsg.message, 14, Kit.GR if pmsg.ok else Kit.RD, true))
 		if pmsg.ok: bm[1].add_child(Kit.btn("Next: deploy it from the Warehouse →", func(): app.go("stock"), "pri", 14))

@@ -23,7 +23,8 @@ describe('rack reservation', () => {
     expect(rackReadiness(g(), 'clone', 1)!.buildableNow).toBe(0);
     expect(rackReadiness(g(), base.id, 1)!.buildableNow).toBe(2);
     expect(st().placeRack(g().halls[0].id, 'clone').ok).toBe(false);
-    st().reserveRacks(base.id, -1); st().reserveRacks('clone', 1);    // split 1 + 1
+    expect(st().reserveRacks(base.id, -1).ok).toBe(false);            // negative counts are refused (reservations are released by cancel/reduce)
+    useGame.setState((s) => ({ game: { ...s.game, rackReserve: { [base.id]: 1 } } })); st().reserveRacks('clone', 1);    // split 1 + 1
     expect(rackReadiness(g(), base.id, 1)!.buildableNow).toBe(1);
     expect(rackReadiness(g(), 'clone', 1)!.buildableNow).toBe(1);
   });

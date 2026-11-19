@@ -521,7 +521,7 @@ static func reveal(node: Control) -> void:
 	if node == null or not node.is_inside_tree(): return
 	var tree := node.get_tree()
 	for i in 9: await tree.process_frame   # let the screen's own scroll-holding after a rebuild finish first
-	if not is_instance_valid(node) or not node.is_inside_tree(): return
+	if not is_instance_valid(node) or not node.is_inside_tree() or TouchScroll.is_busy(): return
 	var scs: Array = []   # every scroller around the node, innermost first (a column can scroll inside the page's own scroller)
 	var p: Node = node.get_parent()
 	while p != null:

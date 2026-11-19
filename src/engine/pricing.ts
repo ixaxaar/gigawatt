@@ -1,7 +1,9 @@
-import { VENDORS } from '../data';
+import { getItem, VENDORS } from '../data';
+import { templateBom } from '../plan';
+import { spareQty } from '../sim/failures';
 import { estimateCapexBasis } from '../sim/economy';
 import { capMultiplier, frameworkDiscount, frameworkFor, relDiscount } from '../sim/vendors';
-import { CatalogItem, GameState, monthToYear } from '../types';
+import { CatalogItem, GameState, monthToYear, SystemTemplate } from '../types';
 import { preorderOpens, shipMonthOf } from '../data/launches';
 
 // ---------- procurement model (deterministic: f(item, month)) ----------
@@ -124,6 +126,46 @@ export const volumeDiscount = (item: CatalogItem, qty: number, unitPrice: number
   if (doublings <= 0) return 0;
   return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
 };
+
+/** One priced line of a template order (bill of materials or bundled spares). */
+export interface TemplateOrderLine { itemId: string; n: number; unit: number; lead: number; spare: boolean; vendor: string; preorder?: boolean; ships?: number }
+export interface TemplateOrder {
+  lines: TemplateOrderLine[]; cost: number; lead: number;
+  /** Parts that cannot be bought (first entry is what buyTemplate reports). */
+  unavailable: { itemId: string; name: string; reason: string }[];
+  /** Lines above the vendor allocation for this quarter (buyTemplate refuses the whole batch). */
+  capped: { itemId: string; name: string; n: number; cap: number }[];
+  /** The first reason buyTemplate would refuse before checking cash, in its order of checks. */
+  blocker?: string;
+}
+/** THE price of a template order: what buyTemplate charges and what quotes show. Uses offerFor (relationship +
+ *  framework discounts, relationship-scaled allocation), per-line volume discount, integration premium and bundled spares.
+ *  `preorder=false` treats parts that are only pre-orderable as unavailable (planning views). */
+export function templateOrder(g: GameState, t: SystemTemplate, racks: number, opts: { spares?: boolean; preorder?: boolean } = {}): TemplateOrder {
+  const spares = opts.spares ?? true, preorder = opts.preorder ?? true;
+  const bom = templateBom(t, racks);
+  const wanted: [string, number, boolean][] = Object.entries(bom).map(([i, n]): [string, number, boolean] => [i, n, false]);
+  if (spares) for (const id of Object.keys(bom)) { const sp = spareQty(id, bom[id]); if (sp) wanted.push([id, sp, true]); }
+  const out: TemplateOrder = { lines: [], cost: 0, lead: 1, unavailable: [], capped: [] };
+  for (const [itemId, n, spare] of wanted) {
+    const item = getItem(itemId)!; const o = offerFor(g, item);
+    if (!o.available || (!preorder && o.preorder)) {
+      const reason = o.reason ?? 'only available as a pre-order';
+      if (!spare) out.unavailable.push({ itemId, name: item.name, reason });
+      out.blocker ??= `${item.name} is not purchasable yet: ${reason}`;
+      continue;
+    }
+    if (o.qtyCap && n > o.qtyCap) {
+      out.capped.push({ itemId, name: item.name, n, cap: o.qtyCap });
+      out.blocker ??= `Allocation: the vendor will only sell ${o.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`;
+    }
+    const unit = Math.round(o.unitPrice * (1 - volumeDiscount(item, n, o.unitPrice)) * (1 + t.premium));
+    const lead = Math.max(1, Math.round(o.leadMonths * t.leadFactor));
+    out.lines.push({ itemId, n, unit, lead, spare, vendor: item.vendor, ...(o.preorder ? { preorder: true, ships: o.ships } : {}) });
+    out.cost += unit * n; out.lead = Math.max(out.lead, lead);
+  }
+  return out;
+}
 
 /** Full parts list (itemId -> count) needed to physically place one rack of a design. */
 export const rackBom = (state: GameState, designId: string): Record<string, number> | undefined => {

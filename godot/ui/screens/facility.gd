@@ -158,11 +158,15 @@ func _rebuild() -> void:
 	var dopts := [["", "choose rack design…"]]; for d in g.racks: dopts.append([d.id, d.name])
 	dr.add_child(_tap(Kit.option(dopts, design, func(v): design = v; refresh())))
 	var missing := []
+	var ready_now := true   # the engine's own answer (it counts only parts not reserved for other designs)
 	if design != "":
 		var bom: Dictionary = b.q("rackBom", [design])
 		for id in bom:
 			if g.inventory.get(id, 0) < bom[id]: missing.append(id)
-	var pb := Kit.btn("PLACE RACK", func(): msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0; dr.add_child(pb)
+		var rr = b.q("rackReadiness", [design, 1])
+		if rr is Dictionary: ready_now = bool(rr.get("buildableNow", true))
+	var pb := Kit.btn("PLACE RACK", func(): msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0 or not ready_now; dr.add_child(pb)
+	if design != "" and missing.size() == 0 and not ready_now: dr.add_child(Kit.label("these parts are reserved for another design", 12, Kit.AM))
 	if missing.size() > 0: dr.add_child(Kit.label("missing %d part type(s)" % missing.size(), 12, Kit.AM))
 	if design != "" and missing.size() > 0:
 		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170 if not Layout.phone else 80); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)

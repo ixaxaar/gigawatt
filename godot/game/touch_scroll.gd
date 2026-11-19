@@ -5,9 +5,16 @@ extends Node
 ## Cards are made pass-through, and a drag that starts on a button scrolls the list and cancels the press.
 
 const THRESH := 14.0
+const SETTLE_MS := 350
+## True while a finger is scrolling a list, and for a moment after: sounds, screen rebuilds and auto-scrolls hold off until then.
+static var _down := false
+static var _last_end := -100000
+static func is_busy() -> bool:
+	return _down or Time.get_ticks_msec() - _last_end < SETTLE_MS
 var _cands: Array = []
 var _start := Vector2.ZERO
 var _on_btn := false
+var _btn: BaseButton = null    # the button the finger went down on (its press is cancelled once the finger turns into a scroll)
 var _dragging := false
 var _acc := Vector2.ZERO
 
@@ -36,14 +43,19 @@ func _input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch:
 		var t := e as InputEventScreenTouch
 		if t.pressed and t.index == 0: _begin(t.position)
-		else: _cands.clear(); _dragging = false     # released, or a second finger arrived (pinch is the hall's)
+		else:   # released, or a second finger arrived (pinch is the hall's)
+			if _dragging or _down: _last_end = Time.get_ticks_msec()
+			_cands.clear(); _dragging = false; _down = false
 	elif e is InputEventScreenDrag and not _cands.is_empty():
 		var d := e as InputEventScreenDrag
 		if d.index != 0: return
 		if not _dragging:
 			if d.position.distance_to(_start) < THRESH: return
-			_dragging = true; _acc = Vector2.ZERO
+			_dragging = true; _down = true; _acc = Vector2.ZERO
 			if _on_btn:
+				# Godot's BaseButton remembers 'press started inside' and only mouse MOTION clears it, so a bare release elsewhere still
+				# fires `pressed`. Disabling the button resets that state for sure; then the release is harmless.
+				if is_instance_valid(_btn) and not _btn.disabled: _btn.disabled = true; _btn.disabled = false
 				var rel := InputEventMouseButton.new(); rel.button_index = MOUSE_BUTTON_LEFT; rel.pressed = false; rel.position = Vector2(-9999, -9999); rel.global_position = rel.position
 				Input.parse_input_event(rel)       # let go outside the button: it never counts as a tap
 		_acc -= d.relative
@@ -79,7 +91,7 @@ func _top_at(p: Vector2) -> String:
 
 func _begin(p: Vector2) -> void:
 	if OS.has_feature("debug"): print("TAP ", p, " top=", _top_at(p))
-	_cands.clear(); _on_btn = false; _dragging = false; _start = p
+	_cands.clear(); _on_btn = false; _btn = null; _dragging = false; _down = false; _start = p
 	var hit: Array = []
 	for s in get_tree().root.find_children("*", "ScrollContainer", true, false):
 		var sc := s as ScrollContainer
@@ -92,7 +104,7 @@ func _begin(p: Vector2) -> void:
 	if _cands.is_empty(): return
 	for bt in (_cands[0] as ScrollContainer).find_children("*", "BaseButton", true, false):
 		var c := bt as Control
-		if c.is_visible_in_tree() and c.get_global_rect().has_point(p): _on_btn = true; break
+		if c.is_visible_in_tree() and c.get_global_rect().has_point(p): _on_btn = true; _btn = bt as BaseButton; break
 
 ## True when something drawn later (a pop-up, a dimming layer) sits over this list at the touch point.
 func _covered(sc: Control, p: Vector2) -> bool:

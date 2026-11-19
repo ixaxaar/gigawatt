@@ -1,5 +1,6 @@
 // GIGAWATT engine — contracts actions. Generated from the former store.ts monolith.
 import { assignFromRacks, startProject, stepAllProjects } from '../../autopilot';
+import { clusterShareUsed } from '../../contractfit';
 import type { GameStore } from '../api';
 import { getItem } from '../../data';
 import { inferenceCapacity } from '../../sim/perf';
@@ -98,15 +99,7 @@ export const contractsActions = (c: Ctx): Partial<GameStore> => {
             const cap = inferenceCapacity(stats, item, contract.model, { contextTokens: contract.contextTokens, tpotMs: contract.tpotMs });
             for (const i of cap.issues) if (i.severity === 'error') issues.push({ ...i, message: `[${cl!.name}] ${i.message}` });
             // other inference contracts already consume a share of this cluster
-            let used = 0;
-            for (const o of g.activeContracts) {
-              if (o.contract.id === contractId || !o.clusterIds.includes(cl!.id)) continue;
-              if (o.contract.kind === 'training') { used = 1; break; }
-              const oct = o.contract; if (oct.kind !== 'inference') continue;
-              const oc = o.clusterIds.map((id) => g.clusters.find((x) => x.id === id)?.stats).filter(Boolean) as ClusterStats[];
-              const oCap = oc.reduce((n, st2) => { const it2 = getItem(st2.acceleratorId); return n + (it2?.kind === 'accelerator' ? inferenceCapacity(st2, it2, oct.model, { contextTokens: oct.contextTokens, tpotMs: oct.tpotMs }).tokensPerSec : 0); }, 0);
-              used += oCap > 0 ? Math.min(1, oct.tokensPerSec / oCap) : 0;
-            }
+            const used = clusterShareUsed(g, cl!.id, contractId);
             total += cap.tokensPerSec * Math.max(0, 1 - Math.min(1, used));
             worstTtft = Math.max(worstTtft, cap.ttftMs);
             if (cap.ttftMs > contract.ttftMs) issues.push({ severity: 'error', code: 'ttft-sla', message: `[${cl!.name}] p95 TTFT ${Math.round(cap.ttftMs)} ms exceeds the ${contract.ttftMs} ms SLA.`, learn: item.id });
@@ -138,9 +131,10 @@ export const contractsActions = (c: Ctx): Partial<GameStore> => {
         return ok('Cluster released; the contract is awaiting deployment again (2 months grace).');
       }),
 
-    assignRacks: (contractId, rackIds) => assignFromRacks(get(), contractId, rackIds),
+    // Both are composite (sign + cluster/order + assign); all-or-nothing: on failure the game is restored exactly.
+    assignRacks: (contractId, rackIds) => { const before = get().game; const r = assignFromRacks(get(), contractId, rackIds); if (!r.ok) set({ game: before }); return r; },
 
-    startEasy: (contractId, templateId, racks) => { const r = startProject(get(), contractId, templateId, racks); if (r.ok) stepAllProjects(get); return r; },
+    startEasy: (contractId, templateId, racks) => { const before = get().game; const r = startProject(get(), contractId, templateId, racks); if (r.ok) stepAllProjects(get); else set({ game: before }); return r; },
 
     stepEasy: () => stepAllProjects(get),
 

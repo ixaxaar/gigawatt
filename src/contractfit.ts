@@ -6,7 +6,15 @@ import { inferenceCapacity } from './sim/perf';
 import type { Accelerator, Cluster, ClusterStats, Contract, GameState } from './types';
 
 export interface Check { label: string; need: string; have: string; ok: boolean }
-export interface ClusterFit { cluster: Cluster; checks: Check[]; ok: boolean; score: number }
+export interface ClusterFit {
+  cluster: Cluster; checks: Check[];
+  /** Meets the contract's spec on its own (ignores other contracts on it). */
+  ok: boolean; score: number;
+  /** Not taken by other contracts: training needs it exclusively, inference needs enough tokens left. */
+  free: boolean;
+  /** Why it is not free (who holds it), when it is not. */
+  busy?: string;
+}
 export interface Fit {
   best?: ClusterFit; all: ClusterFit[]; verdict: 'ready' | 'building' | 'short' | 'none';
   shortfall: string; pipelineAccels: number; monthsToDeploy: number;
@@ -31,6 +39,33 @@ export function pipeline(g: GameState) {
   return { online, freeOnline, installing, warehouse, ordered };
 }
 
+/** Share (0..1+) of a cluster's capacity already taken by OTHER signed contracts, exactly as assignContract counts it:
+ *  a training job holds it entirely (1); inference contracts take tokensPerSec / (their clusters' capacity) each. */
+export function clusterShareUsed(g: GameState, clusterId: string, contractId: string): number {
+  let used = 0;
+  for (const o of g.activeContracts) {
+    if (o.contract.id === contractId || !o.clusterIds.includes(clusterId)) continue;
+    if (o.contract.kind === 'training') { used = 1; break; }
+    const oct = o.contract; if (oct.kind !== 'inference') continue;
+    const oc = o.clusterIds.map((id) => g.clusters.find((x) => x.id === id)?.stats).filter(Boolean) as ClusterStats[];
+    const oCap = oc.reduce((n, st2) => { const it2 = getItem(st2.acceleratorId); return n + (it2?.kind === 'accelerator' ? inferenceCapacity(st2, it2 as Accelerator, oct.model, { contextTokens: oct.contextTokens, tpotMs: oct.tpotMs }).tokensPerSec : 0); }, 0);
+    used += oCap > 0 ? Math.min(1, oct.tokensPerSec / oCap) : 0;
+  }
+  return used;
+}
+
+/** Can `c` actually get this cluster now (assignContract would not refuse it for being busy)? Training needs it
+ *  exclusively; inference needs enough tokens left after the other contracts on it. */
+function availability(g: GameState, c: Contract, cl: Cluster, cap: number | undefined): { free: boolean; busy?: string } {
+  const others = g.activeContracts.filter((o) => o.contract.id !== c.id && o.clusterIds.includes(cl.id));
+  if (!others.length) return { free: true };
+  const who = others.map((o) => o.contract.customer).join(', ');
+  if (c.kind === 'training') return { free: false, busy: `${cl.name} is serving ${who}; a training job needs it exclusively.` };
+  const used = clusterShareUsed(g, cl.id, c.id);
+  const left = (cap ?? 0) * Math.max(0, 1 - Math.min(1, used));
+  return left >= c.tokensPerSec ? { free: true } : { free: false, busy: `${cl.name} is shared with ${who}: about ${k(left)} tok/s left of the ${k(c.tokensPerSec)} needed.` };
+}
+
 export function contractFit(g: GameState, c: Contract): Fit {
   const all: ClusterFit[] = g.clusters.filter((cl) => cl.stats).map((cl) => {
     const s = cl.stats!; const checks: Check[] = [];
@@ -49,14 +84,18 @@ export function contractFit(g: GameState, c: Contract): Fit {
         (checks as any).cap = cap.tokensPerSec;
       } else checks.push({ label: 'Accelerators', need: 'any', have: 'none', ok: false });
     }
-    return { cluster: cl, checks, ok: checks.every((x) => x.ok), score: checks.filter((x) => x.ok).length / checks.length };
+    const av = availability(g, c, cl, (checks as any).cap);
+    return { cluster: cl, checks, ok: checks.every((x) => x.ok), score: checks.filter((x) => x.ok).length / checks.length, free: av.free, ...(av.busy ? { busy: av.busy } : {}) };
   }).sort((a, b) => b.score - a.score);
-  const best = all[0];
+  // `best` is the cluster the contract can actually get: a qualifying free one, else the closest free one, else (all busy) the closest overall.
+  const best = all.find((x) => x.ok && x.free) ?? all.find((x) => x.free) ?? all[0];
+  const busyQualifying = all.filter((x) => x.ok && !x.free);
   const p = pipeline(g);
   const pipelineAccels = p.freeOnline + p.installing + p.warehouse + p.ordered;
   let shortfall = '';
   let verdict: Fit['verdict'] = 'none';
-  if (best?.ok) verdict = 'ready';
+  if (best?.ok && best.free) verdict = 'ready';
+  else if (best?.ok) { shortfall = `Every cluster that qualifies is busy: ${busyQualifying.map((x) => x.busy).join(' ')} Release one, or build more capacity.`; verdict = pipelineAccels > 0 ? 'building' : 'short'; }
   else if (c.kind === 'training') {
     const have = best?.cluster.stats?.accelerators ?? 0;
     const gap = Math.max(0, c.minAccelerators - have);
@@ -71,6 +110,7 @@ export function contractFit(g: GameState, c: Contract): Fit {
     else if (best) { shortfall = 'A hard limit fails (weights/TTFT) — more of the same GPU will not help; pick more memory or faster prefill.'; verdict = 'short'; }
     else { shortfall = 'You have no cluster yet.'; verdict = pipelineAccels > 0 ? 'building' : 'short'; }
   }
+  if (verdict !== 'ready' && best && !best.ok && busyQualifying.length) shortfall += ` (Busy but qualifying: ${busyQualifying.map((x) => x.busy).join(' ')})`;
   // typical time to deploy more: longest GPU lead (~4 mo) + 2 install + 1 commission + cluster build
   const monthsToDeploy = verdict === 'ready' ? 0 : p.ordered + p.warehouse + p.installing + p.freeOnline > 0 ? 3 : 7;
   return { best, all, verdict, shortfall, pipelineAccels, monthsToDeploy };
@@ -82,12 +122,24 @@ export function contractFit(g: GameState, c: Contract): Fit {
 import { TEMPLATES } from './data/templates';
 import { templateFacts } from './plan';
 import { quote } from './quote';
+import { templateOrder } from './engine/pricing';
 import type { SystemTemplate } from './types';
 
 export interface BuildOption {
   t: SystemTemplate; racks: number; accels: number; cost: number; lead: number; kw: number;
   readyMonth: number; fitsRamp: boolean; slack: number; revenueMo: number; powerMo: number; paybackMo: number;
   hallGaps: string[]; why: string; tags: string[]; unavailable: string[]; cover: Check[];
+  /** What buyTemplate / startEasy actually charge for this build (bundled spares, vendor discounts). `cost` is the
+   *  catalog list price of the bare BOM (kept as-is: agents and golden trajectories rank builds by it). Gate buttons on these: */
+  orderCost: number;
+  /** Why buyTemplate(t, racks) refuses regardless of cash (allocation cap, part not purchasable), if it does. */
+  orderBlocker?: string;
+  /** "Just order the racks" succeeds: no orderBlocker and orderCost ≤ cash. */
+  canOrder: boolean;
+  /** EASY PATH succeeds via the build path: canOrder and fitsRamp. */
+  canStartEasy: boolean;
+  /** Why EASY PATH would refuse this build (first failing reason), if it would. */
+  easyBlocker?: string;
 }
 
 const HOURS = 730;
@@ -150,7 +202,11 @@ export function buildOptions(g: GameState, c: Contract, signedAt?: number): Buil
     if (c.slaAvailability >= 0.995 && hall) { const r = hallResilience(hall); cover.push({ label: 'Outage protection', need: `${(c.slaAvailability * 100).toFixed(1)}% SLA → tier N or better`, have: `${r.tier}${r.gaps[0] ? ' — ' + r.gaps[0] : ''}`, ok: r.score >= 0.9 }); }
     cover.push({ label: 'Deploy window', need: `by ${Math.round(deployBy)}`, have: `ready ${readyMonth}`, ok: readyMonth <= deployBy });
     cover.push({ label: 'Hall power / cooling / space', need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? 'needs plant' : 'fits', ok: hallGaps.length === 0 });
-    out.push({ t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
+    const exact = templateOrder(g, t, racks, { preorder: false });
+    const canOrder = !exact.blocker && exact.cost <= g.cash;
+    const fitsRamp = readyMonth <= deployBy;
+    const easyBlocker = exact.blocker ?? (!fitsRamp ? `Parts take ${q.lead} months to arrive but ${c.customer} requires capacity within ${c.rampMonths ?? 4} months of signing.` : exact.cost > g.cash ? `Insufficient funds: this order costs $${Math.round(exact.cost).toLocaleString('en-US')} but you have $${Math.round(g.cash).toLocaleString('en-US')}.` : undefined);
+    out.push({ orderCost: exact.cost, ...(exact.blocker ? { orderBlocker: exact.blocker } : {}), canOrder, canStartEasy: canOrder && fitsRamp, ...(easyBlocker ? { easyBlocker } : {}), t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
   }
   const feasible = out.filter(o => o.cost <= Math.max(g.cash * 4, 1));
   const pool = feasible.length ? feasible : out;

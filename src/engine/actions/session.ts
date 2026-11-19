@@ -42,7 +42,7 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
       return ok(ch.outcome);
     },
 
-    setMode: (m) => set(s => ({ game: { ...s.game, mode: m } })),
+    setMode: (m) => { if (!(['learner', 'operator', 'tycoon'] as const).includes(m)) return; set(s => ({ game: { ...s.game, mode: m } })); }, // unknown modes are ignored
 
     patchProject: (id, patch) => set(s => ({ game: { ...s.game, projects: (s.game.projects ?? []).map(p => p.id === id ? { ...p, ...patch } : p) } })),
 

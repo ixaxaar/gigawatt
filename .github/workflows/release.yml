@@ -21,7 +21,9 @@ jobs:
         with: { node-version: 22 }
       - run: pnpm install --frozen-lockfile
       - run: ./node_modules/.bin/tsc --noEmit
-      - run: ./node_modules/.bin/vitest run
+      - name: Interaction graph (engine follows docs/INTERACTIONS.md)
+        run: pnpm run test:interactions
+      - run: ./node_modules/.bin/vitest run --exclude src/engine/interactions.test.ts
       - name: Wiki is up to date
         run: |
           node scripts/build-wiki.mjs

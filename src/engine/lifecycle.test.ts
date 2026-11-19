@@ -34,6 +34,7 @@ describe('decommissionRack', () => {
   it('refuses clustered racks, then pays 0.85 × residual and cleans up', () => {
     fresh();
     expect(placeH100Rack().ok).toBe(true);
+    useGame.setState((s) => ({ game: { ...s.game, halls: s.game.halls.map((h) => ({ ...h, racks: h.racks.map((r) => ({ ...r, status: 'online' as const })) })) } })); // only online racks can be clustered
     const rack0 = g().halls[0].racks[0];
     const fabric = {
       id: 'f', name: 'F', scaleOutTech: 'ib-ndr' as const, topology: 'single-domain' as const,

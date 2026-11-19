@@ -15,7 +15,7 @@
 
 | I want to… | Touch |
 |---|---|
-| add a player action | new function in `engine/actions/<domain>.ts` (or a new domain file + one line in `actions/index.ts`). It is automatically exposed to Godot and the agent env. |
+| add a player action | new function in `engine/actions/<domain>.ts` (or a new domain file + one line in `actions/index.ts`). It is automatically exposed to Godot and the agent env. Then model it in `engine/interactions.ts` (preconditions, effects, lifecycle edges, UI bindings) and update `docs/INTERACTIONS.md`; `pnpm run test:interactions` fails until you do. The same applies to a new UI control that calls `b.act(...)`. |
 | add a UI question | `engine/queries/<domain>.ts`; names are unique-checked at load. |
 | add a **dynamic** (obsolescence, competitors, maintenance, staff…) | new `System` in `sim/systems/*`, inserted in `PIPELINE` in `sim/tick.ts`. Order matters: RNG draws are sequenced, so insert deliberately. |
 | change a rule/number | the relevant pure module in `src/sim/*`. |

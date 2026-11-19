@@ -78,6 +78,7 @@ func _ready() -> void:
 	pad = Pad.new(); pad.app = self; add_child(pad)
 	coach = Coach.new(); coach.app = self; add_child(coach)
 	b.changed.connect(_on_changed)
+	b.refused.connect(func(_a, why): toast(why, "bad"))   # every refused action explains itself, wherever the player is scrolled to
 	hall.slot_clicked.connect(func(s): if cur == "facility" and screens.has("facility"): screens["facility"].on_slot(s) else: _inspect(s))
 	var auto := OS.get_environment("GW_AUTOSTART")
 	if auto != "": _new_game(auto); if OS.get_environment("GW_DEMO") != "": _demo(int(OS.get_environment("GW_DEMO")))
@@ -439,8 +440,11 @@ func _begin() -> void:
 	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild(); hall.top_view()
 	if OS.get_environment("GW_SETTINGS") != "": get_tree().create_timer(0.5).timeout.connect(func(): if settings_ui == null: _settings())
 
+var _changed_pending := false
 func _on_changed() -> void:
 	if not started: return
+	if TouchScroll.is_busy(): _changed_pending = true; return   # never rebuild a list under a scrolling finger; replayed right after
+	_changed_pending = false
 	var g := b.g
 	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(20, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
@@ -697,7 +701,7 @@ func _speed_label() -> void:
 
 func next_month() -> void:
 	if not started: return
-	audio.play("month"); b.act("nextMonth"); b.act("stepEasy"); _claim()
+	audio.play("month"); b.act("nextMonth"); _claim()   # nextMonth already steps the Easy-path projects
 	if OS.get_environment("GW_NOAUTOSAVE") == "": pass
 
 ## Launch keynotes queue up in the engine (g.news); show them one at a time and stop the clock while one is open.
@@ -742,7 +746,8 @@ func _process(dt: float) -> void:
 		if _stats_t > 2.0:
 			_stats_t = 0.0
 			print("STATS draws=%d prims=%d vram_mb=%d fps=%d" % [RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME), RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME), int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED)) / 1048576, int(Engine.get_frames_per_second())])
-	if _refresh_due and Time.get_ticks_msec() >= _refresh_at: _refresh_cur()
+	if _changed_pending and not TouchScroll.is_busy(): _on_changed()
+	elif _refresh_due and Time.get_ticks_msec() >= _refresh_at and not TouchScroll.is_busy(): _refresh_cur()
 	var idle := started and speed == 0 and Time.get_ticks_msec() - _last_input > 3000
 	if idle != Settings.idle: Settings.idle = idle; Settings.apply_fps()
 	if not started or speed == 0 or menu_ui != null or keynote.visible or story_ui.visible: return

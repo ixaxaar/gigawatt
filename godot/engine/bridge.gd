@@ -2,6 +2,8 @@ class_name Bridge
 extends Node
 ## Client for the headless TypeScript engine (sidecar/bridge.mjs). All game rules live there.
 
+## An action the player asked for was refused: the reason, so it can be shown wherever they are on screen (never a silent no-op).
+signal refused(action: String, why: String)
 signal changed
 var _io   # FileAccess (a spawned Node process) or EngineSocket (an engine that is already running)
 
@@ -110,9 +112,16 @@ func _req(d: Dictionary) -> Dictionary:
 ## Run a store action (mutates the game). Returns the ActionResult dict ({ok,message,issues?}) or {}.
 func act(name: String, args: Array = []) -> Dictionary:
 	var r := _req({"fn": "act", "name": name, "args": args})
-	if not r.get("ok", false): push_error("act %s: %s" % [name, r.get("error", "?")]); return {"ok": false, "message": str(r.get("error", "engine error"))}
+	if not r.get("ok", false): push_error("act %s: %s" % [name, r.get("error", "?")]); refused.emit(name, "Something went wrong in the engine: %s" % str(r.get("error", "?"))); return {"ok": false, "message": str(r.get("error", "engine error"))}
 	g = r.game; _cache.clear(); changed.emit()
 	var res = r.get("result", null)
+	if typeof(res) == TYPE_DICTIONARY and res.get("ok", true) == false:
+		var why := str(res.get("message", ""))
+		var iss = res.get("issues")
+		if iss is Array:
+			for i in iss:
+				if i is Dictionary and i.get("severity", "error") == "error": why += "\n✗ " + str(i.get("message", "")); break   # the first concrete reason
+		refused.emit(name, why if why != "" else "That did not work.")
 	return res if typeof(res) == TYPE_DICTIONARY else {"ok": true, "message": ""}
 
 ## Agent-environment call (reset / step / ...): used by screenshot tooling to load scenarios into the UI.

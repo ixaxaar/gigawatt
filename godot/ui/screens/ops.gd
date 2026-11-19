@@ -59,7 +59,7 @@ func _rebuild() -> void:
 		db = HFlowContainer.new(); db.add_theme_constant_override("h_separation", 12); db.add_theme_constant_override("v_separation", 12); dp[1].add_child(db)
 	for amt in [1.0e6, 5.0e6]:
 		var rb := Kit.btn("Repay %s" % Kit.usd(amt), func(): _act("repayLoan", [int(amt)]), "", 13)
-		rb.disabled = g.debt <= 0 or g.cash < amt; db.add_child(rb)
+		rb.disabled = g.debt <= 0 or g.cash < amt or amt > g.debt; db.add_child(rb)
 	var all := int(minf(g.debt, g.cash))
 	var ab := Kit.btn("Repay all affordable", func(): _act("repayLoan", [all]), "go", 13)
 	ab.disabled = g.debt <= 0 or all <= 0; db.add_child(ab); _wide(db)

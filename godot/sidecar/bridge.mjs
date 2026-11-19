@@ -8405,6 +8405,92 @@ function computePUE(hall, get) {
   const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
   return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
 }
+const trayIdOf = (t) => `tray-${t.id}`;
+const rackIdOf = (t) => `rack-${t.id}`;
+const trayOf = (t) => ({ id: trayIdOf(t), name: `${t.platform} tray`, chassisId: t.tray.chassisId, parts: t.tray.parts });
+const rackOf = (t) => ({
+  id: rackIdOf(t),
+  name: t.name,
+  rackId: t.rack.rackId,
+  coolingInterface: t.rack.cooling,
+  items: [{ type: "tray", trayId: trayIdOf(t), count: t.rack.trayCount }, ...t.rack.extras]
+});
+function templateBom(t, racks = 1) {
+  const need = { [t.rack.rackId]: racks };
+  const add = (id, n) => {
+    need[id] = (need[id] ?? 0) + n * racks;
+  };
+  add(t.tray.chassisId, t.rack.trayCount);
+  for (const p of t.tray.parts) add(p.itemId, p.count * t.rack.trayCount);
+  for (const e of t.rack.extras) add(e.type === "switch" ? e.switchId : e.type === "storage" ? e.storageId : e.type === "power" ? e.powerId : "", e.count);
+  delete need[""];
+  return need;
+}
+function templateFacts(t) {
+  const tray = trayOf(t), rack = rackOf(t);
+  const tv = validateTray(tray, getItem), rv = validateRack(rack, [tray], getItem);
+  const errors = [...tv.issues, ...rv.issues].filter((i) => i.severity === "error").map((i) => `${i.code}: ${i.message}`);
+  const per = tv.stats;
+  const bf = t.tray.parts.reduce((n, p) => {
+    const it2 = getItem(p.itemId);
+    return n + (it2?.kind === "accelerator" ? (it2.tflops.bf16 ?? it2.tflops.fp16 ?? 0) * p.count : 0);
+  }, 0) * t.rack.trayCount;
+  return { tflopsBf16: bf, accels: rv.stats.accels, kWPerRack: rv.stats.kW, scaleUp: rv.stats.scaleUpDomain, tflopsFp8: per.tflopsFp8 * t.rack.trayCount, memGB: per.memGB * t.rack.trayCount, errors };
+}
+const racksFor = (t, n) => Math.max(1, Math.ceil(n / Math.max(1, templateFacts(t).accels)));
+const PART_RATE = {
+  accelerator: 1 / 8e3,
+  psu: 1 / 3e3,
+  nic: 1 / 6e3,
+  nvme: 1 / 6e3,
+  memory: 1 / 2e4,
+  cpu: 1 / 2e4,
+  switch: 1 / 5e3
+};
+const PART_LABEL = {
+  accelerator: "GPU/accelerator",
+  psu: "power supply",
+  nic: "NIC",
+  nvme: "NVMe drive",
+  memory: "DIMM",
+  cpu: "CPU",
+  switch: "ToR switch"
+};
+function rackParts(state2, designId) {
+  const out = {};
+  const d = state2.racks.find((r) => r.id === designId);
+  const add = (id, n) => {
+    out[id] = (out[id] ?? 0) + n;
+  };
+  for (const it2 of d?.items ?? []) {
+    if (it2.type === "tray") {
+      const t = state2.trays.find((x) => x.id === it2.trayId);
+      for (const p of t?.parts ?? []) add(p.itemId, p.count * it2.count);
+    } else if (it2.type === "switch") add(it2.switchId, it2.count);
+  }
+  return out;
+}
+const partClass = (id) => {
+  const k2 = getItem(id)?.kind;
+  return k2 && PART_RATE[k2] !== void 0 ? k2 : void 0;
+};
+function rackRates(state2, designId) {
+  return Object.entries(rackParts(state2, designId)).flatMap(([id, n]) => {
+    const c = partClass(id);
+    return c ? [{ id, rate: n * PART_RATE[c] }] : [];
+  });
+}
+function recommendedSpares(state2, id) {
+  let total = 0;
+  for (const h of state2.halls) for (const p of h.racks) total += rackParts(state2, p.designId)[id] ?? 0;
+  const c = partClass(id);
+  if (!c || total === 0) return 0;
+  return Math.max(1, Math.ceil(total * PART_RATE[c] * 3));
+}
+function spareQty(id, qty) {
+  const c = partClass(id);
+  return c ? Math.max(1, Math.ceil(qty * PART_RATE[c] * 6)) : 0;
+}
 const REL_MAX = 100;
 const FRAMEWORK_MIN_COMMIT_USD = 2e6;
 const FRAMEWORK_MIN_MONTHS = 6;
@@ -8968,6 +9054,36 @@ const volumeDiscount = (item, qty, unitPrice) => {
   if (doublings <= 0) return 0;
   return Math.min(0.25, doublings * (vendor.volumeDiscountPerDoublingPct / 100));
 };
+function templateOrder(g, t, racks, opts = {}) {
+  const spares = opts.spares ?? true, preorder = opts.preorder ?? true;
+  const bom = templateBom(t, racks);
+  const wanted = Object.entries(bom).map(([i, n]) => [i, n, false]);
+  if (spares) for (const id of Object.keys(bom)) {
+    const sp = spareQty(id, bom[id]);
+    if (sp) wanted.push([id, sp, true]);
+  }
+  const out = { lines: [], cost: 0, lead: 1, unavailable: [], capped: [] };
+  for (const [itemId, n, spare] of wanted) {
+    const item = getItem(itemId);
+    const o2 = offerFor(g, item);
+    if (!o2.available || !preorder && o2.preorder) {
+      const reason = o2.reason ?? "only available as a pre-order";
+      if (!spare) out.unavailable.push({ itemId, name: item.name, reason });
+      out.blocker ??= `${item.name} is not purchasable yet: ${reason}`;
+      continue;
+    }
+    if (o2.qtyCap && n > o2.qtyCap) {
+      out.capped.push({ itemId, name: item.name, n, cap: o2.qtyCap });
+      out.blocker ??= `Allocation: the vendor will only sell ${o2.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`;
+    }
+    const unit = Math.round(o2.unitPrice * (1 - volumeDiscount(item, n, o2.unitPrice)) * (1 + t.premium));
+    const lead = Math.max(1, Math.round(o2.leadMonths * t.leadFactor));
+    out.lines.push({ itemId, n, unit, lead, spare, vendor: item.vendor, ...o2.preorder ? { preorder: true, ships: o2.ships } : {} });
+    out.cost += unit * n;
+    out.lead = Math.max(out.lead, lead);
+  }
+  return out;
+}
 const rackBom = (state2, designId) => {
   const design = state2.racks.find((r) => r.id === designId);
   if (!design) return void 0;
@@ -9080,100 +9196,14 @@ function makeCtx(get, set) {
     }
   };
 }
-const trayIdOf = (t) => `tray-${t.id}`;
-const rackIdOf = (t) => `rack-${t.id}`;
-const trayOf = (t) => ({ id: trayIdOf(t), name: `${t.platform} tray`, chassisId: t.tray.chassisId, parts: t.tray.parts });
-const rackOf = (t) => ({
-  id: rackIdOf(t),
-  name: t.name,
-  rackId: t.rack.rackId,
-  coolingInterface: t.rack.cooling,
-  items: [{ type: "tray", trayId: trayIdOf(t), count: t.rack.trayCount }, ...t.rack.extras]
-});
-function templateBom(t, racks = 1) {
-  const need = { [t.rack.rackId]: racks };
-  const add = (id, n) => {
-    need[id] = (need[id] ?? 0) + n * racks;
-  };
-  add(t.tray.chassisId, t.rack.trayCount);
-  for (const p of t.tray.parts) add(p.itemId, p.count * t.rack.trayCount);
-  for (const e of t.rack.extras) add(e.type === "switch" ? e.switchId : e.type === "storage" ? e.storageId : e.type === "power" ? e.powerId : "", e.count);
-  delete need[""];
-  return need;
-}
-function templateFacts(t) {
-  const tray = trayOf(t), rack = rackOf(t);
-  const tv = validateTray(tray, getItem), rv = validateRack(rack, [tray], getItem);
-  const errors = [...tv.issues, ...rv.issues].filter((i) => i.severity === "error").map((i) => `${i.code}: ${i.message}`);
-  const per = tv.stats;
-  const bf = t.tray.parts.reduce((n, p) => {
-    const it2 = getItem(p.itemId);
-    return n + (it2?.kind === "accelerator" ? (it2.tflops.bf16 ?? it2.tflops.fp16 ?? 0) * p.count : 0);
-  }, 0) * t.rack.trayCount;
-  return { tflopsBf16: bf, accels: rv.stats.accels, kWPerRack: rv.stats.kW, scaleUp: rv.stats.scaleUpDomain, tflopsFp8: per.tflopsFp8 * t.rack.trayCount, memGB: per.memGB * t.rack.trayCount, errors };
-}
-const racksFor = (t, n) => Math.max(1, Math.ceil(n / Math.max(1, templateFacts(t).accels)));
-const PART_RATE = {
-  accelerator: 1 / 8e3,
-  psu: 1 / 3e3,
-  nic: 1 / 6e3,
-  nvme: 1 / 6e3,
-  memory: 1 / 2e4,
-  cpu: 1 / 2e4,
-  switch: 1 / 5e3
-};
-const PART_LABEL = {
-  accelerator: "GPU/accelerator",
-  psu: "power supply",
-  nic: "NIC",
-  nvme: "NVMe drive",
-  memory: "DIMM",
-  cpu: "CPU",
-  switch: "ToR switch"
-};
-function rackParts(state2, designId) {
-  const out = {};
-  const d = state2.racks.find((r) => r.id === designId);
-  const add = (id, n) => {
-    out[id] = (out[id] ?? 0) + n;
-  };
-  for (const it2 of d?.items ?? []) {
-    if (it2.type === "tray") {
-      const t = state2.trays.find((x) => x.id === it2.trayId);
-      for (const p of t?.parts ?? []) add(p.itemId, p.count * it2.count);
-    } else if (it2.type === "switch") add(it2.switchId, it2.count);
-  }
-  return out;
-}
-const partClass = (id) => {
-  const k2 = getItem(id)?.kind;
-  return k2 && PART_RATE[k2] !== void 0 ? k2 : void 0;
-};
-function rackRates(state2, designId) {
-  return Object.entries(rackParts(state2, designId)).flatMap(([id, n]) => {
-    const c = partClass(id);
-    return c ? [{ id, rate: n * PART_RATE[c] }] : [];
-  });
-}
-function recommendedSpares(state2, id) {
-  let total = 0;
-  for (const h of state2.halls) for (const p of h.racks) total += rackParts(state2, p.designId)[id] ?? 0;
-  const c = partClass(id);
-  if (!c || total === 0) return 0;
-  return Math.max(1, Math.ceil(total * PART_RATE[c] * 3));
-}
-function spareQty(id, qty) {
-  const c = partClass(id);
-  return c ? Math.max(1, Math.ceil(qty * PART_RATE[c] * 6)) : 0;
-}
 const procureActions = (c) => {
-  const { get, commit, logln } = c;
+  const { get, set, commit, logln } = c;
   return {
     buy: (itemId, qty, spare = false) => commit((g) => {
       const item = getItem(itemId);
       if (!item) return fail(`Unknown item '${itemId}'.`);
       if (item.kind === "uplink") return fail("Internet circuits are added on Build → Internet.");
-      if (!Number.isFinite(qty) || qty <= 0) return fail("Order quantity must be positive.");
+      if (!Number.isFinite(qty) || Math.floor(qty) < 1) return fail("Order at least one whole unit.");
       const offer = offerFor(g, item);
       if (!offer.available) {
         return fail(offer.reason ?? "Not purchasable this month.", [
@@ -9231,35 +9261,24 @@ const procureActions = (c) => {
       const nRacks = Math.floor(racks);
       if (!t) return { ok: false, message: "Unknown template." };
       if (!(nRacks >= 1)) return { ok: false, message: "Order at least one rack." };
+      const before = get().game;
       const adopted = get().adoptTemplate(templateId);
-      if (!adopted.ok) return adopted;
-      return commit((g) => {
-        const bom = templateBom(t, nRacks);
-        const spareBom = {};
-        if (spares) for (const id of Object.keys(bom)) {
-          const sp = spareQty(id, bom[id]);
-          if (sp) spareBom[id] = sp;
-        }
-        let cost = 0, lead = 1;
-        const lines = [];
-        const wanted = [...Object.entries(bom).map(([i, n]) => [i, n, false]), ...Object.entries(spareBom).map(([i, n]) => [i, n, true])];
+      if (!adopted.ok) {
+        set({ game: before });
+        return adopted;
+      }
+      const res = commit((g) => {
+        const order = templateOrder(g, t, nRacks, { spares });
+        if (order.blocker) return fail(order.blocker);
+        const { cost, lead, lines } = order;
         const vendorSpend = /* @__PURE__ */ new Map();
         let relNote = "", fwNote = "";
-        for (const [itemId, n, isSpare] of wanted) {
-          const item = getItem(itemId);
-          const offer = offerFor(g, item);
-          if (!offer.available) return fail(`${item.name} is not purchasable yet: ${offer.reason}`);
-          if (offer.qtyCap && n > offer.qtyCap) return fail(`Allocation: the vendor will only sell ${offer.qtyCap} × ${item.name} per quarter and you asked for ${n}. Order fewer racks or split across quarters.`);
-          const unit = Math.round(offer.unitPrice * (1 - volumeDiscount(item, n, offer.unitPrice)) * (1 + t.premium));
-          cost += unit * n;
-          vendorSpend.set(item.vendor, (vendorSpend.get(item.vendor) ?? 0) + unit * n);
-          const fw = frameworkFor(g, item.vendor);
+        for (const l of lines) {
+          vendorSpend.set(l.vendor, (vendorSpend.get(l.vendor) ?? 0) + l.unit * l.n);
+          const fw = frameworkFor(g, l.vendor);
           if (fw) fwNote = ` (framework -${Math.round(fw.discountPct)}%)`;
-          const rel = relDiscount(g, item.vendor);
+          const rel = relDiscount(g, l.vendor);
           if (rel > 0) relNote = ` (relationship -${Math.round(rel * 100)}%)`;
-          const l = Math.max(1, Math.round(offer.leadMonths * t.leadFactor));
-          lead = Math.max(lead, l);
-          lines.push({ itemId, n, unit, lead: l, spare: isSpare });
         }
         if (cost > g.cash) return fail(`Insufficient funds: this order costs $${usd$1(cost)} but you have $${usd$1(g.cash)}. Try fewer racks, or take a loan on the Dashboard.`);
         g.cash -= cost;
@@ -9271,6 +9290,8 @@ const procureActions = (c) => {
         logln(g, "info", `Ordered ${nRacks} × ${t.name} for $${usd$1(cost)} (${t.tier}, ${Math.round(t.premium * 100)}% integration premium)${vendorNote}. Full bill of materials arrives by month ${g.month + lead}.`);
         return ok(`Ordered ${nRacks} racks: $${usd$1(cost)}, everything arrives by month ${g.month + lead}.${vendorNote}`);
       });
+      if (!res.ok) set({ game: before });
+      return res;
     },
     cancelOrder: (orderId) => commit((g) => {
       const o2 = g.orders.find((x) => x.id === orderId);
@@ -9365,6 +9386,8 @@ const facilityActions = (c) => {
   const { commit, logln } = c;
   return {
     buildHall: (name, coolingClass, rackSlots) => commit((g) => {
+      if (!["air", "rdhx", "dlc", "immersion"].includes(coolingClass)) return fail(`Unknown cooling class '${coolingClass}': pick air, rdhx, dlc or immersion.`);
+      if (!Number.isFinite(rackSlots)) return fail("Rack slots must be a number.");
       const slots = Math.floor(rackSlots);
       if (slots < 4 || slots > 200) return fail("A new hall starts with 4–200 rack slots; buy more floor space later in units.");
       const cost = 2e6 + 25e4 * slots;
@@ -9413,6 +9436,7 @@ const facilityActions = (c) => {
       if (item.powerType === "pdu" || item.powerType === "power-shelf") {
         return fail(`${item.name} is a rack/tray-level part — it gets used when you place a rack, not installed in the hall. Keep it in the warehouse.`);
       }
+      if (!Number.isFinite(qty)) return fail("Quantity must be a number.");
       const n = Math.floor(qty);
       if (n <= 0) return fail("Quantity must be positive.");
       const have = g.inventory[itemId] ?? 0;
@@ -9439,6 +9463,7 @@ const facilityActions = (c) => {
       if (!hall) return fail(`Hall '${hallId}' not found.`);
       const item = getItem(itemId);
       if (!item || item.kind !== "cooling") return fail("Pick a cooling-equipment catalog item.");
+      if (!Number.isFinite(qty)) return fail("Quantity must be a number.");
       const n = Math.floor(qty);
       if (n <= 0) return fail("Quantity must be positive.");
       const compatible = item.serves === hall.coolingClass || hall.coolingClass === "rdhx" && item.serves === "air" || hall.coolingClass === "immersion" && item.serves === "dlc";
@@ -10471,7 +10496,7 @@ const DILEMMA_WINDOW_MONTHS = 3;
 function applyEffect(g, e) {
   if (e.cash) g.cash = Math.round(g.cash + e.cash);
   if (e.rep) g.reputation = clamp$1(g.reputation + e.rep, 0, 100);
-  if (e.staff) g.staff = Math.max(0, g.staff + e.staff);
+  if (e.staff) g.staff = Math.max(Math.min(1, g.staff), g.staff + e.staff);
   if (e.utility) g.utilityUSDPerKWh = Math.round(g.utilityUSDPerKWh * e.utility * 1e4) / 1e4;
 }
 function rivalHeadline(s2, rivalId, name) {
@@ -10559,7 +10584,7 @@ const serveContracts = {
         continue;
       }
       for (const id of ac.clusterIds) c.served.add(id);
-      let availability = 0;
+      let availability2 = 0;
       let accelerators = 0;
       let tokensPerSec = 0;
       if (k2.kind === "training") {
@@ -10574,7 +10599,7 @@ const serveContracts = {
             return n + (pr ? rackAccels(s2, pr.designId) : 0);
           }, 0);
         }
-        availability = total > 0 ? eff / total : 0;
+        availability2 = total > 0 ? eff / total : 0;
         accelerators = eff;
       } else {
         let capacity = 0;
@@ -10596,17 +10621,17 @@ const serveContracts = {
         const served = Math.min(capacity, k2.tokensPerSec);
         for (const pt of parts) if (capacity > 0 && pt.capTok > 0) usedFrac[pt.id] = (usedFrac[pt.id] ?? 0) + served * (pt.capTok * pt.remain / capacity) / pt.capTok;
         const frac = capacity / Math.max(1, k2.tokensPerSec);
-        availability = Math.min(1, frac) * (worstTtftMs <= k2.ttftMs ? 1 : 0.8);
+        availability2 = Math.min(1, frac) * (worstTtftMs <= k2.ttftMs ? 1 : 0.8);
         tokensPerSec = Math.min(capacity, k2.tokensPerSec);
       }
-      availability *= netFactor * staffFactor;
-      const res = k2.kind === "training" ? contractRevenue(ac, { accelerators, availability }) : contractRevenue(ac, { tokensPerSec, availability });
+      availability2 *= netFactor * staffFactor;
+      const res = k2.kind === "training" ? contractRevenue(ac, { accelerators, availability: availability2 }) : contractRevenue(ac, { tokensPerSec, availability: availability2 });
       c.revenue += res.netUSD;
       ac.revenueEarned = (ac.revenueEarned ?? 0) + res.netUSD;
       if (!res.slaMet) {
         ac.slaMisses += 1;
         if (s2.stats) s2.stats.slaMisses += 1;
-        log("bad", `SLA miss for ${k2.customer} (${k2.model.name}): availability ${(availability * 100).toFixed(1)}% vs ${(k2.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
+        log("bad", `SLA miss for ${k2.customer} (${k2.model.name}): availability ${(availability2 * 100).toFixed(1)}% vs ${(k2.slaAvailability * 100).toFixed(1)}% required. Penalties applied.`);
       }
       ac.monthsServed += 1;
       if (!ac.renewalQueued && k2.durationMonths >= 6 && ac.monthsServed === k2.durationMonths - 4 && (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20)) {
@@ -11183,6 +11208,7 @@ const deployActions = (c) => {
   return {
     reserveRacks: (designId, racks) => commit((g) => {
       if (!g.racks.some((r) => r.id === designId)) return fail("Unknown rack design.");
+      if (!Number.isFinite(racks) || Math.floor(racks) < 0) return fail("Reserve a whole number of racks (0 or more).");
       reserve(g, designId, Math.floor(racks));
       return ok(`Reserved ${Math.floor(racks)} rack(s) of this design.`);
     }),
@@ -11289,6 +11315,8 @@ const clustersActions = (c) => {
       if (unknown.length) return fail(`Unknown placed racks: ${unknown.join(", ")}.`);
       const claimed = ids.filter((id) => placed2.get(id)?.clusterId);
       if (claimed.length) return fail(`Racks already belong to a cluster: ${claimed.join(", ")}.`);
+      const offline = ids.filter((id) => placed2.get(id).status !== "online");
+      if (offline.length) return fail(`Only online racks can be clustered; ${offline.map((id) => `${id} is ${placed2.get(id).status}`).join(", ")}. Wait for them to finish installing and commissioning.`);
       const nextN = Math.max(g.clusterSeq ?? 0, g.clusters.reduce((m2, c2) => Math.max(m2, parseInt(c2.id.replace(/\D/g, "")) || 0), 0)) + 1;
       g.clusterSeq = nextN;
       const cluster = { id: `cl-${nextN}`, name, rackIds: ids, fabric };
@@ -11328,7 +11356,23 @@ const clustersActions = (c) => {
     })
   };
 };
-function quote(t, racks, month, preorder = false) {
+function quote(t, racks, month, preorder = false, g) {
+  if (g) {
+    const o2 = templateOrder({ ...g, month }, t, racks, { spares: true, preorder });
+    const lines2 = o2.lines.map((l) => ({ id: l.itemId, name: `${getItem(l.itemId).name}${l.spare ? " (spares)" : ""}`, n: l.n, unit: l.unit, total: l.unit * l.n, ...l.spare ? { spare: true } : {} }));
+    lines2.sort((a, b) => b.total - a.total);
+    const pre2 = o2.lines.filter((l) => l.preorder);
+    return {
+      cost: o2.cost,
+      lead: o2.lead,
+      lines: lines2,
+      unavailable: o2.unavailable.map((u) => u.name),
+      capped: o2.capped.map((c) => `${c.name} (cap ${c.cap}/qtr)`),
+      orderable: !o2.blocker,
+      ...o2.blocker ? { blocker: o2.blocker } : {},
+      ...pre2.length ? { preorder: true, ships: Math.max(0, ...pre2.map((l) => l.ships ?? 0)) } : {}
+    };
+  }
   const lines = [];
   const unavailable = [];
   const capped = [];
@@ -11394,6 +11438,34 @@ function pipeline(g) {
   const ordered = g.orders.filter((o2) => isAccel2(o2.itemId)).reduce((n, o2) => n + o2.qty, 0);
   return { online, freeOnline, installing, warehouse, ordered };
 }
+function clusterShareUsed(g, clusterId, contractId) {
+  let used = 0;
+  for (const o2 of g.activeContracts) {
+    if (o2.contract.id === contractId || !o2.clusterIds.includes(clusterId)) continue;
+    if (o2.contract.kind === "training") {
+      used = 1;
+      break;
+    }
+    const oct = o2.contract;
+    if (oct.kind !== "inference") continue;
+    const oc = o2.clusterIds.map((id) => g.clusters.find((x) => x.id === id)?.stats).filter(Boolean);
+    const oCap = oc.reduce((n, st2) => {
+      const it2 = getItem(st2.acceleratorId);
+      return n + (it2?.kind === "accelerator" ? inferenceCapacity(st2, it2, oct.model, { contextTokens: oct.contextTokens, tpotMs: oct.tpotMs }).tokensPerSec : 0);
+    }, 0);
+    used += oCap > 0 ? Math.min(1, oct.tokensPerSec / oCap) : 0;
+  }
+  return used;
+}
+function availability(g, c, cl, cap) {
+  const others = g.activeContracts.filter((o2) => o2.contract.id !== c.id && o2.clusterIds.includes(cl.id));
+  if (!others.length) return { free: true };
+  const who = others.map((o2) => o2.contract.customer).join(", ");
+  if (c.kind === "training") return { free: false, busy: `${cl.name} is serving ${who}; a training job needs it exclusively.` };
+  const used = clusterShareUsed(g, cl.id, c.id);
+  const left = (cap ?? 0) * Math.max(0, 1 - Math.min(1, used));
+  return left >= c.tokensPerSec ? { free: true } : { free: false, busy: `${cl.name} is shared with ${who}: about ${k(left)} tok/s left of the ${k(c.tokensPerSec)} needed.` };
+}
 function contractFit(g, c) {
   const all = g.clusters.filter((cl) => cl.stats).map((cl) => {
     const s2 = cl.stats;
@@ -11413,15 +11485,20 @@ function contractFit(g, c) {
         checks.cap = cap.tokensPerSec;
       } else checks.push({ label: "Accelerators", need: "any", have: "none", ok: false });
     }
-    return { cluster: cl, checks, ok: checks.every((x) => x.ok), score: checks.filter((x) => x.ok).length / checks.length };
+    const av = availability(g, c, cl, checks.cap);
+    return { cluster: cl, checks, ok: checks.every((x) => x.ok), score: checks.filter((x) => x.ok).length / checks.length, free: av.free, ...av.busy ? { busy: av.busy } : {} };
   }).sort((a, b) => b.score - a.score);
-  const best = all[0];
+  const best = all.find((x) => x.ok && x.free) ?? all.find((x) => x.free) ?? all[0];
+  const busyQualifying = all.filter((x) => x.ok && !x.free);
   const p = pipeline(g);
   const pipelineAccels = p.freeOnline + p.installing + p.warehouse + p.ordered;
   let shortfall = "";
   let verdict = "none";
-  if (best?.ok) verdict = "ready";
-  else if (c.kind === "training") {
+  if (best?.ok && best.free) verdict = "ready";
+  else if (best?.ok) {
+    shortfall = `Every cluster that qualifies is busy: ${busyQualifying.map((x) => x.busy).join(" ")} Release one, or build more capacity.`;
+    verdict = pipelineAccels > 0 ? "building" : "short";
+  } else if (c.kind === "training") {
     const have = best?.cluster.stats?.accelerators ?? 0;
     const gap = Math.max(0, c.minAccelerators - have);
     shortfall = gap > 0 ? `Short ${k(gap)} accelerators vs your best cluster (${k(have)}). ` : "";
@@ -11445,6 +11522,7 @@ function contractFit(g, c) {
       verdict = pipelineAccels > 0 ? "building" : "short";
     }
   }
+  if (verdict !== "ready" && best && !best.ok && busyQualifying.length) shortfall += ` (Busy but qualifying: ${busyQualifying.map((x) => x.busy).join(" ")})`;
   const monthsToDeploy = verdict === "ready" ? 0 : p.ordered + p.warehouse + p.installing + p.freeOnline > 0 ? 3 : 7;
   return { best, all, verdict, shortfall, pipelineAccels, monthsToDeploy };
 }
@@ -11525,7 +11603,11 @@ function buildOptions(g, c, signedAt) {
     }
     cover.push({ label: "Deploy window", need: `by ${Math.round(deployBy)}`, have: `ready ${readyMonth}`, ok: readyMonth <= deployBy });
     cover.push({ label: "Hall power / cooling / space", need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? "needs plant" : "fits", ok: hallGaps.length === 0 });
-    out.push({ t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
+    const exact = templateOrder(g, t, racks, { preorder: false });
+    const canOrder = !exact.blocker && exact.cost <= g.cash;
+    const fitsRamp = readyMonth <= deployBy;
+    const easyBlocker = exact.blocker ?? (!fitsRamp ? `Parts take ${q.lead} months to arrive but ${c.customer} requires capacity within ${c.rampMonths ?? 4} months of signing.` : exact.cost > g.cash ? `Insufficient funds: this order costs $${Math.round(exact.cost).toLocaleString("en-US")} but you have $${Math.round(g.cash).toLocaleString("en-US")}.` : void 0);
+    out.push({ orderCost: exact.cost, ...exact.blocker ? { orderBlocker: exact.blocker } : {}, canOrder, canStartEasy: canOrder && fitsRamp, ...easyBlocker ? { easyBlocker } : {}, t, racks, accels, cover, cost: q.cost, lead: q.lead, kw, readyMonth, fitsRamp: readyMonth <= deployBy, slack: deployBy - readyMonth, revenueMo, powerMo, paybackMo: net > 0 ? q.cost / net : Infinity, hallGaps, why, tags: [], unavailable: q.unavailable });
   }
   const feasible = out.filter((o2) => o2.cost <= Math.max(g.cash * 4, 1));
   const pool = feasible.length ? feasible : out;
@@ -11893,22 +11975,7 @@ const contractsActions = (c) => {
           }
           const cap = inferenceCapacity(stats, item, contract.model, { contextTokens: contract.contextTokens, tpotMs: contract.tpotMs });
           for (const i of cap.issues) if (i.severity === "error") issues.push({ ...i, message: `[${cl.name}] ${i.message}` });
-          let used = 0;
-          for (const o2 of g.activeContracts) {
-            if (o2.contract.id === contractId || !o2.clusterIds.includes(cl.id)) continue;
-            if (o2.contract.kind === "training") {
-              used = 1;
-              break;
-            }
-            const oct = o2.contract;
-            if (oct.kind !== "inference") continue;
-            const oc = o2.clusterIds.map((id) => g.clusters.find((x) => x.id === id)?.stats).filter(Boolean);
-            const oCap = oc.reduce((n, st2) => {
-              const it2 = getItem(st2.acceleratorId);
-              return n + (it2?.kind === "accelerator" ? inferenceCapacity(st2, it2, oct.model, { contextTokens: oct.contextTokens, tpotMs: oct.tpotMs }).tokensPerSec : 0);
-            }, 0);
-            used += oCap > 0 ? Math.min(1, oct.tokensPerSec / oCap) : 0;
-          }
+          const used = clusterShareUsed(g, cl.id, contractId);
           total += cap.tokensPerSec * Math.max(0, 1 - Math.min(1, used));
           worstTtft = Math.max(worstTtft, cap.ttftMs);
           if (cap.ttftMs > contract.ttftMs) issues.push({ severity: "error", code: "ttft-sla", message: `[${cl.name}] p95 TTFT ${Math.round(cap.ttftMs)} ms exceeds the ${contract.ttftMs} ms SLA.`, learn: item.id });
@@ -11935,10 +12002,18 @@ const contractsActions = (c) => {
       logln(g, "info", `${ac.contract.customer}: cluster released. Re-assign a qualifying cluster by ${g.month + 2 >= (ac.deployBy ?? 0) ? "month " + ac.deployBy : "the deadline"} or they walk.`);
       return ok("Cluster released; the contract is awaiting deployment again (2 months grace).");
     }),
-    assignRacks: (contractId, rackIds) => assignFromRacks(get(), contractId, rackIds),
+    // Both are composite (sign + cluster/order + assign); all-or-nothing: on failure the game is restored exactly.
+    assignRacks: (contractId, rackIds) => {
+      const before = get().game;
+      const r = assignFromRacks(get(), contractId, rackIds);
+      if (!r.ok) set({ game: before });
+      return r;
+    },
     startEasy: (contractId, templateId, racks) => {
+      const before = get().game;
       const r = startProject(get(), contractId, templateId, racks);
       if (r.ok) stepAllProjects(get);
+      else set({ game: before });
       return r;
     },
     stepEasy: () => stepAllProjects(get)
@@ -11980,6 +12055,7 @@ const energyActions = (c) => {
       const i = (g.powerOffers ?? []).findIndex((o22) => o22.id === offerId);
       if (i < 0) return fail("Offer not found or expired.");
       const o2 = g.powerOffers[i];
+      if (mwOverride !== void 0 && mwOverride !== null && !Number.isFinite(mwOverride)) return fail("Contract size (MW) must be a number.");
       const mw = Math.max(1, Math.min(o2.mw * 2, Math.round(mwOverride ?? o2.mw)));
       g.powerOffers.splice(i, 1);
       (g.powerContracts ??= []).push({ ...o2, mw, startMonth: g.month + 1, endMonth: g.month + o2.termMonths });
@@ -12003,6 +12079,7 @@ const energyActions = (c) => {
       return ok(on ? "Rack offered on spot when online." : "Rack withdrawn from spot.");
     }),
     setSpotReserve: (usd2) => commit((g) => {
+      if (!Number.isFinite(usd2)) return fail("Reserve price must be a number.");
       g.spotReserve = Math.max(0, usd2);
       return ok(`Reserve price $${Math.max(0, usd2).toFixed(2)}/GPU-hr.`);
     })
@@ -12047,7 +12124,11 @@ const sessionActions = (c) => {
       });
       return ok(ch.outcome);
     },
-    setMode: (m2) => set((s2) => ({ game: { ...s2.game, mode: m2 } })),
+    setMode: (m2) => {
+      if (!["learner", "operator", "tycoon"].includes(m2)) return;
+      set((s2) => ({ game: { ...s2.game, mode: m2 } }));
+    },
+    // unknown modes are ignored
     patchProject: (id, patch2) => set((s2) => ({ game: { ...s2.game, projects: (s2.game.projects ?? []).map((p) => p.id === id ? { ...p, ...patch2 } : p) } })),
     addProject: (p) => set((s2) => ({ game: { ...s2.game, projects: [...s2.game.projects ?? [], p] } })),
     nextMonth: () => {
@@ -12400,6 +12481,7 @@ function stressFill(racksPerTemplate, hallsPerClass = 1, only) {
       continue;
     }
     const hall = halls[rr++ % halls.length];
+    st$2().adoptTemplate(t.id);
     let n = racksPerTemplate, r = st$2().buyTemplate(t.id, n, false);
     while (!r.ok && n > 1 && /llocation/.test(r.message)) {
       n = Math.max(1, Math.floor(n / 2));
@@ -13130,10 +13212,10 @@ const catalogQueries = {
   },
   offersAll: () => Object.fromEntries(ALL_ITEMS.map((i) => [i.id, offerAt(i, G$1().month, true)])),
   volumeDiscount: (itemId, n, unit) => volumeDiscount(getItem(itemId), n, unit),
-  quote: (tid, racks) => quote(tpl(tid), racks, G$1().month, true),
+  quote: (tid, racks) => quote(tpl(tid), racks, G$1().month, true, G$1()),
   hallChecks: (tid, racks) => hallChecks(G$1(), tpl(tid), racks),
   templateFacts: (tid) => templateFacts(tpl(tid)),
-  templatesAll: () => TEMPLATES.map((t) => ({ ...templateFacts(t), id: t.id, racksFor1: 1, quote1: quote(t, 1, G$1().month, true) })),
+  templatesAll: () => TEMPLATES.map((t) => ({ ...templateFacts(t), id: t.id, racksFor1: 1, quote1: quote(t, 1, G$1().month, true, G$1()) })),
   templateBom: (tid, racks) => templateBom(tpl(tid), racks),
   racksFor: (tid, n) => racksFor(tpl(tid), n)
 };
