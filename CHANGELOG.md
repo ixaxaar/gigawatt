@@ -2,7 +2,7 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.2] - 2026-11-19 (alpha 3)
 
 ### Fixed
 - **Scrolling on touch:** a drag that started on a button (collapsible headers, offer rows) also pressed it on release. Now the press is cancelled for certain. While a finger scrolls, UI sounds, screen rebuilds and auto-scroll hold off, and hover sounds are off on touch screens.
