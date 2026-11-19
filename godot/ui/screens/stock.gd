@@ -40,13 +40,22 @@ func _design_row(parent: Control, d: Dictionary) -> void:
 		for p in h.racks:
 			if p.designId == d.id: placed_n += 1
 	var box := VBoxContainer.new(); box.add_theme_constant_override("separation", 6); parent.add_child(box); parent.add_child(Kit.hsep())
-	var h1 := HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1)
-	h1.add_child(Kit.label(d.name, 15)); h1.add_child(Kit.tag("%d ready to deploy" % int(r.buildableNow), Kit.GR)); h1.add_child(Kit.tag("%d deployed" % placed_n))
+	var h1: Container
+	if Layout.phone:   # name, then tags that wrap, then hall picker and Deploy stacked
+		box.add_theme_constant_override("separation", 10)
+		box.add_child(Kit.label(d.name, 16, Kit.TX, true))
+		var tf := HFlowContainer.new(); tf.add_theme_constant_override("h_separation", 8); tf.add_theme_constant_override("v_separation", 8); box.add_child(tf); h1 = tf
+	else:
+		h1 = HBoxContainer.new(); h1.add_theme_constant_override("separation", 10); box.add_child(h1); h1.add_child(Kit.label(d.name, 15))
+	h1.add_child(Kit.tag("%d ready to deploy" % int(r.buildableNow), Kit.GR)); h1.add_child(Kit.tag("%d deployed" % placed_n))
 	if int(g.get("rackReserve", {}).get(d.id, 0)) > 0: h1.add_child(Kit.tag("%d reserved" % int(g.rackReserve[d.id]), Kit.CY))
-	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h1.add_child(sp)
+	if not Layout.phone:
+		var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h1.add_child(sp)
 	if r.buildableNow > 0:
+		if Layout.phone: h1 = box
 		var opts := []; for h in g.halls: opts.append([h.id, "%s (%d/%d)" % [h.name, h.racks.size(), int(h.rackSlots)]])
-		h1.add_child(Kit.option(opts, hall_id, func(v): hall_id = v))
+		var ho := Kit.option(opts, hall_id, func(v): hall_id = v); if Layout.phone: ho.custom_minimum_size.y = Layout.tap()
+		h1.add_child(ho)
 		h1.add_child(Kit.btn("DEPLOY 1", func(): msg = b.act("placeRack", [hall_id, d.id]).message; app.sfx("rack_place"); refresh(), "go", 14))
 	var active: bool = int(g.get("rackReserve", {}).get(d.id, 0)) > 0 or int(r.buildableNow) > 0 or open_missing.has(d.id)
 	for l in r.lines:
@@ -54,6 +63,11 @@ func _design_row(parent: Control, d: Dictionary) -> void:
 	if active: MissingParts.build(app, box, d.id, maxi(1, n), func(m): msg = m; refresh(), sp_state)
 	else: box.add_child(Kit.btn("Order more of this design…", func(): open_missing[d.id] = true; refresh(), "", 12))
 
+
+## Section: a plain panel on desktop, a collapsed fold on phone for the long reference lists.
+func _sec(title: String, key: String, parent: Control, fold_on_phone: bool) -> Array:
+	if Layout.phone and fold_on_phone: return Kit.fold_panel(title, key, folds, refresh, false, parent, true)
+	return Kit.panel(title, false, parent)
 
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
@@ -63,14 +77,17 @@ func _rebuild() -> void:
 	if hall_id == "" or b.hall(hall_id).is_empty(): hall_id = g.halls[0].id
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := Kit.head_row(12); root.add_child(hd)
-	hd.add_child(Kit.label("WAREHOUSE & ASSEMBLY", 26, Kit.CY))
-	hd.add_child(Kit.label("Parts live in one of three states: on order (paid, in transit) → warehouse (arrived) → deployed (racked on the floor or installed in a hall).", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
+	if Layout.phone: hd.add_child(Kit.label("On order → warehouse → deployed", 14, Kit.DIM, true))
+	else:
+		hd.add_child(Kit.label("WAREHOUSE & ASSEMBLY", 26, Kit.CY))
+		hd.add_child(Kit.label("Parts live in one of three states: on order (paid, in transit) → warehouse (arrived) → deployed (racked on the floor or installed in a hall).", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
 	if msg != "": root.add_child(Kit.label(msg, 14, Kit.CY, true))
 	var lr := Kit.cols2(root); var left: VBoxContainer = lr[0]; var right: VBoxContainer = lr[1]
-	left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
-	var ra := Kit.panel("Rack assembly — your designs", true, left)
+	if not Layout.phone: left.add_child(Kit.tip("Parts move on order → warehouse → deployed. A rack can only be deployed when every part in its design is in the warehouse and the hall has power, cooling and a free slot."))
+	var ra := Kit.panel("Rack assembly" if Layout.phone else "Rack assembly — your designs", true, left)
 	if g.racks.is_empty(): ra[1].add_child(Kit.label("No rack designs yet. Buy a system in Procure (it saves its design automatically) or build one in the Design Lab.", 14, Kit.DIM, true))
-	var le := LineEdit.new(); le.placeholder_text = "Filter designs by name (Enter)"; le.text = design_q; le.custom_minimum_size = Vector2(300 if not Layout.compact else 180, 0); le.text_submitted.connect(func(t): design_q = t; refresh()); ra[1].add_child(le)
+	var le := LineEdit.new(); le.placeholder_text = "Filter designs by name (Enter)"; le.text = design_q; le.custom_minimum_size = Vector2(300 if not Layout.compact else 180, 0); le.text_submitted.connect(func(t): design_q = t; refresh()); if Layout.phone: le.custom_minimum_size.y = Layout.tap()
+	ra[1].add_child(le)
 	var used := []; var unused := []
 	for d in g.racks:
 		if design_q != "" and not d.name.to_lower().contains(design_q.to_lower()): continue
@@ -82,9 +99,9 @@ func _rebuild() -> void:
 		for d in unused: _design_row(up[1], d)
 	if not g.racks.is_empty():
 		var h2 := HBoxContainer.new(); h2.add_theme_constant_override("separation", 8); ra[1].add_child(h2)
-		h2.add_child(Kit.label("Plan for", 13, Kit.DIM)); h2.add_child(Kit.spin(n, 1, 500, 1, func(v): n = int(v); refresh())); h2.add_child(Kit.label("rack(s) of each design.", 13, Kit.DIM))
+		h2.add_child(Kit.label("Plan for", 13, Kit.DIM)); h2.add_child(Kit.spin(n, 1, 500, 1, func(v): n = int(v); refresh())); h2.add_child(Kit.label("racks each" if Layout.phone else "rack(s) of each design.", 13, Kit.DIM))
 	# --- spares
-	var sv: Dictionary = b.q("sparesView"); var spp := Kit.panel("Spares — parts WILL break", false, right)
+	var sv: Dictionary = b.q("sparesView"); var spp := _sec("Spares — parts WILL break", "spares", right, false)
 	if sv.rows.is_empty(): spp[1].add_child(Kit.label("Deploy racks first; then keep a few spare GPUs, PSUs, NICs and drives on the shelf. A failed rack with a spare is back in 1 month; without one it waits ~4 months for RMA.", 13, Kit.DIM, true))
 	else:
 		for f in sv.failed: spp[1].add_child(Kit.label("✗ %s: %s · back month %d" % [_serial(f.id), f.part, int(f.readyMonth)], 12, Kit.RD, true))
@@ -96,13 +113,13 @@ func _rebuild() -> void:
 			rows.append([nm, Kit.label(str(int(r.have)), 14, Kit.GR if r.have >= r.adv else Kit.RD), str(int(r.adv)), bt])
 		spp[1].add_child(Kit.table(["Part", "Spare", "Advised", ""], rows))
 	var led: Array = b.q("ledger")
-	var tr := Kit.panel("In transit", false, right)
+	var tr := _sec("In transit", "transit", right, false)
 	if g.orders.is_empty(): tr[1].add_child(Kit.link("Nothing on order. Open Procure →", func(): app.go("shop"), 13))
 	var ords: Array = g.orders.duplicate(); ords.sort_custom(func(a, c): return a.arriveMonth < c.arriveMonth)
 	for o in ords:
 		var nm: String = b.item(o.itemId).get("name", o.itemId)
 		tr[1].add_child(Kit.label("%d× %s%s → %s (%d mo)" % [int(o.qty), nm, " (spare)" if o.get("spare", false) else "", Kit.date_of(o.arriveMonth), int(o.arriveMonth - g.month)], 12, Kit.TX, true))
-	var fl := Kit.panel("Machine ledger — every rack and what it is doing", false, right)
+	var fl := _sec("Machine ledger — every rack and what it is doing", "machines", right, true)
 	var ml: Array = b.q("machineLedger")
 	if ml.is_empty(): fl[1].add_child(Kit.label("None deployed.", 13, Kit.DIM))
 	else:
@@ -119,7 +136,7 @@ func _rebuild() -> void:
 		fl[1].add_child(Kit.table(["Serial", "Machine", "Where", "Status", "Doing"], mrows))
 		if ml.size() > ML_CAP: fl[1].add_child(Kit.link(("Showing all %d racks — collapse" % ml.size()) if ml_all else "Show all %d racks (first %d shown)" % [ml.size(), ML_CAP], func(): ml_all = not ml_all; refresh(), 13))
 	var value := 0.0; for r in led: value += r.warehouse
-	var lp := Kit.panel("Full inventory ledger (%d units in warehouse)" % int(value), false, right)
+	var lp := _sec("Full inventory ledger (%d units in warehouse)" % int(value), "ledger", right, true)
 	var kinds := []; for r in led:
 		if not kinds.has(r.kind): kinds.append(r.kind)
 	kinds.sort_custom(func(a, c): return KIND_ORDER.find(a) < KIND_ORDER.find(c))

@@ -242,7 +242,7 @@ static func ls_bold(size: int, col: Color) -> LabelSettings:
 
 static func panel(title := "", glow := false, parent: Control = null) -> Array:
 	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(accent if glow else PANEL_EDGE, PANEL_FILL, 3 if glow else 2)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); p.add_child(v)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 12 if Layout.phone else 8); p.add_child(v)
 	if title != "":
 		var hb := HBoxContainer.new(); hb.add_child(chip(title.to_upper(), accent, 13)); v.add_child(hb)
 	if parent: parent.add_child(p)
@@ -335,7 +335,7 @@ static func terms_tip(app) -> Control:
 static func issue(sev: String, head: String, msg: String) -> PanelContainer:
 	var col := RD if sev == "error" else (AM if sev == "warn" else CY)
 	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", sb(Color(col.r, col.g, col.b, 0.1), col, 6, 1, 9)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p.add_child(rich("[b][color=#%s]%s[/color][/b]  %s" % [col.to_html(false), head, msg], 14)); return p
+	p.add_child(rich("[b][color=#%s]%s[/color][/b]  %s" % [col.to_html(false), head, msg] if not Layout.phone else "[color=#%s]●[/color]  %s" % [col.to_html(false), msg], 14)); return p
 
 static func issues(parent: Control, list: Array) -> void:
 	if list.is_empty(): parent.add_child(issue("info", "All clear", "No problems detected.")); return
@@ -386,6 +386,7 @@ static func on_set(sl: HSlider, apply: Callable) -> void:
 
 static func option(opts: Array, selected: String, cb: Callable) -> OptionButton:
 	var o := OptionButton.new(); o.focus_mode = focus_mode(); o.add_theme_font_size_override("font_size", 14)
+	if Layout.phone: o.custom_minimum_size.y = Layout.tap()
 	var sel := 0
 	for i in opts.size():
 		var id: String = opts[i][0] if opts[i] is Array else opts[i]; var nm: String = opts[i][1] if opts[i] is Array else opts[i]
@@ -394,7 +395,9 @@ static func option(opts: Array, selected: String, cb: Callable) -> OptionButton:
 	o.select(sel); o.item_selected.connect(func(i): cb.call(o.get_item_metadata(i))); return o
 
 static func check(text: String, on: bool, cb: Callable) -> CheckBox:
-	var c := CheckBox.new(); c.text = text; c.button_pressed = on; c.focus_mode = focus_mode(); c.add_theme_font_size_override("font_size", 14); c.toggled.connect(cb); return c
+	var c := CheckBox.new(); c.text = text; c.button_pressed = on; c.focus_mode = focus_mode(); c.add_theme_font_size_override("font_size", 14)
+	if Layout.phone: c.custom_minimum_size.y = Layout.tap()
+	c.toggled.connect(cb); return c
 
 # ---------- formatting ----------
 ## Unit prices ($/GPU-hour, $/Mtok): cents matter, so never round them away.
@@ -475,8 +478,14 @@ static func fold_panel(title: String, key: String, folds: Dictionary, on_toggle:
 	var collapsed: bool = folds.get(key, default_collapsed)
 	var p := PanelContainer.new(); p.add_theme_stylebox_override("panel", card_sb(accent if glow else PANEL_EDGE, PANEL_FILL, 3 if glow else 2, 12)); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); p.add_child(v)
-	var hb := btn(("▸ " if collapsed else "▾ ") + title.to_upper(), func(): folds[key] = not collapsed; on_toggle.call(), "pri" if not collapsed else "", 13)
+	var hb := btn(("▸ " if collapsed else "▾ ") + title.to_upper(), func(): folds[key] = not collapsed; on_toggle.call(), "pri" if (not collapsed and not Layout.phone) else "", 13)
 	hb.alignment = HORIZONTAL_ALIGNMENT_LEFT; hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if Layout.phone: hb.custom_minimum_size.y = Layout.tap()
+	if Layout.phone:   # flat disclosure row: no box inside the card
+		var flat := sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 6, 0, 8); var hov := sb(Color(1, 1, 1, 0.07), Color(0, 0, 0, 0), 6, 0, 8)
+		for st in ["normal", "focus"]: hb.add_theme_stylebox_override(st, flat)
+		for st in ["hover", "pressed"]: hb.add_theme_stylebox_override(st, hov)
+		hb.add_theme_color_override("font_color", accent)
 	if logo != "":   # company logo to the left of the header
 		var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 8); hr.add_child(Logo.make(logo, 30.0)); hr.add_child(hb); v.add_child(hr)
 	else: v.add_child(hb)

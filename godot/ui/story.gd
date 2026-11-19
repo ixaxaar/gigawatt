@@ -18,8 +18,8 @@ func _frame(accent: Color, width: float, height: float) -> VBoxContainer:
 func open_chapter(c: Dictionary) -> void:
 	var v := _frame(Kit.CY, 760.0, 420.0)
 	v.add_child(Kit.chip("CHAPTER · JANUARY %d" % int(c.year), Kit.CY, 13))
-	v.add_child(Kit.label(str(c.title), 44, Kit.TX, true))
-	v.add_child(Kit.label(str(c.text), 19, Kit.DIM, true))
+	v.add_child(Kit.label(str(c.title), 44 if not Layout.phone else 32, Kit.TX, true))
+	v.add_child(Kit.label(str(c.text), 19 if not Layout.phone else 17, Kit.DIM, true))
 	var sp := Control.new(); sp.size_flags_vertical = Control.SIZE_EXPAND_FILL; v.add_child(sp)
 	var go := Kit.btn("Into %d  ▶" % int(c.year), func(): _close_chapter(), "go", 19); go.custom_minimum_size = Vector2(0, 54); v.add_child(go)
 	if go.focus_mode != Control.FOCUS_NONE: go.grab_focus()   # only a controller/keyboard user has focusable buttons
@@ -34,8 +34,8 @@ func open_dilemma(d: Dictionary) -> void:
 	hd.add_child(Kit.chip("DECISION", Kit.AM, 13))
 	var spc := Control.new(); spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hd.add_child(spc)
 	hd.add_child(Kit.label("answer within %d month%s" % [int(d.monthsLeft), "" if int(d.monthsLeft) == 1 else "s"], 12, Kit.DIM))
-	v.add_child(Kit.label(str(d.title), 34, Kit.TX, true))
-	v.add_child(Kit.label(str(d.text), 18, Kit.DIM, true))
+	v.add_child(Kit.label(str(d.title), 34 if not Layout.phone else 26, Kit.TX, true))
+	v.add_child(Kit.label(str(d.text), 18 if not Layout.phone else 16, Kit.DIM, true))
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 14); v.add_child(row)
 	for ch in d.choices:
 		var hint := PackedStringArray()

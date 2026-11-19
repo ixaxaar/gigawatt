@@ -7,6 +7,13 @@ var f: Dictionary = {}
 var cname := "Cluster A"
 var msg := ""
 var adv := false
+var _folds := {}
+func _tap(c: Control) -> Control:
+	if Layout.phone: c.custom_minimum_size.y = maxf(c.custom_minimum_size.y, Layout.tap())
+	return c
+## Side by side on desktop, stacked on phone.
+func _pair() -> BoxContainer:
+	var r: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); r.add_theme_constant_override("separation", 10 if Layout.phone else 8); return r
 var init_sel := false
 const TECH := ["ib-ndr", "ib-xdr", "spectrum-x", "eth-400", "eth-800", "roce", "uec-eth"]
 const TOPO := ["fat-tree-rail-optimized", "fat-tree", "single-domain", "dragonfly", "torus-ish"]
@@ -56,11 +63,12 @@ func _rebuild() -> void:
 	if sel.size() > 0: stats = b.q("evaluateCluster", [{"id": "draft", "name": cname, "rackIds": sel, "fabric": f}])
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := Kit.head_row(12); root.add_child(hd)
-	hd.add_child(Kit.label("SUPERCOMPUTER BUILDER", 26, Kit.CY)); hd.add_child(Kit.label("Group online racks into one machine, wire its network, and see what it can train or serve.", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)
+	hd.add_child(Kit.label("SUPERCOMPUTER BUILDER", 26, Kit.CY)); if not Layout.phone: hd.add_child(Kit.label("Group online racks into one machine, wire its network, and see what it can train or serve.", 13, Kit.DIM, true))
+	Kit.hint_fix(hd, app)
 	var nh = app.b.q("netHealth")
 	if nh is Dictionary and int(nh.level) > 0:
 		var warn := PanelContainer.new(); warn.add_theme_stylebox_override("panel", Kit.card_sb(Kit.AM, Kit.tint(Kit.AM, 0.12), 2, 10)); root.add_child(warn)
-		var wl := Kit.label("🔗 %s. Links flap and die every month at scale: optics most, DACs least. Keep spare cables and optics in the Warehouse and a down link is fixed next month instead of after a 3-month RMA." % nh.summary, 14, Kit.TX, true); warn.add_child(wl)
+		var wl := Kit.label(("🔗 %s. Links flap and die every month at scale: optics most, DACs least. Keep spare cables and optics in the Warehouse and a down link is fixed next month instead of after a 3-month RMA." if not Layout.phone else "🔗 %s. Keep spare cables in the Warehouse.") % nh.summary, 14, Kit.TX, true); warn.add_child(wl)
 	# Touch: the three cards are one row you swipe left and right; each card scrolls up and down on its own.
 	var touch := Layout.touch
 	var colw := clampf((app.vw() - (app.RAIL_W + 14.0 if Layout.phone else 40.0) - 60.0) * 0.92, 340.0, 640.0)
@@ -72,50 +80,54 @@ func _rebuild() -> void:
 	else:
 		cols = Kit.cols_row(); root.add_child(cols)
 	var c1 := Kit.column(cols, colw if touch else 380, false, false, true)
-	c1.add_child(Kit.tip("A cluster is racks + a network. Scale-up (NVLink, purple boxes) links GPUs inside a rack at TB/s; scale-out (InfiniBand/Ethernet, green/gold) links racks. Training needs both; inference mostly needs memory and tokens/s."))
-	c1.add_child(Kit.terms_tip(app))
+	if not Layout.phone: c1.add_child(Kit.tip("A cluster is racks + a network. Scale-up (NVLink, purple boxes) links GPUs inside a rack at TB/s; scale-out (InfiniBand/Ethernet, green/gold) links racks. Training needs both; inference mostly needs memory and tokens/s."))
+	if Layout.phone:
+		if str(g.get("mode", "operator")) == "learner":
+			var tf: Array = Kit.fold_panel("Plain-English terms", "terms", _folds, refresh, false, c1, true); tf[1].add_child(Kit.label(Kit.TERMS, 13, Kit.TX, true))
+	else: c1.add_child(Kit.terms_tip(app))
 	var p1 := Kit.panel("1 · Pick racks", true, c1)
-	if free.is_empty(): p1[1].add_child(Kit.label("No free online racks — deploy racks in Warehouse and wait for commissioning. (You can also serve a customer straight from racks in Customers.)", 12, Kit.DIM, true))
+	if free.is_empty(): p1[1].add_child(Kit.label("No free online racks — deploy racks in Warehouse and wait for commissioning." + ("" if Layout.phone else " (You can also serve a customer straight from racks in Customers.)"), 12, Kit.DIM, true))
 	else:
-		var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 5); fl.add_theme_constant_override("v_separation", 5); p1[1].add_child(fl)
+		var fl := HFlowContainer.new(); fl.add_theme_constant_override("h_separation", 10 if Layout.phone else 5); fl.add_theme_constant_override("v_separation", 10 if Layout.phone else 5); p1[1].add_child(fl)
 		for r in free:
 			var dn := ""; for d in g.racks:
 				if d.id == r.designId: dn = d.name
 			fl.add_child(Kit.btn("%s · %s" % [dn.left(16), "RK-%04d" % int(r.get("serial", 0))], func(): sel = sel.filter(func(x): return x != r.id) if sel.has(r.id) else sel + [r.id]; refresh(), "pri" if sel.has(r.id) else "", 12))
-		var br := HBoxContainer.new(); p1[1].add_child(br); br.add_child(Kit.btn("select all", func(): sel = free.map(func(r): return r.id); refresh(), "", 12)); br.add_child(Kit.btn("none", func(): sel = []; refresh(), "", 12))
+		var br := HBoxContainer.new(); br.add_theme_constant_override("separation", 10); p1[1].add_child(br); br.add_child(Kit.btn("select all", func(): sel = free.map(func(r): return r.id); refresh(), "", 12)); br.add_child(Kit.btn("none", func(): sel = []; refresh(), "", 12))
 	var p2 := Kit.panel("2 · Wire the network", true, c1)
 	p2[1].add_child(Kit.btn("Auto-design for TRAINING", func(): _auto(tier), "go", 14)); p2[1].add_child(Kit.btn("Auto-design for INFERENCE (cheaper)", func(): _auto(0.0), "", 14))
-	p2[1].add_child(Kit.label("Training customers expect ≥ %.1f GB/s per GPU in %d; auto-design finds the cheapest fabric that reaches it." % [tier, int(year)], 11, Kit.DIM, true))
+	if not Layout.phone: p2[1].add_child(Kit.label("Training customers expect ≥ %.1f GB/s per GPU in %d; auto-design finds the cheapest fabric that reaches it." % [tier, int(year)], 11, Kit.DIM, true))
 	p2[1].add_child(Kit.btn(("▼" if adv else "▶") + " Advanced fabric", func(): adv = not adv; refresh(), "", 12))
 	if adv:
 		var sw := []; var cables := []
 		for it in b.items.values():
 			if it.kind == "switch" and it.role == "scale-out" and it.rackUnits > 0: sw.append([it.id, it.name])
 			elif it.kind == "cable": cables.append([it.id, it.name])
-		var gr := GridContainer.new(); gr.columns = 2; gr.add_theme_constant_override("h_separation", 8); gr.add_theme_constant_override("v_separation", 6); p2[1].add_child(gr)
+		var gr := GridContainer.new(); gr.columns = 1 if Layout.phone else 2; gr.add_theme_constant_override("h_separation", 8); gr.add_theme_constant_override("v_separation", 6); p2[1].add_child(gr)
 		for row in [["Scale-out tech", Kit.option(TECH, f.scaleOutTech, func(v): f["scaleOutTech"] = v; _fit_fabric(f); refresh())], ["Topology", Kit.option(TOPO, f.topology, func(v): f["topology"] = v; refresh())], ["Leaf switch", Kit.option(sw, f.leafSwitchId, func(v): f["leafSwitchId"] = v; refresh())], ["Spine switch", Kit.option(sw, f.get("spineSwitchId", ""), func(v): f["spineSwitchId"] = v; refresh())], ["Node→leaf cable", Kit.option(cables, f.nodeToLeafCableId, func(v): f["nodeToLeafCableId"] = v; refresh())], ["Leaf→spine cable", Kit.option(cables, f.get("leafToSpineCableId", ""), func(v): f["leafToSpineCableId"] = v; refresh())]]:
-			gr.add_child(Kit.label(row[0], 12, Kit.DIM)); gr.add_child(row[1])
+			gr.add_child(Kit.label(row[0], 12, Kit.DIM)); gr.add_child(_tap(row[1]))
 		p2[1].add_child(Kit.label("Oversubscription %s:1" % f.oversubscription, 12, Kit.DIM))
-		var sl := Kit.slider(f.oversubscription, 1, 4, 0.5, func(_v): pass); Kit.on_set(sl, func(v): f["oversubscription"] = v; refresh()); p2[1].add_child(sl)
+		var sl := Kit.slider(f.oversubscription, 1, 4, 0.5, func(_v): pass); Kit.on_set(sl, func(v): f["oversubscription"] = v; refresh()); p2[1].add_child(_tap(sl))
 	if msg != "": p2[1].add_child(Kit.label(msg, 12, Kit.AM, true))
 	var p3 := Kit.panel("Existing machines", false, c1)
 	if g.clusters.is_empty(): p3[1].add_child(Kit.label("None yet", 13, Kit.DIM))
 	for c in g.clusters:
 		var custs := []
 		for a in g.activeContracts:
-			if a.clusterIds.has(c.id): custs.append(str(a.contract.customer))
+			if a.clusterIds.has(c.id) and not (Layout.phone and custs.has(str(a.contract.customer))): custs.append(str(a.contract.customer))
 		var cc0 := Kit.cluster_color(g, c.id)
 		p3[1].add_child(Kit.rich("[color=#%s]■[/color] [b]%s[/b]  [color=#8fb0c8]%s · %d rack%s[/color]" % [cc0.to_html(false), c.name, c.fabric.scaleOutTech, c.rackIds.size(), "" if c.rackIds.size() == 1 else "s"], 13))
 		p3[1].add_child(Kit.label(("serving: " + ", ".join(custs)) if custs.size() > 0 else "not serving any customer", 11, Kit.GR if custs.size() > 0 else Kit.DIM, true))
-		if c.get("stats") != null: p3[1].add_child(Kit.label("%s accels · domain %d · %s PF %s · %.0f GB/s/GPU" % [Kit.num(c.stats.accelerators), int(c.stats.scaleUpDomain), Kit.num(c.stats.peakPFLOPSFp8 if c.stats.peakPFLOPSFp8 > 0 else c.stats.peakPFLOPSBf16), "fp8" if c.stats.peakPFLOPSFp8 > 0 else "bf16", c.stats.effScaleOutGBs], 11, Kit.DIM, true))
-		var br := HFlowContainer.new(); br.add_theme_constant_override("h_separation", 6); p3[1].add_child(br)
-		br.add_child(Kit.btn("Uncluster", func(): Kit.confirm(self, "Uncluster %s? Its racks go back to the free pool and any customers it serves lose service." % str(c.name), func(): msg = b.act("disbandCluster", [c.id]).message; app.sfx("click"); refresh(), "Uncluster"), "danger", 12))
-		br.add_child(Kit.btn("Re-cluster (edit racks)", func():
+		if c.get("stats") != null and not Layout.phone: p3[1].add_child(Kit.label("%s accels · domain %d · %s PF %s · %.0f GB/s/GPU" % [Kit.num(c.stats.accelerators), int(c.stats.scaleUpDomain), Kit.num(c.stats.peakPFLOPSFp8 if c.stats.peakPFLOPSFp8 > 0 else c.stats.peakPFLOPSBf16), "fp8" if c.stats.peakPFLOPSFp8 > 0 else "bf16", c.stats.effScaleOutGBs], 11, Kit.DIM, true))
+		var br: Container = VBoxContainer.new() if Layout.phone else HFlowContainer.new(); br.add_theme_constant_override("h_separation" if not Layout.phone else "separation", 6 if not Layout.phone else 16); p3[1].add_child(br)
+		var unc := Kit.btn("Uncluster", func(): Kit.confirm(self, "Uncluster %s? Its racks go back to the free pool and any customers it serves lose service." % str(c.name), func(): msg = b.act("disbandCluster", [c.id]).message; app.sfx("click"); refresh(), "Uncluster"), "danger", 12)
+		var rec := Kit.btn("Re-cluster (edit racks)", func():
 			var ids: Array = c.rackIds.duplicate(); var nm: String = c.name; var fab: Dictionary = c.fabric.duplicate(true)
 			var r: Dictionary = b.act("disbandCluster", [c.id])
 			if r.ok: sel = ids; cname = nm; f = fab; init_sel = true; msg = "Cluster dissolved — adjust the rack selection and rebuild it."
 			else: msg = r.message
-			refresh(), "", 12))
+			refresh(), "", 12)
+		br.add_child(rec); br.add_child(unc)
 		p3[1].add_child(Kit.hsep())
 	# center: topology + stat strip
 	var cc: VBoxContainer
@@ -148,18 +160,18 @@ func _rebuild() -> void:
 			var t = perf.train; var inf = perf.infer
 			var nm := VBoxContainer.new(); nm.add_child(Kit.label(m.name, 13)); nm.add_child(Kit.label("%sB%s" % [Kit.num(m.paramsB, 1), (" (%sB active)" % Kit.num(m.activeParamsB, 1)) if m.activeParamsB != m.paramsB else ""], 10, Kit.DIM))
 			var tc := VBoxContainer.new()
-			if t != null and t.fitsTrainingState and t.tokensPerSec > 0: tc.add_child(Kit.label("✓ %sk tok/s" % Kit.num(t.tokensPerSec / 1000.0), 12, Kit.GR)); tc.add_child(Kit.label("MFU %d%%" % int(round(t.mfu * 100.0)), 10, Kit.DIM))
+			if t != null and t.fitsTrainingState and t.tokensPerSec > 0: tc.add_child(Kit.label("✓ %sk tok/s" % Kit.num(t.tokensPerSec / 1000.0), 12, Kit.GR)); if not Layout.phone: tc.add_child(Kit.label("MFU %d%%" % int(round(t.mfu * 100.0)), 10, Kit.DIM))
 			else: tc.add_child(Kit.label("✗ state doesn't fit", 12, Kit.RD))
 			var ic := VBoxContainer.new()
-			if inf != null and inf.fitsWeights: ic.add_child(Kit.label("✓ %sk tok/s" % Kit.num(inf.tokensPerSec / 1000.0, 1), 12, Kit.GR)); ic.add_child(Kit.label("TTFT %d ms · TP%d" % [int(round(inf.ttftMs)), int(inf.tpSize)], 10, Kit.DIM))
+			if inf != null and inf.fitsWeights: ic.add_child(Kit.label("✓ %sk tok/s" % Kit.num(inf.tokensPerSec / 1000.0, 1), 12, Kit.GR)); if not Layout.phone: ic.add_child(Kit.label("TTFT %d ms · TP%d" % [int(round(inf.ttftMs)), int(inf.tpSize)], 10, Kit.DIM))
 			else: ic.add_child(Kit.label("✗ weights don't fit", 12, Kit.RD))
 			rows.append([nm, tc, ic])
 		wp[1].add_child(Kit.table(["Model", "Train", "Serve"], rows))
 	var ck := Kit.panel("Checks", false, c3)
 	if stats == null: ck[1].add_child(Kit.label("—", 13, Kit.DIM))
 	else: Kit.issues(ck[1], stats.issues)
-	var br2 := HBoxContainer.new(); br2.add_theme_constant_override("separation", 8); ck[1].add_child(br2)
-	var le := LineEdit.new(); le.text = cname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): cname = t); br2.add_child(le)
+	var br2 := _pair(); ck[1].add_child(br2)
+	var le := LineEdit.new(); _tap(le); le.text = cname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): cname = t); br2.add_child(le)
 	var go := Kit.btn("BUILD CLUSTER", func(): var r := b.act("createCluster", [cname, sel, f]); msg = r.message; if r.ok: sel = []; app.sfx("buy"); refresh(), "go", 14); go.disabled = stats == null; br2.add_child(go)
 
 func _auto(target: float) -> void:

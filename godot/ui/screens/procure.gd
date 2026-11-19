@@ -17,6 +17,7 @@ var sel := ""
 var qty := 8
 var spares := true
 var bmsg := ""
+var folds := {}
 const KINDS := ["accelerator", "cpu", "nic", "switch", "cable", "chassis", "rack", "power", "cooling", "storage", "memory", "nvme"]
 const TIER := {"diy": ["DIY", "Build it yourself"], "oem": ["OEM", "OEM integrated rack"], "turnkey": ["TURNKEY", "Turnkey / reference"]}
 
@@ -30,6 +31,14 @@ func _rebuild() -> void:
 	if next_tab != "": tab = next_tab; next_tab = ""
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
 	var hd := Kit.head_row(8); root.add_child(hd)
+	if Layout.phone:   # the drawer tab already says Procure: three even tabs, no title that looks like a button
+		hd.add_theme_constant_override("separation", 10)
+		for t in [["plan", "Plan"], ["parts", "Parts"], ["road", "Roadmap"]]:
+			var tb := Kit.btn(t[1], func(): tab = t[0]; refresh(), "pri" if tab == t[0] else "", 15); tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hd.add_child(tb)
+		if tab == "road": _roadmap(root)
+		elif tab == "plan": _planner(root)
+		else: _parts(root)
+		return
 	hd.add_child(Kit.label("PROCUREMENT", 26, Kit.CY))
 	hd.add_child(Kit.btn("Guided planner", func(): tab = "plan"; refresh(), "pri" if tab == "plan" else ""))
 	hd.add_child(Kit.btn("Parts bin (advanced)", func(): tab = "parts"; refresh(), "pri" if tab == "parts" else ""))
@@ -63,7 +72,9 @@ func _showroom(c1: VBoxContainer, platforms: Array, t: Dictionary, f: Dictionary
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 8); left.add_child(tb)
 	var door_b := Kit.btn("Door: open" if showroom.door_open else "Door: closed", func(): showroom.set_door(not showroom.door_open); app.sfx("click"); refresh(), "pri" if showroom.door_open else "", 14)
 	var cab_b := Kit.btn("Cables: on" if showroom.cables_on else "Cables: off", func(): showroom.set_cables(not showroom.cables_on); app.sfx("click"); refresh(), "pri" if showroom.cables_on else "", 14)
-	tb.add_child(door_b); tb.add_child(cab_b); tb.add_child(Kit.label("Drag to spin" if Layout.touch else "Drag to spin · wheel to zoom", 13, Kit.DIM))
+	tb.add_theme_constant_override("separation", 10); tb.add_child(door_b)
+	tb.add_child(cab_b)
+	if not Layout.phone: tb.add_child(Kit.label("Drag to spin" if Layout.touch else "Drag to spin · wheel to zoom", 13, Kit.DIM))
 	# overlay card: what it is, and whether your hall can take it
 	var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.accent, Kit.PANEL_FILL, 2, 12)); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(card)
 	var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 6); card.add_child(cv)
@@ -120,20 +131,32 @@ func _planner(root: Control) -> void:
 	_showroom(c1, platforms, t, f, checks)
 	# --- column 2: description, how many, how to buy
 	var c2: VBoxContainer = lr[0]
-	c2.add_child(Kit.tip("Pick a platform (a GPU generation, pre-engineered), say how many accelerators you want, then choose DIY (cheapest, you integrate), an OEM rack, or a turnkey one (priciest, fastest). Check the hall can feed and cool it before you order."))
-	c2.add_child(Kit.terms_tip(app))
-	var pa := Kit.panel(plat, false, c2); pa[1].add_child(Kit.label(t.codex.explain, 14, Kit.TX, true))
-	pa[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]]))
+	if Layout.phone:
+		var mp := Kit.fold_panel("More: how this works", "p_help", folds, func(): refresh(), false, c2, true)
+		mp[1].add_child(Kit.label("Pick a platform, say how many accelerators you want, then choose DIY (cheapest), OEM, or turnkey (priciest, fastest). Check the hall can feed and cool it before you order.", 13, Kit.DIM, true)); mp[1].add_child(Kit.terms_tip(app))
+	else: c2.add_child(Kit.tip("Pick a platform (a GPU generation, pre-engineered), say how many accelerators you want, then choose DIY (cheapest, you integrate), an OEM rack, or a turnkey one (priciest, fastest). Check the hall can feed and cool it before you order."))
+	if not Layout.phone: c2.add_child(Kit.terms_tip(app))
+	var pa := Kit.panel(plat, false, c2)
+	if Layout.phone:
+		pa[1].add_child(Kit.label(str(t.codex.summary), 14, Kit.TX, true))
+		var mx := Kit.fold_panel("More: details", "p_more", folds, func(): refresh(), false, pa[1], true)
+		mx[1].add_child(Kit.label(t.codex.explain, 13, Kit.DIM, true))
+		mx[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]], 2))
+	else:
+		pa[1].add_child(Kit.label(t.codex.explain, 14, Kit.TX, true))
+		pa[1].add_child(Kit.stats([["Accel / rack", str(f.accels)], ["Scale-up", str(int(f.scaleUp))], ["Memory / rack", "%s TB" % Kit.num(f.memGB / 1000.0, 1)], ["Power / rack", "%d kW" % int(f.kWPerRack)]]))
 	var ph := Kit.panel("2 · How many accelerators?", false, c2)
 	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 14); ph[1].add_child(hr)
+	var slh: float = Layout.tap() if Layout.phone else 0.0
 	var sl := Kit.slider(maxf(f.accels, racks * f.accels), f.accels, f.accels * 64, f.accels, func(_v): pass)
 	Kit.on_set(sl, func(v): want = int(v); app.sfx("click"); refresh())
 	sl.value_changed.connect(func(v): want = int(v); lbl_hint.text = "%s" % Kit.num(v))
+	if Layout.phone: sl.custom_minimum_size.y = slh; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hr.add_child(sl); lbl_hint = Kit.label(Kit.num(racks * f.accels), 28, Kit.CY); hr.add_child(lbl_hint)
 	var pf: float = f.tflopsFp8 if f.tflopsFp8 > 0 else f.tflopsBf16
-	ph[1].add_child(Kit.label("= %d rack%s · %s PFLOPS %s · %s TB memory · %d kW" % [racks, "s" if racks > 1 else "", Kit.num(racks * pf / 1000.0, 1), "FP8" if f.tflopsFp8 > 0 else "BF16", Kit.num(racks * f.memGB / 1000.0, 1), int(racks * f.kWPerRack)], 14, Kit.DIM, true))
+	ph[1].add_child(Kit.label(("= %d rack%s · %s PFLOPS · %d kW" % [racks, "s" if racks > 1 else "", Kit.num(racks * pf / 1000.0, 1), int(racks * f.kWPerRack)]) if Layout.phone else "= %d rack%s · %s PFLOPS %s · %s TB memory · %d kW" % [racks, "s" if racks > 1 else "", Kit.num(racks * pf / 1000.0, 1), "FP8" if f.tflopsFp8 > 0 else "BF16", Kit.num(racks * f.memGB / 1000.0, 1), int(racks * f.kWPerRack)], 14, Kit.DIM, true))
 	var pt := Kit.panel("3 · How do you want to buy it?", false, c2)
-	var tg := GridContainer.new(); tg.columns = 3; tg.add_theme_constant_override("h_separation", 10); tg.add_theme_constant_override("v_separation", 10); pt[1].add_child(tg)
+	var tg := GridContainer.new(); tg.columns = 1 if Layout.phone else 3; tg.add_theme_constant_override("h_separation", 10); tg.add_theme_constant_override("v_separation", 10); pt[1].add_child(tg)
 	for x in ts:
 		var qq: Dictionary = b.q("quote", [x.id, racks]); var on2: bool = x.id == t.id
 		var tc := PanelContainer.new(); tc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tc.add_theme_stylebox_override("panel", Kit.sb(Kit.SEL if on2 else Kit.PANEL, Kit.CY if on2 else Kit.LINE, 10, 2 if on2 else 1, 10))
@@ -141,27 +164,33 @@ func _planner(root: Control) -> void:
 		tv.add_child(Kit.label(TIER[x.tier][0], 13, Kit.CY))
 		var tname: String = x.name if x.tier == "turnkey" else (("%s rack" % x.integrator.capitalize()) if x.tier == "oem" else TIER[x.tier][1])
 		tv.add_child(Kit.label(tname, 14, Kit.TX, true)); tv.add_child(Kit.label(Kit.usd(qq.cost), 18, Kit.CY))
-		tv.add_child(Kit.label("%d mo lead · +%d%%" % [qq.lead, int(round(x.premium * 100.0))], 12, Kit.DIM)); tv.add_child(Kit.label(x.tagline, 12, Kit.TX, true))
+		tv.add_child(Kit.label("%d mo lead · +%d%%" % [qq.lead, int(round(x.premium * 100.0))], 12, Kit.DIM)); if not Layout.phone: tv.add_child(Kit.label(x.tagline, 12, Kit.TX, true))
 		var tb := Button.new(); tb.flat = true; tb.set_anchors_preset(Control.PRESET_FULL_RECT); tb.focus_mode = Kit.focus_mode(); tb.pressed.connect(func(): tier_sel = x.id; app.sfx("click"); refresh()); tc.add_child(tb)
 		tg.add_child(tc)
-	pt[1].add_child(Kit.label("⚖  " + t.codex.tradeoffs[0], 13, Kit.DIM, true))
+	if not Layout.phone: pt[1].add_child(Kit.label("⚖  " + t.codex.tradeoffs[0], 13, Kit.DIM, true))
 	# --- column 3: hall check, BOM, order
 	var c3: VBoxContainer = lr[0]
 	var hc := Kit.panel("4 · Does your hall have room?", true, c3)
-	for c in checks: hc[1].add_child(Kit.issue("info" if c.ok else "error", "✓ OK · %s" % c.label if c.ok else "✗ Action needed · %s" % c.label, c.detail))
+	for c in checks: hc[1].add_child(Kit.issue("info" if c.ok else "error", "✓ OK · %s" % c.label if c.ok else "✗ Action needed · %s" % c.label, "" if (Layout.phone and c.ok) else c.detail))
 	hc[1].add_child(Kit.btn("Open Build →", func(): app.go("facility"), "", 14))
 	var bm := Kit.panel("Bill of materials · %d rack%s" % [racks, "s" if racks > 1 else ""], false, c3)
 	var rows := []
 	for l in q.lines: rows.append(["%d× %s" % [l.n, l.name], Kit.label(Kit.usd(l.total), 14, Kit.TX)])
-	var tbl := Kit.table(["Part", "Cost"], rows); bm[1].add_child(tbl)
+	var tbl := Kit.table(["Part", "Cost"], rows)
+	if Layout.phone:
+		var bf := Kit.fold_panel("Parts list (%d)" % rows.size(), "p_bom", folds, func(): refresh(), false, bm[1], true); bf[1].add_child(tbl)
+	else: bm[1].add_child(tbl)
 	var tot := HBoxContainer.new(); tot.add_child(Kit.label("TOTAL", 16)); var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tot.add_child(sp); tot.add_child(Kit.label(Kit.usd(q.cost), 18, Kit.CY)); bm[1].add_child(tot)
 	bm[1].add_child(Kit.label("Cash %s · arrives ~%s" % [Kit.usd(b.g.cash), Kit.date_of(b.g.month + q.lead)], 13, Kit.DIM, true))
 	if q.capped.size() > 0: bm[1].add_child(Kit.label("Allocation limits: " + ", ".join(q.capped), 13, Kit.AM, true))
 	var is_pre: bool = q.get("preorder", false)
-	if is_pre: bm[1].add_child(Kit.label("PRE-ORDER: ships %s. You queue behind the hyperscalers at the launch premium, delivery lands after the ship date, and cancelling refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
+	if is_pre and Layout.phone: bm[1].add_child(Kit.label("PRE-ORDER: ships %s, cancel refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
+	elif is_pre: bm[1].add_child(Kit.label("PRE-ORDER: ships %s. You queue behind the hyperscalers at the launch premium, delivery lands after the ship date, and cancelling refunds 90%%." % Kit.date_of(int(q.ships)), 13, Kit.GR, true))
 	var ob := Kit.btn("NOT ENOUGH CASH" if cant_afford else "%s %d RACK%s · %s" % ["PRE-ORDER" if is_pre else "ORDER", racks, "S" if racks > 1 else "", Kit.usd(q.cost)], func():
 		pmsg = b.act("buyTemplate", [t.id, racks]); app.sfx(("cash_big" if racks >= 20 else "order") if pmsg.ok else "error"); refresh(), "go", 17)
-	ob.disabled = cant_afford or q.unavailable.size() > 0; ob.custom_minimum_size = Vector2(0, 52); bm[1].add_child(ob)
+	ob.disabled = cant_afford or q.unavailable.size() > 0; ob.custom_minimum_size = Vector2(0, 52)
+	if Layout.phone: bm[1].add_child(Control.new()); bm[1].get_child(bm[1].get_child_count() - 1).custom_minimum_size = Vector2(0, 6)
+	bm[1].add_child(ob)
 	if not pmsg.is_empty():
 		bm[1].add_child(Kit.label(pmsg.message, 14, Kit.GR if pmsg.ok else Kit.RD, true))
 		if pmsg.ok: bm[1].add_child(Kit.btn("Next: deploy it from the Warehouse →", func(): app.go("stock"), "pri", 14))
@@ -173,7 +202,7 @@ func _roadmap(root: Control) -> void:
 	var b: Bridge = app.b
 	var L: Dictionary = b.q("launches"); var now: int = int(b.g.month)
 	var col: VBoxContainer = Kit.cols2(root)[0]
-	col.add_child(Kit.tip("Hardware is announced at keynotes months before it ships. After the keynote you can PRE-ORDER (launch premium, delivery after the ship date, cancel for 90% back). Wait and you pay the going rate and the queue behind the hyperscalers. Each card explains the technology and what it changes in your hall."))
+	if not Layout.phone: col.add_child(Kit.tip("Hardware is announced at keynotes months before it ships. After the keynote you can PRE-ORDER (launch premium, delivery after the ship date, cancel for 90% back). Wait and you pay the going rate and the queue behind the hyperscalers. Each card explains the technology and what it changes in your hall."))
 	var upcoming: Array = L.list.filter(func(k): return int(k.month) > now)
 	if not upcoming.is_empty():
 		var nx: Dictionary = upcoming[0]
@@ -188,7 +217,7 @@ func _roadmap(root: Control) -> void:
 		h.add_child(Kit.chip("%s · %s" % [Kit.date_of(int(k.month)), str(k.venue)], Kit.AM, 12))
 		var pre: bool = k.items.any(func(i): return i.state == "preorder")
 		if pre: h.add_child(Kit.chip("PRE-ORDER OPEN", Kit.GR, 12))
-		v.add_child(Kit.label(str(k.title), 16, Kit.TX, true)); v.add_child(Kit.label(str(k.headline), 13, Kit.DIM, true))
+		v.add_child(Kit.label(str(k.title), 16, Kit.TX, true)); if not Layout.phone or open: v.add_child(Kit.label(str(k.headline), 13, Kit.DIM, true))
 		if open:
 			KeynoteOverlay.body(v, k)
 			if k.items.size() > 0: v.add_child(Kit.btn("Look at these parts in the Parts bin →", func(): tab = "parts"; kind = "accelerator"; vendor = "all"; sel = str(k.items[0].id); road_open = ""; future = true; refresh(), "pri", 14))
@@ -198,16 +227,21 @@ func _roadmap(root: Control) -> void:
 func _parts(root: Control) -> void:
 	var b: Bridge = app.b
 	var offers: Dictionary = b.q("offersAll")
-	var bar := HBoxContainer.new(); bar.add_theme_constant_override("separation", 6); root.add_child(bar)
-	for k in KINDS: bar.add_child(Kit.btn(k, func(): kind = k; vendor = "all"; sel = ""; refresh(), "pri" if k == kind else "", 14))
-	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bar.add_child(sp)
+	var bar: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); bar.add_theme_constant_override("separation", 10 if Layout.phone else 6); root.add_child(bar)
+	if Layout.phone:
+		var ko := Kit.option(KINDS.map(func(k): return [k, k.capitalize()]), kind, func(k): kind = k; vendor = "all"; sel = ""; refresh()); ko.custom_minimum_size.y = Layout.tap(); bar.add_child(ko)
+	else:
+		for k in KINDS: bar.add_child(Kit.btn(k, func(): kind = k; vendor = "all"; sel = ""; refresh(), "pri" if k == kind else "", 14))
+	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if not Layout.phone: bar.add_child(sp)
 	var vendors := []
 	for it in b.items.values():
 		if it.kind == kind and not vendors.has(it.vendor): vendors.append(it.vendor)
 	vendors.sort(); var vopts := [["all", "all vendors"]]; for v in vendors: vopts.append([v, v])
-	bar.add_child(Kit.option(vopts, vendor, func(v): vendor = v; refresh()))
-	bar.add_child(Kit.check("show unreleased/EOL", future, func(on): future = on; refresh()))
-	var cols := Kit.cols_row(); root.add_child(cols)
+	var vo := Kit.option(vopts, vendor, func(v): vendor = v; refresh()); vo.custom_minimum_size.y = Layout.tap(); bar.add_child(vo)
+	var fc := Kit.check("show unreleased/EOL", future, func(on): future = on; refresh()); fc.custom_minimum_size.y = Layout.tap(); bar.add_child(fc)
+	var cols: Container = VBoxContainer.new() if Layout.phone else Kit.cols_row(); root.add_child(cols)   # phone drawer: plain stack (fit_split sizes for a full-width screen)
+	if Layout.phone: cols.add_theme_constant_override("separation", 14)
 	var list: Array = []
 	for it in b.items.values():
 		if it.kind != kind or (vendor != "all" and it.vendor != vendor): continue
@@ -216,19 +250,23 @@ func _parts(root: Control) -> void:
 	list.sort_custom(func(a, c): return a.item.availableFrom < c.item.availableFrom)
 	var lp := PanelContainer.new(); lp.add_theme_stylebox_override("panel", Kit.sb(Kit.PANEL, Kit.LINE, 12, 1, 8)); lp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lp.size_flags_stretch_ratio = 1.5; cols.add_child(lp)
 	var lc := Kit.column(lp, 0, true, true)
-	lc.add_child(Kit.label("%-34s %-44s %9s %6s %6s" % ["PART", "KEY SPECS", "PRICE", "LEAD", "STOCK"], 12, Kit.DIM))
+	if not Layout.phone: lc.add_child(Kit.label("%-34s %-44s %9s %6s %6s" % ["PART", "KEY SPECS", "PRICE", "LEAD", "STOCK"], 12, Kit.DIM))
+	else: lc.add_theme_constant_override("separation", 10)
 	for o in list:
 		var it: Dictionary = o.item
 		var specs := " · ".join(Kit.specs_of(it).slice(0, 2).map(func(s): return "%s:%s" % [s[0], s[1]]))
 		var txt := "%-34s %-44s %9s %6s %6s" % [str(it.name).left(34), specs.left(44), Kit.usd(o.unitPrice) if o.available else "—", ("%s mo" % o.leadMonths) if o.available else "", str(int(b.g.inventory.get(it.id, 0)))]
-		var rb := Kit.btn(txt, func(): sel = it.id; bmsg = ""; refresh(), "pri" if sel == it.id else "", 13); rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.clip_text = true
+		if Layout.phone: txt = "%s\n%s · %s · have %d" % [str(it.name), Kit.usd(o.unitPrice) if o.available else "unavailable", ("%s mo lead" % o.leadMonths) if o.available else "not shipping", int(b.g.inventory.get(it.id, 0))]
+		var rb := Kit.btn(txt, func(): sel = it.id; bmsg = ""; refresh(), "pri" if sel == it.id else "", 13); rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.clip_text = not Layout.phone
+		if Layout.phone: rb.custom_minimum_size.y = 64
 		if not o.available: rb.modulate = Color(1, 1, 1, 0.5)
 		lc.add_child(rb)
 		var sub := "    %s · %d" % [it.vendor, int(it.availableFrom)]
 		if o.get("preorder", false): sub += " · PRE-ORDER, ships %s" % Kit.date_of(int(o.ships))
 		elif o.get("opens") != null and not o.available: sub += " · announced, orders open %s" % Kit.date_of(int(o.opens))
-		lc.add_child(Kit.label(sub, 11, Kit.GR if o.get("preorder", false) else Kit.DIM))
-	var dc := Kit.column(cols, 460, false, true); Kit.fit_split(cols, app, [700, 460])
+		if not Layout.phone or o.get("preorder", false): lc.add_child(Kit.label(sub.strip_edges() if Layout.phone else sub, 11, Kit.GR if o.get("preorder", false) else Kit.DIM))
+	var dc := Kit.column(cols, 0 if Layout.phone else 460, false, true); Kit.fit_split(cols, app, [700, 460])
+	if Layout.phone and sel != "": cols.move_child(dc, 0)   # the picked part's detail and BUY sit above the long list
 	if sel != "" and offers.has(sel):
 		var o: Dictionary = offers[sel]; var it: Dictionary = o.item
 		var dp := Kit.panel(it.name, true, dc)
@@ -237,7 +275,7 @@ func _parts(root: Control) -> void:
 		if o.available:
 			var disc := float(b.q("volumeDiscount", [it.id, qty, o.unitPrice])); var total: float = o.unitPrice * qty * (1.0 - disc)
 			var sq := int(b.q("spareQty", [it.id, qty])); var spare_cost: float = (sq * o.unitPrice) if spares else 0.0
-			var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); dp[1].add_child(h)
+			var h: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); h.add_theme_constant_override("separation", 10 if Layout.phone else 8); dp[1].add_child(h)
 			h.add_child(Kit.label("Qty", 14, Kit.DIM)); h.add_child(Kit.spin(qty, 1, 100000, 1, func(v): qty = int(v); refresh()))
 			var buy := Kit.btn("BUY %s" % Kit.usd(total + spare_cost), func():
 				var m := b.act("buy", [it.id, qty])
@@ -246,10 +284,11 @@ func _parts(root: Control) -> void:
 			buy.disabled = total > b.g.cash; h.add_child(buy)
 			if sq > 0: h.add_child(Kit.check("+ %d spare%s" % [sq, "s" if sq > 1 else ""], spares, func(on): spares = on; refresh()))
 			var line := "%s ea" % Kit.usd(o.unitPrice)
-			if disc > 0: line += " · −%d%% volume" % int(round(disc * 100.0))
-			line += " · arrives in %s mo" % o.leadMonths
+			if Layout.phone: line = "%s ea · arrives in %s mo" % [Kit.usd(o.unitPrice), o.leadMonths]
+			if disc > 0 and not Layout.phone: line += " · −%d%% volume" % int(round(disc * 100.0))
+			if not Layout.phone: line += " · arrives in %s mo" % o.leadMonths
 			if o.get("preorder", false): line += " · PRE-ORDER: ships %s, launch premium, cancel refunds 90%%" % Kit.date_of(int(o.ships))
-			if o.get("qtyCap") != null: line += " · allocation %s/qtr" % Kit.num(o.qtyCap)
+			if o.get("qtyCap") != null and not Layout.phone: line += " · allocation %s/qtr" % Kit.num(o.qtyCap)
 			dp[1].add_child(Kit.label(line, 13, Kit.DIM, true))
 		else: dp[1].add_child(Kit.label(str(o.get("reason", "")), 14, Kit.AM, true))
 		if bmsg != "": dp[1].add_child(Kit.label(bmsg, 13, Kit.DIM, true))
@@ -257,13 +296,13 @@ func _parts(root: Control) -> void:
 		var np := Kit.panel("", false, dc); np[1].add_child(Kit.label("Select a part to see specs, the engineering story and tradeoffs.", 14, Kit.DIM, true))
 	var op := Kit.panel("Open orders", false, dc)
 	if b.g.orders.is_empty(): op[1].add_child(Kit.label("None", 13, Kit.DIM))
-	else: op[1].add_child(Kit.label("Every open order, including ones placed from Customers / Easy Path. Cancelling refunds 90%.", 11, Kit.DIM, true))
+	elif not Layout.phone: op[1].add_child(Kit.label("Every open order, including ones placed from Customers / Easy Path. Cancelling refunds 90%.", 11, Kit.DIM, true))
 	var seen := {}
 	for o in b.g.orders:
 		if o.get("batch") != null:
 			if seen.has(o.batch): continue
 			seen[o.batch] = true
-		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); op[1].add_child(row)
+		var row: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); row.add_theme_constant_override("separation", 10 if Layout.phone else 6); op[1].add_child(row)
 		var is_batch: bool = o.get("batch") != null
 		var title: String
 		var cost := 0.0
@@ -277,8 +316,9 @@ func _parts(root: Control) -> void:
 			cost = o.qty * o.unitPrice
 		var lb := Kit.label("%s · %s · arrives %s" % [title, Kit.usd(cost), Kit.date_of(o.arriveMonth)], 12, Kit.TX, true); lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(lb)
 		var cur: int = int(o.racks) if is_batch else int(o.qty)
-		if cur > 1:
+		if cur > 1 and not Layout.phone:
 			row.add_child(Kit.btn("−1", func(): bmsg = b.act("reduceOrder", [o.id, cur - 1]).message; app.sfx("click"); refresh(), "", 11))
 			if cur > 3: row.add_child(Kit.btn("half", func(): bmsg = b.act("reduceOrder", [o.id, cur / 2]).message; app.sfx("click"); refresh(), "", 11))
+		if Layout.phone and cur > 1: row.add_child(Kit.btn("−1 rack" if is_batch else "Order one fewer", func(): bmsg = b.act("reduceOrder", [o.id, cur - 1]).message; app.sfx("click"); refresh(), "", 13))
 		row.add_child(Kit.btn("Cancel", func(): Kit.confirm(self, "Cancel %s? You get 90%% back." % title, func(): bmsg = b.act("cancelOrder", [o.id]).message; app.sfx("sell"); refresh(), "Cancel order"), "danger", 11))
 	if bmsg != "" and sel == "": op[1].add_child(Kit.label(bmsg, 12, Kit.DIM, true))

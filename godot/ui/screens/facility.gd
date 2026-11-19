@@ -12,6 +12,12 @@ var nh_slots := 20
 var _focus := ""
 var _focus_panel: Control
 var _scroll: ScrollContainer
+func _tap(c: Control) -> Control:
+	if Layout.phone: c.custom_minimum_size.y = maxf(c.custom_minimum_size.y, Layout.tap())
+	return c
+## Label + action: side by side on desktop, stacked (action full width) on phone.
+func _pair() -> BoxContainer:
+	var r: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); r.add_theme_constant_override("separation", 10 if Layout.phone else 8); return r
 
 ## Called by the Datacenter 101 "Show me where" button: jump to the relevant section of this screen.
 func focus_concept(cid: String) -> void:
@@ -41,7 +47,7 @@ func _rebuild() -> void:
 	var rp := PanelContainer.new(); rp.set_anchors_preset(Control.PRESET_RIGHT_WIDE); rp.offset_left = -app.overlay_w() + 20.0; rp.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.95), Kit.LINE, 12, 1, 12)); add_child(rp)
 	var rv := VBoxContainer.new(); rv.add_theme_constant_override("separation", 8); rp.add_child(rv)
 	rv.add_child(app.tab_strip("facility"))
-	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 6); rv.add_child(hd); hd.add_child(Kit.label("BUILD", 22, Kit.CY))
+	var hd := HFlowContainer.new(); hd.add_theme_constant_override("h_separation", 10 if Layout.phone else 6); hd.add_theme_constant_override("v_separation", 10 if Layout.phone else 4); rv.add_child(hd); hd.add_child(Kit.label("BUILD", 22, Kit.CY))
 	for i in g.halls.size(): hd.add_child(Kit.btn("%s · %s" % [g.halls[i].name, g.halls[i].coolingClass], func(): app.hall.hall_i = i; app.hall.rebuild(); refresh(), "pri" if i == hi else "", 13))
 	var col := Kit.column(rv, 0, true)
 	if g.get("mode", "operator") == "learner":
@@ -54,12 +60,12 @@ func _rebuild() -> void:
 	var used: int = hall.racks.size(); var total: int = int(hall.rackSlots)
 	fp[1].add_child(Kit.label("%d of %d rack positions used" % [used, total], 13)); fp[1].add_child(Kit.bar(used, maxf(1.0, total), used >= total))
 	for e in hall.get("expansions", []): fp[1].add_child(Kit.label("◔ +%d positions being fitted out · ready %s" % [int(e.units) * 10, Kit.date_of(e.readyMonth)], 12, Kit.AM, true))
-	var fr := HFlowContainer.new(); fr.add_theme_constant_override("h_separation", 6); fp[1].add_child(fr)
+	var fr: Container = VBoxContainer.new() if Layout.phone else HFlowContainer.new(); fr.add_theme_constant_override("h_separation" if not Layout.phone else "separation", 6 if not Layout.phone else 10); fp[1].add_child(fr)
 	for n in [1, 5, 20]:
 		var q: Dictionary = b.q("floorQuote", [n])
 		var fb := Kit.btn("+%d positions · %s · %d mo" % [int(q.slots), Kit.usd(q.cost), int(q.months)], func(): msg = b.act("expandHall", [hall.id, n]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 12)
 		fb.disabled = q.cost > g.cash; fr.add_child(fb)
-	fp[1].add_child(Kit.label("Space is sold in blocks and takes a few months to build out before racks can go in. Bigger orders take longer.", 11, Kit.DIM, true))
+	if not Layout.phone: fp[1].add_child(Kit.label("Space is sold in blocks and takes a few months to build out before racks can go in. Bigger orders take longer.", 11, Kit.DIM, true))
 	# machine ledger: what every rack in this hall is doing
 	var ml: Array = b.q("machineLedger").filter(func(m): return m.hallId == hall.id)
 	var mp := Kit.panel("Machines in %s (%d)" % [hall.name, ml.size()], false, col)
@@ -67,6 +73,13 @@ func _rebuild() -> void:
 	else:
 		var mrows := []
 		for m in ml:
+			if Layout.phone:
+				var dn: String = m.role
+				if m.get("customer") != null: dn += " · %s" % m.customer
+				elif m.get("cluster") != null: dn += " · " + str(m.cluster)
+				var ml_c := Kit.GR if ["training", "serving"].has(m.role) else (Kit.RD if str(m.role).begins_with("failed") else Kit.DIM)
+				mp[1].add_child(Kit.label("%s · slot %d · %s" % [m.design, int(m.slot + 1), m.status], 13, Kit.TX, true)); mp[1].add_child(Kit.label("%s · %s" % [m.serial, dn], 12, ml_c, true)); mp[1].add_child(Kit.hsep())
+				continue
 			var doing: String = m.role
 			if m.get("customer") != null: doing += " · %s (%s)" % [m.customer, m.model]
 			elif m.get("cluster") != null: doing += " · " + str(m.cluster)
@@ -74,23 +87,25 @@ func _rebuild() -> void:
 			var dl := Kit.label(m.design, 12, Kit.TX, true); dl.custom_minimum_size = Vector2(150, 0)
 			var gl := Kit.label(doing, 12, dc, true); gl.custom_minimum_size = Vector2(80, 0)
 			mrows.append([Kit.label(m.serial, 12), dl, Kit.label("%d" % int(m.slot + 1), 12), Kit.label(m.status, 12, Kit.GR if m.status == "online" else Kit.AM), gl])
-		mp[1].add_child(Kit.table(["Serial", "Machine", "Slot", "Status", "Doing"], mrows))
+		if not Layout.phone: mp[1].add_child(Kit.table(["Serial", "Machine", "Slot", "Status", "Doing"], mrows))
 	# install from inventory
 	var ip := Kit.panel("Install equipment from inventory", false, col); var any := false
 	for id in g.inventory:
 		var n: int = int(g.inventory[id]); var it: Dictionary = b.item(id)
 		if n <= 0 or it.is_empty() or not (it.kind == "power" or it.kind == "cooling") or ["pdu", "power-shelf"].has(it.get("powerType", "")): continue
-		any = true; var r := HBoxContainer.new(); ip[1].add_child(r); r.add_child(Kit.label("%d× %s" % [n, it.name], 13, Kit.TX, true)); r.get_child(0).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		any = true; var r := _pair(); ip[1].add_child(r); r.add_child(Kit.label("%d× %s" % [n, it.name], 13, Kit.TX, true)); r.get_child(0).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if Layout.phone: ip[1].add_child(Kit.hsep())
 		r.add_child(Kit.btn("Install 1", func(): msg = b.act("installPower" if it.kind == "power" else "installCooling", [hall.id, id, 1]).message; app.sfx("buy"); refresh(), "", 12))
 	if not any: ip[1].add_child(Kit.label("Buy transformers, UPS, CRAH/CDU/chillers below.", 12, Kit.DIM, true))
 	var inst := []; for id in hall.powerEquip: inst.append("%d× %s" % [int(hall.powerEquip[id]), b.item(id).get("name", id)])
 	for id in hall.coolingEquip: inst.append("%d× %s" % [int(hall.coolingEquip[id]), b.item(id).get("name", id)])
-	ip[1].add_child(Kit.label("Installed: " + (", ".join(inst) if inst.size() > 0 else "nothing"), 11, Kit.DIM, true))
+	if not Layout.phone: ip[1].add_child(Kit.label("Installed: " + (", ".join(inst) if inst.size() > 0 else "nothing"), 11, Kit.DIM, true))
 	# buy plant
 	var bp := Kit.panel("Buy plant for this hall", false, col)
 	_focus_panel = bp[0]; _scroll = col.get_parent() as ScrollContainer
-	var tb := HBoxContainer.new(); bp[1].add_child(tb)
-	for k in ["cooling", "power"]: tb.add_child(Kit.btn(k, func(): plant_kind = k; refresh(), "pri" if plant_kind == k else "", 12))
+	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 10 if Layout.phone else 4); bp[1].add_child(tb)
+	for k in ["cooling", "power"]:
+		var kb := Kit.btn(k, func(): plant_kind = k; refresh(), "pri" if plant_kind == k else "", 12); kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tb.add_child(kb)
 	var offers: Dictionary = b.q("offersAll")
 	for it in b.items.values():
 		if it.kind != plant_kind: continue
@@ -98,47 +113,50 @@ func _rebuild() -> void:
 		if it.kind == "power" and ["pdu", "power-shelf"].has(it.get("powerType", "")): continue
 		var o: Dictionary = offers[it.id]
 		if not o.available: continue
-		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 8); bp[1].add_child(r)
+		var r := _pair(); bp[1].add_child(r)
 		var nm := VBoxContainer.new(); nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(nm); nm.add_child(Kit.label(it.name, 12, Kit.TX, true)); nm.add_child(Kit.label("%s kW · %s · %s mo" % [it.capacityKW, Kit.usd(o.unitPrice), o.leadMonths], 11, Kit.DIM))
-		var bu := Kit.btn("Buy 1", func(): msg = b.act("buy", [it.id, 1]).message; app.sfx("buy"); refresh(), "", 12); bu.disabled = o.unitPrice > g.cash; r.add_child(bu)
-	bp[1].add_child(Kit.label("Arrives in Warehouse, then use “Install 1” above.", 11, Kit.DIM))
+		if Layout.phone: bp[1].add_child(Kit.hsep())
+		var bu := Kit.btn("Buy 1" if not Layout.phone else "Buy 1 · " + Kit.usd(o.unitPrice), func(): msg = b.act("buy", [it.id, 1]).message; app.sfx("buy"); refresh(), "", 12); bu.disabled = o.unitPrice > g.cash; r.add_child(bu)
+	if not Layout.phone: bp[1].add_child(Kit.label("Arrives in Warehouse, then use “Install 1” above.", 11, Kit.DIM))
 	# outage protection
 	var r: Dictionary = hs.resilience; var op := Kit.panel("Outage protection", true, col)
-	var oh := HBoxContainer.new(); op[1].add_child(oh); oh.add_child(Kit.label("Tier: %s" % r.tier, 15)); var osp := Control.new(); osp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; oh.add_child(osp); oh.add_child(Kit.label("rides through %d%% of outages" % int(round(r.score * 100.0)), 12, Kit.DIM))
+	var oh := HBoxContainer.new(); op[1].add_child(oh); oh.add_child(Kit.label("Tier: %s" % r.tier, 15)); var osp := Control.new(); osp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; oh.add_child(osp); oh.add_child(Kit.label(("rides through %d%% of outages" if not Layout.phone else "%d%% covered") % int(round(r.score * 100.0)), 12, Kit.DIM))
 	op[1].add_child(Kit.bar(r.score, 1.0, r.score < 0.9))
-	op[1].add_child(Kit.label("UPS %s kW · battery %s kW · generator %s kW" % [Kit.num(r.upsKW), Kit.num(r.batteryKW), Kit.num(r.gensetKW)], 11, Kit.DIM))
+	if not Layout.phone: op[1].add_child(Kit.label("UPS %s kW · battery %s kW · generator %s kW" % [Kit.num(r.upsKW), Kit.num(r.batteryKW), Kit.num(r.gensetKW)], 11, Kit.DIM))
 	for gap in r.gaps: op[1].add_child(Kit.label("✗ " + str(gap), 12, Kit.AM, true))
 	if r.gaps.is_empty(): op[1].add_child(Kit.label("✓ Full chain: UPS + battery + generator + transfer switch", 12, Kit.GR))
 	# internet
 	var ip2 := Kit.panel("Internet", true, col)
 	if g.get("uplinks") != null:
 		var net: Dictionary = b.q("internet")
-		var nh := HBoxContainer.new(); ip2[1].add_child(nh); nh.add_child(Kit.label("%s Gb/s live · %d carrier%s" % [Kit.num(net.have), int(net.carriers), "" if net.carriers == 1 else "s"], 13)); var nsp := Control.new(); nsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; nh.add_child(nsp); nh.add_child(Kit.label("demand ~%.1f Gb/s · %s/mo" % [net.need, Kit.usd(net.mrc)], 12, Kit.DIM))
+		var nh := HFlowContainer.new(); nh.add_theme_constant_override("h_separation", 12); ip2[1].add_child(nh); nh.add_child(Kit.label("%s Gb/s live · %d carrier%s" % [Kit.num(net.have), int(net.carriers), "" if net.carriers == 1 else "s"], 13)); nh.add_child(Kit.label("demand ~%.1f Gb/s · %s/mo" % [net.need, Kit.usd(net.mrc)], 12, Kit.DIM))
 		ip2[1].add_child(Kit.bar(net.need, maxf(1.0, net.have), net.need > net.have * 0.8))
-		if net.carriers < 2: ip2[1].add_child(Kit.label("✗ Single carrier: one fiber cut takes every customer offline. Add a circuit from a different carrier.", 12, Kit.AM, true))
+		if net.carriers < 2: ip2[1].add_child(Kit.label(("✗ Single carrier: one fiber cut takes every customer offline. Add a circuit from a different carrier." if not Layout.phone else "✗ Single carrier: one fiber cut = full outage."), 12, Kit.AM, true))
 		for id in g.uplinks:
 			if g.uplinks[id] > 0:
-				var ur := HBoxContainer.new(); ip2[1].add_child(ur); var ul := Kit.label("%d× %s" % [int(g.uplinks[id]), b.item(id).get("name", id)], 12); ul.size_flags_horizontal = Control.SIZE_EXPAND_FILL; ur.add_child(ul)
-				ur.add_child(Kit.btn("cancel 1", func(): msg = b.act("dropUplink", [id]).message; refresh(), "", 11))
+				var ur := _pair(); ip2[1].add_child(ur); var ul := Kit.label("%d× %s" % [int(g.uplinks[id]), b.item(id).get("name", id)], 12); ul.size_flags_horizontal = Control.SIZE_EXPAND_FILL; ur.add_child(ul)
+				ur.add_child(Kit.btn("cancel 1", func(): msg = b.act("dropUplink", [id]).message; refresh(), "", 11 if not Layout.phone else 12))
+				if Layout.phone: ip2[1].add_child(Kit.hsep())
 		for it in b.items.values():
 			if it.kind != "uplink" or it.availableFrom * 12.0 - 2020.0 * 12.0 > g.month: continue
-			var ur2 := HBoxContainer.new(); ur2.add_theme_constant_override("separation", 8); ip2[1].add_child(ur2)
+			var ur2 := _pair(); ip2[1].add_child(ur2)
 			var nm2 := VBoxContainer.new(); nm2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; ur2.add_child(nm2); nm2.add_child(Kit.label(it.name, 12, Kit.TX, true)); nm2.add_child(Kit.label("%s install · %s/mo · %s" % [Kit.usd(it.priceUSD), Kit.usd(it.mrcUSD), it.carrier], 11, Kit.DIM))
-			var ab := Kit.btn("Add", func(): msg = b.act("buyUplink", [it.id]).message; app.sfx("buy"); refresh(), "", 12); ab.disabled = it.priceUSD > g.cash; ur2.add_child(ab)
+			if Layout.phone: ip2[1].add_child(Kit.hsep())
+			var ab := Kit.btn("Add" if not Layout.phone else "Add · " + Kit.usd(it.priceUSD), func(): msg = b.act("buyUplink", [it.id]).message; app.sfx("buy"); refresh(), "", 12); ab.disabled = it.priceUSD > g.cash; ur2.add_child(ab)
 	else: ip2[1].add_child(Kit.label("Legacy save: unlimited internet.", 12, Kit.DIM))
 	var hc := Kit.panel("Hall checks", false, col); Kit.issues(hc[1], b.q("validateHall", [hall.id]))
 	var nhp := Kit.panel("Build new hall", false, col)
-	var nr := HFlowContainer.new(); nr.add_theme_constant_override("h_separation", 6); nhp[1].add_child(nr)
-	var le := LineEdit.new(); le.text = nh_name; le.custom_minimum_size = Vector2(110, 0); le.text_changed.connect(func(t): nh_name = t); nr.add_child(le)
-	nr.add_child(Kit.option(["air", "rdhx", "dlc", "immersion"], nh_cool, func(v): nh_cool = v)); nr.add_child(Kit.spin(nh_slots, 4, 200, 1, func(v): nh_slots = int(v)))
+	var nr: Container = VBoxContainer.new() if Layout.phone else HFlowContainer.new(); nr.add_theme_constant_override("h_separation" if not Layout.phone else "separation", 6 if not Layout.phone else 10); nhp[1].add_child(nr)
+	var le := LineEdit.new(); _tap(le); le.text = nh_name; le.custom_minimum_size.x = 110; le.text_changed.connect(func(t): nh_name = t); nr.add_child(le)
+	nr.add_child(_tap(Kit.option(["air", "rdhx", "dlc", "immersion"], nh_cool, func(v): nh_cool = v))); nr.add_child(_tap(Kit.spin(nh_slots, 4, 200, 1, func(v): nh_slots = int(v))))
 	nr.add_child(Kit.btn("Build", func(): msg = b.act("buildHall", [nh_name, nh_cool, nh_slots]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 13))
 	# ---- bottom-left placement strip
 	var bl := PanelContainer.new(); bl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT); bl.offset_left = 8; bl.offset_bottom = -8; bl.grow_vertical = Control.GROW_DIRECTION_BEGIN; bl.offset_top = -8; bl.offset_right = 760 if not Layout.phone else 8.0 + maxf(320.0, app.vw() - app.RAIL_W - 8.0 - app.overlay_w() - 56.0); bl.add_theme_stylebox_override("panel", Kit.sb(Color(0.03, 0.045, 0.07, 0.94), Kit.CY, 12, 1, 12)); add_child(bl)
 	var bv := VBoxContainer.new(); bv.add_theme_constant_override("separation", 6); bl.add_child(bv)
-	bv.add_child(Kit.label("%s floor — choose a rack design, then PLACE RACK (or click the hall): it goes in the next free slot. Click a rack to inspect it." % hall.name, 14, Kit.CY, true))
-	var dr := HBoxContainer.new(); dr.add_theme_constant_override("separation", 8); bv.add_child(dr)
+	bv.add_child(Kit.label(("%s floor — choose a rack design, then PLACE RACK (or click the hall): it goes in the next free slot. Click a rack to inspect it." if not Layout.phone else "%s floor: pick a design, then place") % hall.name, 14, Kit.CY, true))
+	var dr := _pair(); bv.add_child(dr)
 	var dopts := [["", "choose rack design…"]]; for d in g.racks: dopts.append([d.id, d.name])
-	dr.add_child(Kit.option(dopts, design, func(v): design = v; refresh()))
+	dr.add_child(_tap(Kit.option(dopts, design, func(v): design = v; refresh())))
 	var missing := []
 	if design != "":
 		var bom: Dictionary = b.q("rackBom", [design])

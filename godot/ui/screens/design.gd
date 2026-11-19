@@ -25,15 +25,30 @@ const ZONE := {"accelerator": "ACCELERATOR", "cpu": "CPU", "dimm": "DIMM", "nic"
 const RC := {"tray": Color("#76b900"), "switch": Color("#4fd1ff"), "storage": Color("#c792ea"), "power": Color("#ffb020")}
 
 var _gwfilled := false
+var _folds := {}
+## Phone helpers: tap-height controls, roomier spacing, and a drop-prose-on-phone label.
+func _tap(c: Control) -> Control:
+	if Layout.phone: c.custom_minimum_size.y = maxf(c.custom_minimum_size.y, Layout.tap())
+	return c
+func _gap(c: Container, n := 10) -> Container:
+	if Layout.phone:
+		if c is HFlowContainer or c is GridContainer: c.add_theme_constant_override("h_separation", n); c.add_theme_constant_override("v_separation", n)
+		else: c.add_theme_constant_override("separation", n)
+	return c
+## A row that is side by side on desktop and stacked on phone.
+func _pair() -> BoxContainer:
+	var r: BoxContainer = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); r.add_theme_constant_override("separation", 10 if Layout.phone else 8); return r
+func _prose(p: Control, t: String, size := 11, col: Color = Kit.DIM) -> void:
+	if not Layout.phone: p.add_child(Kit.label(t, size, col, true))
 func refresh() -> void: Kit.rebuild_keep(self, _rebuild)
 
 func _rebuild() -> void:
 	for c in get_children(): c.queue_free()
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
-	var hd := Kit.head_row(8); root.add_child(hd)
+	var hd := Kit.head_row(8 if not Layout.phone else 10); root.add_child(hd)
 	hd.add_child(Kit.label("DESIGN LAB", 26, Kit.CY))
-	hd.add_child(Kit.btn("① Tray bench", func(): tab = "tray"; refresh(), "pri" if tab == "tray" else ""))
-	hd.add_child(Kit.btn("② Rack bench", func(): tab = "rack"; refresh(), "pri" if tab == "rack" else ""))
+	hd.add_child(Kit.btn("① Tray bench" if not Layout.phone else "① Tray", func(): tab = "tray"; refresh(), "pri" if tab == "tray" else ""))
+	hd.add_child(Kit.btn("② Rack bench" if not Layout.phone else "② Rack", func(): tab = "rack"; refresh(), "pri" if tab == "rack" else ""))
 	if tab == "tray": _tray(root)
 	else: _rack(root)
 
@@ -109,33 +124,36 @@ func _tray(root: Control) -> void:
 	var cols := Kit.cols_row(); root.add_child(cols)
 	# --- bench
 	var bench := Kit.panel("Tray bench", true, cols); bench[0].size_flags_stretch_ratio = 1.6; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); bench[1].add_child(tools)
+	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); _gap(tools); bench[1].add_child(tools)
 	var copts := []; for c in chl: copts.append([c.id, "%s (%s, %sU)" % [c.name, c.cooling, int(c.rackUnits)]])
-	tools.add_child(Kit.option(copts, cid, func(id): _load_chassis(id); refresh()))
+	tools.add_child(_tap(Kit.option(copts, cid, func(id): _load_chassis(id); refresh())))
+	if Layout.phone: tools.get_child(0).custom_minimum_size.x = 300
 	var topts := [["", "load pre-built system…"]]
 	for t in b.templates:
 		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
-	var to := Kit.option(topts, "", func(id): if id != "": _load_template(id); refresh()); tools.add_child(to)
+	var to := Kit.option(topts, "", func(id): if id != "": _load_template(id); refresh()); tools.add_child(_tap(to))
 	if OS.get_environment("GW_FILL") != "" and not _gwfilled: _gwfilled = true; _autofill(ch)
 	tools.add_child(Kit.btn("Auto-fill", func(): _autofill(ch); refresh(), "", 13)); tools.add_child(Kit.btn("Clear", func(): sock = {}; refresh(), "", 13))
+	if Layout.phone: tools.get_child(tools.get_child_count() - 2).custom_minimum_size.x = 140; tools.get_child(tools.get_child_count() - 1).custom_minimum_size.x = 140
 	var bd := TrayBoard.new(); bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; bd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bd.ch = ch; bd.sel_kind = _active(ch) if sel_idx >= 0 else ""; bd.sel_idx = sel_idx
 	for s in ch.slots: bd.cells[s.kind] = _cells(ch, s.kind)
 	for id in b.items: if b.items[id].kind != "chassis": bd.items[id] = b.items[id]
 	bd.socket_clicked.connect(func(k, i): sel_kind = k; sel_idx = i; _reveal_picker = Layout.touch; refresh())
 	bench[1].add_child(bd)
-	bench[1].add_child(Kit.label(str(ch.codex.summary), 12, Kit.DIM, true))
+	_prose(bench[1], str(ch.codex.summary), 12)
 	if tmsg != "": bench[1].add_child(Kit.label(tmsg, 13, Kit.AM, true))
 	# --- right column
 	var col := Kit.column(cols, 560, false, true); Kit.fit_split(cols, app, [760, 560])
-	col.add_child(Kit.tip("This is a server tray. Click a socket on the board and pick a part. Watch the Sizing advisor: GPUs set the power and NIC needs, CPUs set PCIe lanes and memory channels — and everything you add costs money per GPU-hour."))
+	if not Layout.phone: col.add_child(Kit.tip("This is a server tray. Click a socket on the board and pick a part. Watch the Sizing advisor: GPUs set the power and NIC needs, CPUs set PCIe lanes and memory channels — and everything you add costs money per GPU-hour."))
 	var active := _active(ch)
 	var ip := Kit.panel("Install into: %s%s" % [ZONE.get(active, active), (" #%d" % (sel_idx + 1)) if sel_idx >= 0 else ""], true, col)
 	if _reveal_picker: _reveal_picker = false; Kit.reveal(ip[0])
-	var sk := HFlowContainer.new(); sk.add_theme_constant_override("h_separation", 5); sk.add_theme_constant_override("v_separation", 5); ip[1].add_child(sk)
+	if Layout.phone: ip[1].add_theme_constant_override("separation", 12)
+	var sk := HFlowContainer.new(); sk.add_theme_constant_override("h_separation", 5); sk.add_theme_constant_override("v_separation", 5); _gap(sk); ip[1].add_child(sk)
 	for s in ch.slots:
 		var filled := _cells(ch, s.kind).filter(func(x): return x != null).size()
-		sk.add_child(Kit.btn("%s %d/%d" % [ZONE.get(s.kind, s.kind), filled, int(s.count)], func(): sel_kind = s.kind; sel_idx = maxi(0, _cells(ch, s.kind).find(null)); refresh(), "pri" if active == s.kind else "", 12))
+		sk.add_child(Kit.btn("%s %d/%d" % [ZONE.get(s.kind, s.kind), filled, int(s.count)], func(): sel_kind = s.kind; sel_idx = maxi(0, _cells(ch, s.kind).find(null)); refresh(), "pri" if active == s.kind else "", 13 if Layout.phone else 12))
 	for s in ch.slots:
 		if s.kind == active:
 			ip[1].add_child(Kit.label(("Needs ≥ %d" % int(s.required) if s.get("required") != null else "Optional") + ((" · accepts " + " / ".join(s.accepts)) if s.get("accepts") != null else ""), 11, Kit.DIM, true))
@@ -147,25 +165,25 @@ func _tray(root: Control) -> void:
 		shown += 1
 		if shown > 60: break
 		var it: Dictionary = o.item; var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 6); ip[1].add_child(r)
-		var specs := " · ".join(Kit.specs_of(it).slice(0, 3).map(func(x): return "%s: %s" % [x[0], x[1]]))
+		var specs := " · ".join(Kit.specs_of(it).slice(0, 3 if not Layout.phone else 2).map(func(x): return "%s: %s" % [x[0], x[1]]))
 		var rb := Kit.btn("%s\n%s · %s" % [str(it.name).left(46), specs.left(60), Kit.usd(o.unitPrice) if o.available else "ships %d" % int(it.availableFrom)], func(): if o.available: _install(ch, it.id); refresh(), "pri" if cur_id == it.id else "", 12)
 		rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; rb.disabled = not o.available; r.add_child(rb)
-		if o.available: r.add_child(Kit.btn("fill all", func(): var arr := _cells(ch, active).map(func(x): return x if x != null else it.id); sock[active] = arr; tmsg = ""; refresh(), "", 11))
-	var ar := HBoxContainer.new(); ip[1].add_child(ar)
-	if cur_id != null: ar.add_child(Kit.btn("Remove from socket", func(): var arr := _cells(ch, active); arr[sel_idx] = null; sock[active] = arr; refresh(), "", 12)); ar.add_child(Kit.btn("Codex", func(): app.learn(cur_id), "", 12))
-	ip[1].add_child(Kit.label("Click a socket on the board to target it, then click a part to install it there (it advances to the next empty socket). “fill all” populates every empty socket of that type.", 11, Kit.DIM, true))
+		if o.available and not Layout.phone: r.add_child(Kit.btn("fill all", func(): var arr := _cells(ch, active).map(func(x): return x if x != null else it.id); sock[active] = arr; tmsg = ""; refresh(), "", 11))
+	var ar := HBoxContainer.new(); ar.add_theme_constant_override("separation", 10); ip[1].add_child(ar)
+	if cur_id != null: ar.add_child(Kit.btn("Remove" if Layout.phone else "Remove from socket", func(): var arr := _cells(ch, active); arr[sel_idx] = null; sock[active] = arr; refresh(), "", 12)); ar.add_child(Kit.btn("Codex", func(): app.learn(cur_id), "", 12))
+	if not Layout.phone: ip[1].add_child(Kit.label("Click a socket on the board to target it, then click a part to install it there (it advances to the next empty socket). “fill all” populates every empty socket of that type.", 11, Kit.DIM, true))
 	var vp := Kit.panel("Live validation", true, col)
 	var req_pcie: int = int(ch.pcieLanesAvail)
 	vp[1].add_child(Kit.stats([["Power", "%.1f kW" % (v.stats.watts / 1000.0)], ["Cost", Kit.usd(v.stats.costUSD)], ["Accelerators", str(int(v.stats.accels))], ["FP8 / BF16", "%s / %s PF" % [Kit.num(v.stats.tflopsFp8 / 1000.0, 1), Kit.num(bf16 / 1000.0, 1)]], ["HBM", "%s GB" % Kit.num(v.stats.memGB)], ["PCIe lanes", "%d/%d" % [int(v.stats.pcieLanesUsed), req_pcie]]], 2))
 	Kit.issues(vp[1], v.issues)
-	var sr := HBoxContainer.new(); sr.add_theme_constant_override("separation", 8); vp[1].add_child(sr)
-	var le := LineEdit.new(); le.text = tname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): tname = t); sr.add_child(le)
+	var sr := _pair(); vp[1].add_child(sr)
+	var le := LineEdit.new(); _tap(le); le.text = tname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): tname = t); sr.add_child(le)
 	var has_err: bool = v.issues.any(func(i): return i.severity == "error")
 	var save := Kit.btn("SAVE TRAY", func(): var d := design.duplicate(); d["id"] = "tray-%d" % (g.trays.size() + 1); d["name"] = tname; tmsg = b.act("saveTray", [d]).message; app.sfx("buy"); refresh(), "go", 14); save.disabled = has_err; sr.add_child(save)
 	_sizing(col, design)
 	var sp := Kit.panel("Saved trays", false, col)
 	if g.trays.is_empty(): sp[1].add_child(Kit.label("None yet", 12, Kit.DIM))
-	for t in g.trays: sp[1].add_child(Kit.label("%s · %s · %s" % [t.id, t.name, b.item(t.chassisId).get("name", "")], 12, Kit.TX, true))
+	for t in g.trays: sp[1].add_child(Kit.label(("%s · %s · %s" % [t.id, t.name, b.item(t.chassisId).get("name", "")]) if not Layout.phone else str(t.name), 12, Kit.TX, true))
 
 func _row(parent: Control, ok, text: String) -> void:
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 6); parent.add_child(h)
@@ -173,29 +191,29 @@ func _row(parent: Control, ok, text: String) -> void:
 
 func _sizing(col: Control, design: Dictionary) -> void:
 	var s = app.b.q("traySizing", [design]); if s == null: return
-	var p := Kit.panel("Sizing & cost advisor", true, col); var v: VBoxContainer = p[1]
+	var p: Array = Kit.fold_panel("Sizing & cost advisor", "sizing", _folds, refresh, true, col, true) if Layout.phone else Kit.panel("Sizing & cost advisor", true, col); var v: VBoxContainer = p[1]
 	v.add_child(Kit.label("Power supplies", 13, Kit.CY)); v.add_child(Kit.bar(s.draw, maxf(1.0, s.psuW)))
-	v.add_child(Kit.label("draw %.1f kW · PSU capacity %.1f kW (%d × %.1f kW) · chassis limit %.1f kW" % [s.draw / 1000.0, s.psuW / 1000.0, int(s.psuCount), s.unitW / 1000.0, s.chassisMaxW / 1000.0], 11, Kit.DIM, true))
+	if not Layout.phone: v.add_child(Kit.label("draw %.1f kW · PSU capacity %.1f kW (%d × %.1f kW) · chassis limit %.1f kW" % [s.draw / 1000.0, s.psuW / 1000.0, int(s.psuCount), s.unitW / 1000.0, s.chassisMaxW / 1000.0], 11, Kit.DIM, true))
 	_row(v, s.psuW >= s.draw, "Capacity covers the %d-GPU draw%s" % [int(s.gpus), " — add PSUs" if s.psuW < s.draw else ""])
-	_row(v, s.redundantOK, "N+1 redundancy: one PSU can fail without a brownout%s" % ((" — need ≥ %d PSUs (you have %d)" % [int(s.need) + 1, int(s.psuCount)]) if (not s.redundantOK and s.unitW > 0) else ""))
+	_row(v, s.redundantOK, ("N+1 redundancy: one PSU can fail without a brownout%s" if not Layout.phone else "N+1 redundancy%s") % ((" — need ≥ %d PSUs (you have %d)" % [int(s.need) + 1, int(s.psuCount)]) if (not s.redundantOK and s.unitW > 0) else ""))
 	_row(v, s.draw <= s.chassisMaxW, "Within the chassis busbar limit")
 	v.add_child(Kit.label("PCIe lanes & CPUs", 13, Kit.CY)); v.add_child(Kit.bar(s.lanesUsed, maxf(1.0, s.lanesAvail)))
-	v.add_child(Kit.label("%d/%d lanes used · %d CPU%s × %d lanes" % [int(s.lanesUsed), int(s.lanesAvail), int(s.cpuN), "" if s.cpuN == 1 else "s", int(s.cpuLanes)], 11, Kit.DIM))
-	_row(v, s.lanesUsed <= s.lanesAvail, "One CPU gives half the lanes of two — fine for 4 GPUs/NVMe-light trays, starved for 8 GPUs + 8 NICs." if s.cpuN <= 1 else ("Two CPUs: the standard 8-GPU layout — each CPU feeds half the GPUs/NICs, UPI link between them." if s.cpuN == 2 else "Four CPUs: only worth it for huge memory or lane counts; cost and power go up."))
-	if s.cpuHint != null: v.add_child(Kit.label("1 CPU = %d lanes · %d mem channels · %d W · %s (%s). Cheaper CPUs cut cost but may cut lanes/channels." % [int(s.cpuHint.lanes), int(s.cpuHint.channels), int(s.cpuHint.tdp), Kit.usd(s.cpuHint.price), s.cpuHint.name], 11, Kit.DIM, true))
+	if not Layout.phone: v.add_child(Kit.label("%d/%d lanes used · %d CPU%s × %d lanes" % [int(s.lanesUsed), int(s.lanesAvail), int(s.cpuN), "" if s.cpuN == 1 else "s", int(s.cpuLanes)], 11, Kit.DIM))
+	if not Layout.phone: _row(v, s.lanesUsed <= s.lanesAvail, "One CPU gives half the lanes of two — fine for 4 GPUs/NVMe-light trays, starved for 8 GPUs + 8 NICs." if s.cpuN <= 1 else ("Two CPUs: the standard 8-GPU layout — each CPU feeds half the GPUs/NICs, UPI link between them." if s.cpuN == 2 else "Four CPUs: only worth it for huge memory or lane counts; cost and power go up."))
+	if s.cpuHint != null and not Layout.phone: v.add_child(Kit.label("1 CPU = %d lanes · %d mem channels · %d W · %s (%s). Cheaper CPUs cut cost but may cut lanes/channels." % [int(s.cpuHint.lanes), int(s.cpuHint.channels), int(s.cpuHint.tdp), Kit.usd(s.cpuHint.price), s.cpuHint.name], 11, Kit.DIM, true))
 	v.add_child(Kit.label("NICs (scale-out)", 13, Kit.CY))
-	v.add_child(Kit.label("%d NICs = %s Gbps → %.1f GB/s per GPU · training customers expect ≥ %.1f GB/s in %d" % [int(s.nicCount), Kit.num(s.nicGbps), s.perGpu, s.tier, int(s.year)], 11, Kit.DIM, true))
+	if not Layout.phone: v.add_child(Kit.label("%d NICs = %s Gbps → %.1f GB/s per GPU · training customers expect ≥ %.1f GB/s in %d" % [int(s.nicCount), Kit.num(s.nicGbps), s.perGpu, s.tier, int(s.year)], 11, Kit.DIM, true))
 	_row(v, s.perGpu >= s.tier * 0.98, "Meets today's training bandwidth tier." if s.perGpu >= s.tier * 0.98 else "Short of the tier — %s for %d GPUs. Inference-only trays can get away with less." % [("need ~%d × %s (%dG, x%d lanes each)" % [int(s.nicNeed), s.bestNic.name, int(s.bestNic.gbps), int(s.bestNic.lanes)]) if s.bestNic != null else "newer NICs", int(s.gpus)])
-	_row(v, null, "Rule of thumb: one NIC per GPU (\"rail-optimized\") for training; one per 2 GPUs is fine for inference.")
+	if not Layout.phone: _row(v, null, "Rule of thumb: one NIC per GPU (\"rail-optimized\") for training; one per 2 GPUs is fine for inference.")
 	v.add_child(Kit.label("Memory & storage", 13, Kit.CY))
-	v.add_child(Kit.label("%d DIMMs on %s channels · host RAM %s GB vs %s GB of GPU HBM" % [int(s.dimms), str(int(s.channels)) if s.channels > 0 else "?", Kit.num(s.hostRam), Kit.num(s.hbm)], 11, Kit.DIM, true))
+	if not Layout.phone: v.add_child(Kit.label("%d DIMMs on %s channels · host RAM %s GB vs %s GB of GPU HBM" % [int(s.dimms), str(int(s.channels)) if s.channels > 0 else "?", Kit.num(s.hostRam), Kit.num(s.hbm)], 11, Kit.DIM, true))
 	_row(v, s.channels == 0 or s.dimms >= s.channels, "All memory channels populated (full host bandwidth)." if (s.channels == 0 or s.dimms >= s.channels) else "Only %d/%d channels populated — host bandwidth is wasted." % [int(s.dimms), int(s.channels)])
-	_row(v, s.hostRam >= s.hbm * 0.5 or s.hbm == 0, "Host RAM ≥ ~½ of HBM keeps checkpointing and data loading smooth.")
+	if not Layout.phone: _row(v, s.hostRam >= s.hbm * 0.5 or s.hbm == 0, "Host RAM ≥ ~½ of HBM keeps checkpointing and data loading smooth.")
 	v.add_child(Kit.hsep()); v.add_child(Kit.label("Cost over a long contract (5-year TCO)", 13, Kit.CY))
 	var gp: float = s.gpus
 	v.add_child(Kit.stats([["Capex / GPU", Kit.usd(s.capex / gp) if gp > 0 else "—"], ["Power / GPU / month", Kit.usd(s.powerMo / gp) if gp > 0 else "—"], ["Break-even $/GPU-hr (100% used)", "$%.2f" % s.costHr if gp > 0 else "—"], ["Break-even at 60% used", "$%.2f" % (s.costHr / 0.6) if gp > 0 else "—"]], 2))
 	if gp > 0: _row(v, s.costHr / 0.6 < s.price, "Market pays ≈ $%.2f/GPU-hr this year%s" % [s.price, (" — a %d%% margin at 60%% utilisation." % int(round((1.0 - s.costHr / 0.6 / s.price) * 100.0))) if s.costHr / 0.6 < s.price else " — this tray does not break even at 60% use; cut cost or raise utilisation."])
-	v.add_child(Kit.label("To lower cost for a long contract: drop unneeded NICs/NVMe/CPUs, keep PSU count at N+1 (not more), choose the GPU with the best price per HBM-GB for inference or per PFLOP for training.", 11, Kit.DIM, true))
+	if not Layout.phone: v.add_child(Kit.label("To lower cost for a long contract: drop unneeded NICs/NVMe/CPUs, keep PSU count at N+1 (not more), choose the GPU with the best price per HBM-GB for inference or per PFLOP for training.", 11, Kit.DIM, true))
 
 # ======================= RACK LAB =======================
 func _unit_per(it: Dictionary) -> int:
@@ -283,18 +301,19 @@ func _rack(root: Control) -> void:
 	var v: Dictionary = b.q("validateRack", [design, g.trays])
 	var cols := Kit.cols_row(); root.add_child(cols)
 	var bench := Kit.panel("Rack bench", true, cols); bench[0].size_flags_stretch_ratio = 1.0; bench[0].size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); bench[1].add_child(tools)
+	var tools := HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); _gap(tools); bench[1].add_child(tools)
 	var ropts := []; for r in racks: ropts.append([r.id, "%s (%dU, %s kW)" % [r.name, int(r.units), r.maxKW]])
-	tools.add_child(Kit.option(ropts, rid, func(id): rid = id; ritems = []; sel_dev = -1; refresh()))
-	tools.add_child(Kit.option(["air", "rdhx", "dlc", "immersion"], cool, func(c): cool = c; refresh()))
+	tools.add_child(_tap(Kit.option(ropts, rid, func(id): rid = id; ritems = []; sel_dev = -1; refresh())))
+	tools.add_child(_tap(Kit.option(["air", "rdhx", "dlc", "immersion"], cool, func(c): cool = c; refresh())))
 	var topts := [["", "pre-built rack…"]]
 	for t in b.templates:
 		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
-	tools.add_child(Kit.option(topts, "", func(id): _adopt(id)))
+	tools.add_child(_tap(Kit.option(topts, "", func(id): _adopt(id))))
 	if g.racks.size() > 0:
 		var sopts := [["", "open saved…"]]; for r in g.racks: sopts.append([r.id, r.name])
-		tools.add_child(Kit.option(sopts, "", func(id): if id != "": _load_rack(id); refresh()))
+		tools.add_child(_tap(Kit.option(sopts, "", func(id): if id != "": _load_rack(id); refresh())))
 	tools.add_child(Kit.btn("Clear", func(): ritems = []; sel_dev = -1; refresh(), "", 13))
+	if Layout.phone: tools.get_child(tools.get_child_count() - 1).custom_minimum_size.x = 140
 	var bd := RackBoard.new(); bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; bd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bd.units = units; bd.rack_name = rk.name; bd.max_kw = rk.maxKW; bd.kw = v.stats.kW; bd.sel_u = sel_u; bd.sel_dev = sel_dev; bd.occ = _occ(units, ritems)
 	for i in ritems.size():
@@ -307,15 +326,20 @@ func _rack(root: Control) -> void:
 	var col := Kit.column(cols, 560, false, true); Kit.fit_split(cols, app, [760, 560])
 	if sel_dev >= 0 and sel_dev < ritems.size():
 		var it: Dictionary = ritems[sel_dev]; var sp := Kit.panel("Selected: %s   U%d–%d" % [_meta(it).label, int(it.get("u", 0)) + 1, int(it.get("u", 0)) + _height(it)], true, col)
-		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 6); sp[1].add_child(h)
+		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 6); _gap(h); sp[1].add_child(h)
 		if it.type != "power":
 			h.add_child(Kit.btn("− count", func(): _bump(units, sel_dev, -1); refresh(), "", 12)); h.add_child(Kit.label(str(int(it.count)), 15)); h.add_child(Kit.btn("+ count", func(): _bump(units, sel_dev, 1); refresh(), "", 12))
 		h.add_child(Kit.btn("▲ up", func(): _nudge(units, sel_dev, 1); refresh(), "", 12)); h.add_child(Kit.btn("▼ down", func(): _nudge(units, sel_dev, -1); refresh(), "", 12))
-		h.add_child(Kit.btn("remove", func(): ritems.remove_at(sel_dev); sel_dev = -1; refresh(), "danger", 12))
+		if Layout.phone: sp[1].add_child(Kit.hsep())
+		(sp[1] if Layout.phone else h).add_child(Kit.btn("remove", func(): ritems.remove_at(sel_dev); sel_dev = -1; refresh(), "danger", 12))
 	var ip := Kit.panel("Install into rack", true, col)
-	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 5); ip[1].add_child(tb)
-	for k in [["switch", "ToR / switches"], ["tray", "Compute trays"], ["power", "Power"], ["storage", "Storage"]]: tb.add_child(Kit.btn(k[1], func(): rtab = k[0]; refresh(), "pri" if rtab == k[0] else "", 12))
-	ip[1].add_child(Kit.label(("Target: U%d. " % (sel_u + 1) if sel_u >= 0 else "No U selected — Add puts it in the best free spot (switches go to the top). ") + ("A part is armed — click an empty U to place it." if not armed.is_empty() else ""), 11, Kit.DIM, true))
+	if Layout.phone: ip[1].add_theme_constant_override("separation", 12)
+	var tb: Container = GridContainer.new() if Layout.phone else HBoxContainer.new(); tb.add_theme_constant_override("separation", 5)
+	if Layout.phone: (tb as GridContainer).columns = 2; tb.add_theme_constant_override("h_separation", 10); tb.add_theme_constant_override("v_separation", 10)
+	ip[1].add_child(tb)
+	for k in [["switch", "ToR / switches"], ["tray", "Compute trays"], ["power", "Power"], ["storage", "Storage"]]:
+		var kb := Kit.btn(k[1], func(): rtab = k[0]; refresh(), "pri" if rtab == k[0] else "", 12 if not Layout.phone else 13); kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tb.add_child(kb)
+	if not Layout.phone: ip[1].add_child(Kit.label(("Target: U%d. " % (sel_u + 1) if sel_u >= 0 else "No U selected — Add puts it in the best free spot (switches go to the top). ") + ("A part is armed — click an empty U to place it." if not armed.is_empty() else ""), 11, Kit.DIM, true))
 	var palette := []
 	if rtab == "tray":
 		for t in g.trays:
@@ -326,23 +350,25 @@ func _rack(root: Control) -> void:
 			if rtab == "switch" and it.kind == "switch" and it.rackUnits > 0: palette.append({"id": it.id, "name": it.name, "sub": "%s · %sU" % [it.role, int(it.rackUnits)], "kind": "switch", "ok": o.available, "price": o.unitPrice})
 			elif rtab == "storage" and it.kind == "storage": palette.append({"id": it.id, "name": it.name, "sub": "%s PB · %s GB/s · %sU" % [it.capacityPB, it.readGBs, int(it.rackUnits)], "kind": "storage", "ok": o.available, "price": o.unitPrice})
 			elif rtab == "power" and it.kind == "power" and ["pdu", "power-shelf"].has(it.get("powerType", "")): palette.append({"id": it.id, "name": it.name, "sub": "%s · %s kW" % [it.powerType, it.capacityKW], "kind": "power", "ok": o.available, "price": o.unitPrice})
+	if Layout.phone: palette = palette.filter(func(x): return x.ok)
 	if palette.is_empty(): ip[1].add_child(Kit.label("No saved trays — build one on the Tray bench or load a pre-built rack." if rtab == "tray" else "Nothing here yet.", 12, Kit.DIM, true))
+	if Layout.phone and sel_u >= 0: ip[1].add_child(Kit.label("Adds at U%d (tap a part)" % (sel_u + 1), 12, Kit.DIM))
 	for p in palette:
 		var on: bool = armed.get("id", "") == p.id; var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 6); ip[1].add_child(r)
-		var rb := Kit.btn("%s\n%s%s" % [str(p.name).left(46), p.sub, (" · " + Kit.usd(p.price)) if p.price > 0 else ""], func(): armed = {} if on else {"kind": p.kind, "id": p.id}; refresh(), "pri" if on else "", 12)
+		var rb := Kit.btn("%s\n%s%s" % [str(p.name).left(46), p.sub, (" · " + Kit.usd(p.price)) if p.price > 0 else ""], (func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh()) if Layout.phone else (func(): armed = {} if on else {"kind": p.kind, "id": p.id}; refresh()), "pri" if on else "", 12)
 		rb.alignment = HORIZONTAL_ALIGNMENT_LEFT; rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; rb.disabled = not p.ok; r.add_child(rb)
-		var ab := Kit.btn("Add", func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh(), "", 12); ab.disabled = not p.ok; r.add_child(ab)
-	ip[1].add_child(Kit.label("Click a part to arm it and click the U where it should sit, or press Add. Zones are hints: ToR switches at the top, compute in the middle, power/storage at the bottom.", 11, Kit.DIM, true))
+		if not Layout.phone: var ab := Kit.btn("Add", func(): _place_at(units, {"kind": p.kind, "id": p.id}, sel_u); refresh(), "", 12); ab.disabled = not p.ok; r.add_child(ab)
+	if not Layout.phone: ip[1].add_child(Kit.label("Click a part to arm it and click the U where it should sit, or press Add. Zones are hints: ToR switches at the top, compute in the middle, power/storage at the bottom.", 11, Kit.DIM, true))
 	var vp := Kit.panel("Rack validation", true, col)
 	vp[1].add_child(Kit.stats([["Power", "%d / %s kW" % [int(v.stats.kW), rk.maxKW], Kit.RD if v.stats.kW > rk.maxKW else Kit.TX], ["Units", "%d/%d" % [int(v.stats.units), units]], ["Weight", "%s kg" % Kit.num(v.stats.weightKg)], ["Cost", Kit.usd(v.stats.costUSD)], ["Accels", str(int(v.stats.accels))], ["Scale-up", str(int(v.stats.scaleUpDomain))]], 3))
 	Kit.issues(vp[1], v.issues)
-	var sr := HBoxContainer.new(); sr.add_theme_constant_override("separation", 8); vp[1].add_child(sr)
-	var le := LineEdit.new(); le.text = rname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): rname = t); sr.add_child(le)
+	var sr := _pair(); vp[1].add_child(sr)
+	var le := LineEdit.new(); _tap(le); le.text = rname; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): rname = t); sr.add_child(le)
 	var has_err: bool = v.issues.any(func(i): return i.severity == "error")
 	var save := Kit.btn("SAVE RACK", func(): var d := design.duplicate(true); d["id"] = "rack-%d" % (g.racks.size() + 1); d["name"] = rname; rmsg = b.act("saveRack", [d]).message; app.sfx("buy"); refresh(), "go", 14); save.disabled = has_err or ritems.is_empty(); sr.add_child(save)
 	var sv := Kit.panel("Saved racks", false, col)
 	if g.racks.is_empty(): sv[1].add_child(Kit.label("None yet", 12, Kit.DIM))
-	for r in g.racks: sv[1].add_child(Kit.label("%s · %s" % [r.id, r.name], 12, Kit.TX, true))
+	for r in g.racks: sv[1].add_child(Kit.label(("%s · %s" % [r.id, r.name]) if not Layout.phone else str(r.name), 12, Kit.TX, true))
 
 func _adopt(id: String) -> void:
 	if id == "": return

@@ -13,7 +13,7 @@ func _preview(col: Control, pv: Dictionary) -> void:
 	var pp := Kit.panel("Next month · %s" % Kit.date_of(int(pv.nextMonth)), false, col)
 	var delta := float(pv.cashDelta)
 	pp[1].add_child(Kit.rich("Cash after: [b]%s[/b]  [color=%s]%s%s[/color]" % [Kit.usd(float(pv.cashAfter)), "#4be3a1" if delta >= 0 else "#ff6b6b", "+" if delta >= 0 else "", Kit.usd(delta)], 14))
-	pp[1].add_child(Kit.label("Revenue %s · running costs %s · interest %s" % [Kit.usd(float(pv.revenue)), Kit.usd(float(pv.opex)), Kit.usd(float(pv.interest))], 11, Kit.DIM, true))
+	if not Layout.phone: pp[1].add_child(Kit.label("Revenue %s · running costs %s · interest %s" % [Kit.usd(float(pv.revenue)), Kit.usd(float(pv.opex)), Kit.usd(float(pv.interest))], 11, Kit.DIM, true))
 	if pv.runwayMonths != null:
 		var rm := int(pv.runwayMonths)
 		pp[1].add_child(Kit.label("Runway: %d month%s at this burn" % [rm, "" if rm == 1 else "s"], 13, Kit.RD if rm <= 6 else Color("#ffb454")))
@@ -28,6 +28,7 @@ func _preview(col: Control, pv: Dictionary) -> void:
 	if pv.completing.size() > 0: bits.append("completing: " + ", ".join(pv.completing))
 	if pv.expiring.size() > 0: bits.append("offers expiring: " + ", ".join(pv.expiring))
 	if bits.is_empty(): pp[1].add_child(Kit.label("Nothing scheduled.", 12, Kit.DIM))
+	if Layout.phone and bits.size() > 3: bits = bits.slice(0, 3)
 	for t in bits: pp[1].add_child(Kit.label("• " + t, 12, Kit.TX, true))
 	for w in pv.warnings: pp[1].add_child(Kit.label("⚠ " + str(w), 12, Kit.RD, true))
 
@@ -40,9 +41,13 @@ func _needs(col: Control, needs: Array) -> void:
 	var tint: Color = Kit.RD if n.level == "crit" else (Kit.AM if n.level == "warn" else Kit.CY)
 	var pp := Kit.panel("Needs you now", true, col)
 	var tl := Kit.label(str(n.title), 20, tint, true); pp[1].add_child(tl)
-	pp[1].add_child(Kit.label(str(n.detail), 13, Kit.TX, true))
-	var go := Kit.btn(str(n.button) + "  →", func(): _do_need(n), "go", 15); go.custom_minimum_size = Vector2(0, 40); pp[1].add_child(go)
-	for i in range(1, mini(needs.size(), 4)):
+	var det := str(n.detail)
+	if Layout.phone:   # one short sentence; the full text is a tap away on the target screen
+		var dot := det.find(". "); if dot > 0: det = det.substr(0, dot + 1)
+		if det.length() > 110: det = det.substr(0, 107).strip_edges() + "…"
+	pp[1].add_child(Kit.label(det, 13, Kit.TX, true))
+	var go := Kit.btn(str(n.button) + "  →", func(): _do_need(n), "go", 15); go.custom_minimum_size = Vector2(0, maxf(40.0, Layout.tap())); pp[1].add_child(go)
+	for i in range(1, mini(needs.size(), 2 if Layout.phone else 4)):
 		var m: Dictionary = needs[i]
 		var c: Color = Kit.RD if m.level == "crit" else (Kit.AM if m.level == "warn" else Kit.DIM)
 		pp[1].add_child(Kit.label("• " + str(m.title), 12, c, true))
@@ -66,7 +71,7 @@ func _net_card(col: Control, nh) -> void:
 		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 8); np[1].add_child(r)
 		var tv := VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(tv)
 		tv.add_child(Kit.label("%s · %s accelerators" % [c.name, Kit.num(c.accels)], 13, Kit.TX, true))
-		tv.add_child(Kit.label("%s %s%s · %.1f GB/s per GPU" % [str(c.tech).to_upper(), str(c.topology).replace("-", " "), (" · %d:1" % int(c.oversub)) if float(c.oversub) > 1.0 else "", float(c.gbs)], 12, Kit.DIM, true))
+		if not Layout.phone: tv.add_child(Kit.label("%s %s%s · %.1f GB/s per GPU" % [str(c.tech).to_upper(), str(c.topology).replace("-", " "), (" · %d:1" % int(c.oversub)) if float(c.oversub) > 1.0 else "", float(c.gbs)], 12, Kit.DIM, true))
 		if int(c.down) > 0: tv.add_child(Kit.label("🔗 %d × %s down (-%.1f%% bandwidth), fixed in %s%s" % [int(c.down), c.cableName, float(c.loss) * 100.0, Kit.date_of(int(c.fixMonth)), "" if c.fromSpares else " · no spares on the shelf"], 12, Kit.RD, true))
 		r.add_child(Kit.chip("DOWN" if int(c.down) > 0 else "OK", Kit.RD if int(c.down) > 0 else Kit.GR, 12))
 	var up: Dictionary = nh.uplink
@@ -91,6 +96,7 @@ func _rebuild() -> void:
 	if g.get("projects", []).size() > 0:
 		var pp := _fold("Easy-path projects (%d)" % projs.size(), "easy", col, projs.filter(func(x): return x.stage != "done").is_empty())
 		pp[1].add_child(Kit.btn("Check now", func(): b.act("stepEasy"), "", 12))
+		if Layout.phone: pp[1].add_theme_constant_override("separation", 10)
 		for x in projs.slice(maxi(0, projs.size() - 3)):
 			var cust := "Spec build"
 			for c in g.availableContracts:
@@ -100,19 +106,22 @@ func _rebuild() -> void:
 			pp[1].add_child(Kit.label("%s · %d× build" % [cust, int(x.racks)], 13))
 			var at: int = -1 if x.stage == "failed" else STAGES.find(x.stage)
 			var sr := HFlowContainer.new(); sr.add_theme_constant_override("h_separation", 4); sr.add_theme_constant_override("v_separation", 4); pp[1].add_child(sr)   # flows onto a second line in a narrow drawer
-			for i in STAGES.size():
-				var failed: bool = x.stage == "failed"
-				if failed or i <= at:
-					var pc: Color = Kit.RD if failed else (Kit.GR if i < at or x.stage == "done" else Kit.CY)
-					sr.add_child(Kit.chip(STAGE_LBL[STAGES[i]], pc, 12))
-				else: sr.add_child(Kit.label(STAGE_LBL[STAGES[i]], 12, Kit.DIM))
-			pp[1].add_child(Kit.label(("✗ " if x.stage == "failed" else "") + str(x.notes[x.notes.size() - 1] if x.notes.size() > 0 else ""), 11, Kit.DIM, true))
+			if Layout.phone and x.stage == "done": sr.add_child(Kit.chip(STAGE_LBL["done"], Kit.GR, 12))
+			else:
+				for i in STAGES.size():
+					var failed: bool = x.stage == "failed"
+					if failed or i <= at:
+						var pc: Color = Kit.RD if failed else (Kit.GR if i < at or x.stage == "done" else Kit.CY)
+						sr.add_child(Kit.chip(STAGE_LBL[STAGES[i]], pc, 12))
+					else: sr.add_child(Kit.label(STAGE_LBL[STAGES[i]], 12, Kit.DIM))
+			if not Layout.phone or x.stage == "failed": pp[1].add_child(Kit.label(("✗ " if x.stage == "failed" else "") + str(x.notes[x.notes.size() - 1] if x.notes.size() > 0 else ""), 11, Kit.DIM, true))
 	var ms: Array = b.q("missions"); var nxt := ms.filter(func(m): return not m.done and not g.missionsDone.has(m.id)).slice(0, 3 if g.get("mode", "operator") == "learner" else 1)
 	var mp := _fold("Next mission · %d of %d done" % [g.missionsDone.size(), ms.size()], "missions", col, false)
 	if nxt.is_empty(): mp[1].add_child(Kit.label("All missions complete — you run a hyperscaler.", 13, Kit.GR))
 	for m in nxt:
-		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 8); mp[1].add_child(r)
-		var tv := VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(tv); tv.add_child(Kit.label("%s  +%s" % [m.title, Kit.usd(m.reward)], 13, Kit.TX, true)); tv.add_child(Kit.label(m.hint, 11, Kit.DIM, true))
+		var r: Container = VBoxContainer.new() if Layout.phone else HBoxContainer.new(); r.add_theme_constant_override("separation", 10 if Layout.phone else 8); mp[1].add_child(r)
+		var tv := VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(tv); tv.add_child(Kit.label("%s  +%s" % [m.title, Kit.usd(m.reward)], 13, Kit.TX, true))
+		if not Layout.phone: tv.add_child(Kit.label(m.hint, 11, Kit.DIM, true))
 		r.add_child(Kit.btn("Go →", func(): app.go(m.go if m.go != "finance" else "dash"), "", 12))
 	_net_card(col, b.q("netHealth"))
 	var cp := _fold("Customers (%d)" % g.activeContracts.size(), "customers", col, g.activeContracts.size() > 4)

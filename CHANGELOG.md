@@ -2,6 +2,21 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.9.1] - 2026-11-19 (alpha 2)
+
+Phone and website pass, from feedback on the first alpha: too much text, too cramped, taps landing on the wrong thing.
+
+### Changed
+- **Phone layout, every screen:** long tips and explanatory paragraphs are hidden or tucked into collapsed "More" sections; one short line per item by default. Buttons are stacked at full width with real gaps, checkboxes and dropdowns have tap-sized rows, money-spending buttons sit apart from harmless ones, and validation messages are one line. Covers Clients, Home, Ops, Energy, Supply (Plan, Parts, Roadmap), Warehouse, Codex, Design Lab (tray and rack benches), Cluster and Build, plus chapter and decision cards.
+- **Design Lab on a phone:** tapping a part in the rack bench adds it at the selected U (or the best free spot); no arm-then-click step.
+- **Title screen on a phone:** shorter mode descriptions, everything fits without scrolling; no Quit button on Android.
+- **Collapsible headers on a phone** are flat rows instead of boxes inside boxes.
+- **Website:** a new game-style home page (full-screen hall footage, HUD strip, sideways screenshot gallery with a lightbox, screenshot panels, console-style Heat Lab). On phones it is about a third shorter, with less text and touch-safe scrolling. Fixed the hero on 2K, ultrawide and 4K screens.
+
+### Known gaps
+- Only partly verified on a real phone: Cluster, Warehouse, Codex, Energy, Settings and Learner mode were checked in desktop phone emulation, not by touch. Design Lab boards are still not controller or keyboard operable.
+- The rest of the 0.9.0 list stands (light-theme contrast, ultrawide dead space, manually built APK, iOS untouched).
+
 ## [0.9.0] - 2026-11-09 (alpha)
 
 First alpha for friends. A full critique pass (six testers on desktop at nine resolutions, a Pixel 9a, a virtual Steam Deck controller, a random-button tester and a code review; see `docs/CRITIQUE-0.8.md`) drove this release.

@@ -379,9 +379,9 @@ func _title() -> void:
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; h.add_child(sc)
 		bv = VBoxContainer.new(); bv.add_theme_constant_override("separation", 10); bv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(bv)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", 18, Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", 110 if not two else 64, Kit.CY))
-	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028.", 20, Kit.TX, true))
-	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding"]]:
-		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0) if not two else 0.0, 76); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; bt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if two else TextServer.AUTOWRAP_OFF; bv.add_child(bt)
+	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028." if not Layout.phone else "Buy real GPUs, wire power and cooling, and lease capacity to AI labs. 2020 → 2028.", 20, Kit.TX, true))
+	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path" if not Layout.phone else "New to datacenters · $80M · explains everything"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists" if not Layout.phone else "I know the basics · $50M"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding" if not Layout.phone else "Just the keys · $30M"]]:
+		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "pri" if m[0] == "operator" else "", 18); bt.custom_minimum_size = Vector2(minf(640.0, vw() - 48.0) if not two else 0.0, 76 if not Layout.phone else 68); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; bt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if two else TextServer.AUTOWRAP_OFF; bv.add_child(bt)
 	quiet = true; b.env("autosave", [false]); quiet = false   # the backdrop demo must never overwrite the player's autosave
 	b.act("newGame", [7, "operator"]); _demo_hall()
 	var recent: Array = b.q("saves")
@@ -391,8 +391,8 @@ func _title() -> void:
 		bv.add_child(cont); bv.move_child(cont, 3 if bv == vb else 0)
 	bv.add_child(Kit.btn("LOAD GAME", func(): _slots("load", func(): h.queue_free()), "", 16))
 	bv.add_child(Kit.btn("SETTINGS", func(): _settings(), "", 16))
-	bv.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
-	bv.add_child(Kit.label("Settings has the full list of controls.", 14, Kit.DIM))
+	if not Layout.is_mobile(): bv.add_child(Kit.btn("QUIT", func(): get_tree().quit(), "", 16))
+	if not Layout.phone: bv.add_child(Kit.label("Settings has the full list of controls.", 14, Kit.DIM))
 	var gw := Settings.gpu_warning()
 	if gw != "": var gl := Kit.label(gw, 14, Kit.AM); gl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; bv.add_child(gl)
 	hall.dist = 13.0; hall.pitch = 0.32; hall.auto_orbit = true; hall.hall_i = 0; hall.rebuild(); hall.cam.h_offset = -4.5
