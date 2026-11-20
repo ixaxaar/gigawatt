@@ -2,7 +2,7 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.3] - 2026-11-20 (alpha 4)
 
 Third review round: five reviewers (real Pixel 9a, desktop 720p to 4K, handheld/tablet/odd windows, graphics, website), then fixes in five lanes.
 
