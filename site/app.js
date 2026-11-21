@@ -1,4 +1,4 @@
-// GIGAWATT site: hero rack field, OS-aware downloads, heat lab calculator. No dependencies.
+// GIGAWATT site: OS-aware downloads, heat lab calculator, gallery and lightbox. No dependencies.
 (() => {
   const REPO = "ixaxaar/gigawatt";
 
@@ -133,6 +133,17 @@
   }
 })();
 
+// ---- hero clip: plays by itself unless the visitor asked for reduced motion, and pauses off screen ----
+(() => {
+  const host = document.getElementById("heroshot"), v = host && host.querySelector("video");
+  if (!v) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { v.removeAttribute("autoplay"); v.pause(); return; }
+  if (!("IntersectionObserver" in window)) return;
+  new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !document.documentElement.classList.contains("lb-open")) { const p = v.play(); if (p) p.catch(() => {}); } else v.pause();
+  }), { threshold: 0.3 }).observe(v);
+})();
+
 // ---- header menu, solid header after the hero ----
 (() => {
   const nav = document.querySelector(".nav");
@@ -189,7 +200,7 @@
     lb.hidden = false; lb.classList.add("open"); root.classList.add("lb-open");
     inerted = [...document.body.children].filter(el => el !== lb && el.tagName !== "SCRIPT");
     inerted.forEach(el => { el.inert = true; });
-    document.querySelectorAll(".rail video").forEach(v => v.pause());
+    document.querySelectorAll(".rail video, .heroshot video").forEach(v => v.pause());
     x.focus(); if (!video) centre();
   };
   const close = () => {

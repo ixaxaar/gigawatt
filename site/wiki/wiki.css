@@ -1,44 +1,44 @@
 /* Wiki pages: same language as the home page (tokens, header and buttons come from ../base.css). Sidebar plus a readable document column. */
 body.wiki{background:var(--bg)}
-.wiki-wrap{display:grid;grid-template-columns:minmax(220px,270px) minmax(0,1fr);gap:36px;max-width:1240px;margin:0 auto;padding:calc(var(--nav) + 32px) var(--gut) 72px}
-.side{position:sticky;top:calc(var(--nav) + 16px);align-self:start;max-height:calc(100vh / var(--z2) - var(--nav) - 32px);overflow:auto;padding-right:6px;scrollbar-color:var(--amber) var(--bg2);scrollbar-width:thin}
-.side input{width:100%;font:600 14px var(--font);color:var(--ink);background:#060c17;border:1px solid var(--line);border-radius:0;padding:12px;margin-bottom:12px;min-height:46px}
+.wiki-wrap{display:grid;grid-template-columns:minmax(220px,270px) minmax(0,1fr);gap:36px;max-width:1180px;margin:0 auto;padding:calc(var(--nav) + 32px) var(--gut) 72px}
+.side{position:sticky;top:calc(var(--nav) + 16px);align-self:start;max-height:calc(100vh / var(--z2) - var(--nav) - 32px);overflow:auto;padding-right:6px;scrollbar-color:#3a414d transparent;scrollbar-width:thin}
+.side input{width:100%;font:15px var(--font);color:var(--ink);background:var(--panel);border:1px solid #3a414d;border-radius:6px;padding:12px;margin-bottom:12px;min-height:46px}
 .side input::placeholder{color:var(--dim)}
 .side ul{list-style:none;margin:0;padding:0}
-.side .pages li a,.side .results li a{display:block;color:var(--ink);text-decoration:none;font-size:14px;font-weight:600;padding:9px 12px;border-left:3px solid transparent;min-height:40px}
-.side .pages li a:hover,.side .results li a:hover{background:var(--panel);border-color:var(--cyan)}
+.side .pages li a,.side .results li a{display:block;color:var(--ink);text-decoration:none;font-size:15px;padding:8px 12px;border-left:2px solid transparent;min-height:40px;border-radius:0 6px 6px 0}
+.side .pages li a:hover,.side .results li a:hover{background:var(--panel);border-color:#566070}
 .side .pages li a[aria-current=page]{background:var(--panel);border-color:var(--amber);color:var(--amber)}
-.side .results{margin-bottom:14px;border:1px solid var(--line);background:var(--bg2)}
+.side .results{margin-bottom:14px;border:1px solid var(--line);border-radius:6px;background:var(--bg2)}
 .side .results small{display:block;color:var(--dim);font-weight:400;font-size:12px;margin-top:2px}
 .side{min-width:0}
 .doc{min-width:0;max-width:78ch}
-.doc h1{font-size:clamp(30px,5vw,48px);font-weight:900;text-transform:uppercase;letter-spacing:-.005em;margin-bottom:12px;background:linear-gradient(180deg,#fff 20%,#9fc0ee);-webkit-background-clip:text;background-clip:text;color:transparent}
-.doc h2{font-size:clamp(22px,3vw,30px);font-weight:900;text-transform:uppercase;margin:40px 0 14px;padding:0 0 8px 14px;border-left:3px solid var(--amber);border-bottom:1px solid var(--line)}
-.doc h3{font-size:18px;margin:26px 0 8px;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em}
+.doc h1{font-size:clamp(30px,5vw,46px);font-weight:700;letter-spacing:-.01em;margin-bottom:12px}
+.doc h2{font-size:clamp(22px,3vw,28px);font-weight:700;margin:44px 0 14px;padding:0 0 10px;border-bottom:1px solid var(--line)}
+.doc h3{font-size:19px;margin:28px 0 8px;color:var(--amber)}
 .lede2{font-size:18px;color:var(--dim);margin-bottom:22px}
-.doc p,.doc li{font-size:16px}
+.doc p,.doc li{font-size:17px}
 .doc a{overflow-wrap:anywhere}
 .doc ul,.doc ol{margin:0 0 16px;padding-left:24px}
 .doc li{margin-bottom:6px}
-.doc code{background:var(--panel2);border:1px solid var(--line);padding:1px 6px;font-size:.92em;overflow-wrap:anywhere}
-.doc pre{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--cyan);padding:14px;overflow:auto;max-width:100%;font-size:14px;line-height:1.5}
+.doc code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font:.9em var(--mono);overflow-wrap:anywhere}
+.doc pre{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:14px;overflow:auto;max-width:100%;font-size:14px;line-height:1.5}
 .doc pre code{border:0;padding:0;background:none;overflow-wrap:normal}
-.doc blockquote{margin:0 0 16px;padding:12px 18px;border-left:3px solid var(--amber);background:var(--panel)}
+.doc blockquote{margin:0 0 16px;padding:12px 18px;border-left:3px solid var(--amber);background:var(--panel);border-radius:0 6px 6px 0}
 .doc figure{margin:24px 0}
-.doc figure img{border:1px solid var(--line);width:100%;height:auto;background:#05080d}
+.doc figure img{border:1px solid var(--line);border-radius:8px;width:100%;height:auto;background:#07080a}
 .doc figcaption{font-size:13px;color:var(--dim);margin-top:10px}
-.tbl{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line)}
-.tbl table{border-collapse:collapse;width:100%;font-size:14px}
+.tbl{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:6px}
+.tbl table{border-collapse:collapse;width:100%;font-size:15px}
 .tbl th,.tbl td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
 .tbl tr:last-child td{border-bottom:0}
-.tbl th{background:var(--panel);color:var(--amber);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
-.toc{border:1px solid var(--line);border-top:3px solid var(--cyan);background:var(--panel);padding:14px 18px;margin:0 0 26px}
-.toc strong{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan)}
+.tbl th{background:var(--panel);color:var(--dim);font:600 12px var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.toc{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:14px 18px;margin:0 0 26px}
+.toc strong{font:600 12px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
 .toc ul{margin:8px 0 0;padding-left:20px}
 .toc li{margin-bottom:2px}
 .pager{display:flex;justify-content:space-between;gap:14px;margin:44px 0 18px;flex-wrap:wrap}
-.pager a{font-weight:700;font-size:14px;letter-spacing:.06em;text-decoration:none;color:var(--ink);background:rgba(56,214,255,.08);padding:14px 22px;min-height:48px;display:inline-flex;align-items:center;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);box-shadow:inset 0 0 0 2px var(--cyan)}
-.pager a:hover{background:rgba(56,214,255,.2)}
+.pager a{font:700 15px var(--head);text-decoration:none;color:var(--ink);background:var(--panel2);border:1px solid #3a414d;border-radius:8px;padding:12px 20px;min-height:48px;display:inline-flex;align-items:center}
+.pager a:hover{background:#232830;border-color:#566070}
 .doc .fine a{display:inline-block;padding:12px 0}
 @media (max-width:860px){
   .wiki-wrap{grid-template-columns:minmax(0,1fr);gap:14px;padding-top:calc(var(--nav) + 16px)}
@@ -48,7 +48,7 @@ body.wiki{background:var(--bg)}
   .side .pages{display:flex;gap:8px;overflow-x:auto;padding:2px var(--gut) 10px;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,transparent,#000 var(--gut),#000 calc(100% - 28px),transparent)}
   .side .pages::-webkit-scrollbar{display:none}
   .side .pages li{flex:none;scroll-snap-align:start}
-  .side .pages li a{border:1px solid var(--line);padding:10px 14px;white-space:nowrap;min-height:44px;display:flex;align-items:center}
+  .side .pages li a{border:1px solid var(--line);border-radius:999px;padding:10px 14px;white-space:nowrap;min-height:44px;display:flex;align-items:center}
   .side .pages li a[aria-current=page]{border-color:var(--amber)}
   .doc h1{font-size:clamp(28px,8.5vw,40px)}
 }

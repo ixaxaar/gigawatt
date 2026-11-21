@@ -127,7 +127,7 @@ const shell = (p, idx) => {
 <meta property="og:image" content="${ORIGIN}/assets/og.jpg">
 <meta property="og:type" content="article">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#050912">
+<meta name="theme-color" content="#0c0d10">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="../assets/ChakraPetch-Bold.ttf" as="font" type="font/ttf" crossorigin>
 <script>document.documentElement.classList.add("js")</script>
