@@ -27,8 +27,8 @@ func _preview(col: Control, pv: Dictionary) -> void:
 	if pv.deliveries.size() > 0:
 		var n := 0; for d in pv.deliveries: n += int(d.qty)
 		bits.append("%s arriving" % Kit.plural(n, "part"))
-	if int(pv.racks.commissioning) > 0: bits.append(Kit.plural(pv.racks.commissioning, "rack") + " start burn-in")
-	if int(pv.racks.online) > 0: bits.append(Kit.plural(pv.racks.online, "rack") + " go online")
+	if int(pv.racks.commissioning) > 0: bits.append(Kit.plural(pv.racks.commissioning, "rack") + (" starts burn-in" if int(pv.racks.commissioning) == 1 else " start burn-in"))
+	if int(pv.racks.online) > 0: bits.append(Kit.plural(pv.racks.online, "rack") + (" goes online" if int(pv.racks.online) == 1 else " go online"))
 	if int(pv.racks.repaired) > 0: bits.append(Kit.plural(pv.racks.repaired, "rack") + " repaired")
 	for f in pv.floor: bits.append("+%d slots in %s" % [int(f.slots), f.hall])
 	if pv.completing.size() > 0: bits.append("completing: " + ", ".join(pv.completing))

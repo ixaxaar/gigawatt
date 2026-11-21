@@ -282,7 +282,7 @@ describe('advanceMonth: failures & MTBF scaling', () => {
     expect(t1.halls[0].racks.every((r) => r.status === 'failed')).toBe(true);
     expect(t1.history[0].revenue).toBe(0);
     expect(t1.activeContracts[0].slaMisses).toBe(1);
-    expect(t1.log.some((l) => l.level === 'bad' && l.text.includes('rack(s) went down'))).toBe(true);
+    expect(t1.log.some((l) => l.level === 'bad' && /racks? went down/.test(l.text))).toBe(true);
 
     const t2 = advanceMonth(t1, NO_FAIL);
     expect(t2.halls[0].racks.every((r) => r.status === 'failed')).toBe(true);

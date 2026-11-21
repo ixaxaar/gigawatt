@@ -6852,6 +6852,64 @@ const EXP_ACCELERATORS = [
     trainingAffinity: 0.55,
     inferenceAffinity: 0.85
   }),
+  // RTX cards. The workstation line (A6000, 6000 Ada) is licensed for servers; the GeForce line is not: no ECC, no datacentre
+  // driver licence, triple-slot open-air coolers. That is modelled as lower software maturity and affinity, not as a ban:
+  // plenty of budget GPU clouds were built on exactly these cards.
+  pcieAccel({
+    ...base("nv-rtx-3090", "GeForce RTX 3090 24GB", "nvidia", 2020.75, 1500, 1, ["Consumer Ampere flagship: 24 GB for the price of a server fan tray.", "The card the first budget GPU clouds were built on. Per dollar nothing in 2020 comes close, but it is a gaming card: no ECC memory, a licence that forbids datacentre use of the driver, and a triple-slot cooler that wants open air, so dense chassis run hot and throttle.", ["Cheapest compute per dollar of its year", "24 GB caps the models it can hold; no NVLink worth the name", "Consumer card in a server: no ECC and a cooler that throttles in a packed chassis, so it delivers less than its spec sheet"]]),
+    family: "Ampere",
+    tflops: { fp32: 35.6, tf32: 71, bf16: 142, fp16: 142, int8: 284 },
+    memGB: 24,
+    memBWTBs: 0.936,
+    tdpW: 350,
+    softwareMaturity: 0.8,
+    trainingAffinity: 0.5,
+    inferenceAffinity: 0.75
+  }),
+  pcieAccel({
+    ...base("nv-rtx-a6000", "RTX A6000 48GB", "nvidia", 2020.95, 4650, 2, ["Workstation Ampere: 48 GB of ECC memory on a 300 W blower card.", "The professional twin of the RTX 3090 with twice the memory, ECC, a blower cooler that works in a packed chassis and a licence that allows server use. Slower memory than the 3090 and three times the price.", ["48 GB at a third of an A100", "GDDR6 bandwidth: decode-heavy serving hits the memory wall", "No scale-up fabric beyond a two-card bridge"]]),
+    family: "Ampere",
+    tflops: { fp32: 38.7, tf32: 77, bf16: 155, fp16: 155, int8: 310 },
+    memGB: 48,
+    memBWTBs: 0.768,
+    tdpW: 300,
+    trainingAffinity: 0.6,
+    inferenceAffinity: 0.95
+  }),
+  pcieAccel({
+    ...base("nv-rtx-4090", "GeForce RTX 4090 24GB", "nvidia", 2022.8, 1800, 2, ["Consumer Ada flagship: L40S-class compute at a fifth of the price.", "Nearly the same silicon as the L40S with half the memory and a 450 W triple-slot cooler. Export rules and the consumer licence keep it out of respectable datacentres, which is exactly why the grey market for blower-converted cards exists.", ["Best compute per dollar of the Ada generation", "24 GB and 450 W: few fit per chassis, and big models do not fit at all", "Consumer card in a server: no ECC and a cooler that throttles in a packed chassis, so it delivers less than its spec sheet"]]),
+    family: "Ada Lovelace",
+    tflops: { fp32: 82.6, tf32: 165, bf16: 165, fp16: 165, fp8: 330, int8: 330 },
+    memGB: 24,
+    memBWTBs: 1.008,
+    tdpW: 450,
+    softwareMaturity: 0.8,
+    trainingAffinity: 0.5,
+    inferenceAffinity: 0.8
+  }),
+  pcieAccel({
+    ...base("nv-rtx-6000-ada", "RTX 6000 Ada 48GB", "nvidia", 2022.95, 6800, 2, ["Workstation Ada: the L40S in a 300 W blower card.", "Same 48 GB and nearly the same compute as the L40S, tuned for a workstation power budget. Fits any PCIe server and is licensed for it; it simply arrived earlier and costs less than the L40S that replaced it in server catalogues.", ["L40S performance a year sooner", "GDDR6 bandwidth limits long-context decode", "No scale-up fabric"]]),
+    family: "Ada Lovelace",
+    tflops: { fp32: 91, tf32: 181, bf16: 181, fp16: 181, fp8: 366, int8: 366 },
+    memGB: 48,
+    memBWTBs: 0.96,
+    tdpW: 300,
+    trainingAffinity: 0.65,
+    inferenceAffinity: 1.05
+  }),
+  pcieAccel({
+    ...base("nv-rtx-5090", "GeForce RTX 5090 32GB", "nvidia", 2025.1, 2600, 3, ["Consumer Blackwell flagship: 32 GB of GDDR7 and FP4 for the price of a server CPU.", "A third of the memory of the RTX PRO 6000 on the same generation of silicon, at under a third of the price. It draws 575 W through one connector and is sold out everywhere, so street price sits well above list.", ["Fastest consumer card ever sold; supports FP4", "575 W each: the power feed, not the slots, limits a chassis", "Consumer card in a server: no ECC and a cooler that throttles in a packed chassis, so it delivers less than its spec sheet"]]),
+    family: "Blackwell",
+    tflops: { fp32: 104.8, tf32: 210, bf16: 420, fp16: 420, fp8: 840, fp4: 1680, int8: 840 },
+    memGB: 32,
+    memType: "gddr7",
+    memBWTBs: 1.79,
+    tdpW: 575,
+    pcieGen: 5,
+    softwareMaturity: 0.8,
+    trainingAffinity: 0.5,
+    inferenceAffinity: 0.8
+  }),
   pcieAccel({
     ...base("amd-mi210", "AMD Instinct MI210 64GB (PCIe)", "amd", 2022, 9e3, 3, ["CDNA2 PCIe card with 64 GB HBM2e and 1.6 TB/s.", "The air-cooled AMD alternative for PCIe servers; strong FP64 for HPC, cheaper than A100 but with a thinner software ecosystem.", ["Good memory capacity per dollar", "ROCm maturity trails CUDA"]]),
     family: "CDNA2",
@@ -8577,6 +8635,20 @@ const PLATFORMS = [
     variants: [DIY(), OEM("supermicro"), OEM("dell", 0.08), TURNKEY("nvidia", "NVIDIA DGX A100 (rack)"), OEM("lenovo", 0.09), OEM("inspur", 0.05), OEM("quanta", 0.04)]
   },
   {
+    key: "rtx-3090",
+    label: "RTX 3090 6-GPU (budget PCIe)",
+    from: 2020.85,
+    eol: 2023.5,
+    chassisId: "gen-pcie-4u",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 4,
+    cooling: "air",
+    parts: [{ slot: "accelerator", itemId: "nv-rtx-3090", count: 6 }, { slot: "cpu", itemId: "amd-epyc-7742", count: 2 }, { slot: "dimm", itemId: "sam-ddr4-3200-64", count: 8 }, { slot: "nic", itemId: "nv-connectx6-hdr", count: 1 }, { slot: "nvme", itemId: "sam-pm1733-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-5kw", count: 2 }],
+    extras: [sw("nv-qm8700")],
+    story: "Six consumer RTX 3090s in a 4U PCIe server (the board runs out of PCIe lanes before it runs out of slots): what the first budget GPU clouds ran on. A fraction of the price of A100s, but 24 GB per card, no link between cards, and gaming coolers that throttle in a packed chassis. Inference only.",
+    variants: [DIY(), OEM("supermicro", 0.05)]
+  },
+  {
     key: "hgx-h100",
     label: "HGX H100 8-GPU",
     from: 2022.9,
@@ -8589,6 +8661,20 @@ const PLATFORMS = [
     extras: [sw("nv-qm9700")],
     story: "Hopper: FP8 Transformer Engine and NVLink4. 10 kW per server is the edge of air cooling, so only two fit per air rack.",
     variants: [DIY(), OEM("supermicro"), OEM("hpe", 0.09), TURNKEY("nvidia", "NVIDIA DGX H100 (rack)"), OEM("lenovo", 0.09), OEM("quanta", 0.04), OEM("asus", 0.06), OEM("cisco", 0.12), OEM("dell", 0.08)]
+  },
+  {
+    key: "rtx-4090",
+    label: "RTX 4090 6-GPU (budget PCIe)",
+    from: 2022.9,
+    eol: 2026.5,
+    chassisId: "gen-pcie-4u",
+    rackId: "gen-rack-19-48u-hd",
+    trays: 4,
+    cooling: "air",
+    parts: [{ slot: "accelerator", itemId: "nv-rtx-4090", count: 6 }, { slot: "cpu", itemId: "amd-epyc-7742", count: 2 }, { slot: "dimm", itemId: "sam-ddr4-3200-64", count: 8 }, { slot: "nic", itemId: "nv-connectx6-hdr", count: 1 }, { slot: "nvme", itemId: "sam-pm1733-3t84", count: 2 }, { slot: "psu", itemId: "vt-geist-5kw", count: 2 }],
+    extras: [sw("nv-qm8700")],
+    story: "Six consumer RTX 4090s per server. Close to L40S compute for a fifth of the money, at 450 W a card and 24 GB each. Small models served cheaply; nothing that needs the cards to talk to each other.",
+    variants: [DIY(), OEM("supermicro", 0.05)]
   },
   {
     key: "hgx-h200",
@@ -9421,7 +9507,7 @@ const facilityActions = (c) => {
       const n = Math.floor(units);
       if (!(n >= 1)) return fail("Buy at least one floor unit.");
       const cost = n * FLOOR_UNIT_COST;
-      if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd$1(cost)} — not enough cash.`);
+      if (cost > g.cash) return fail(`${n} floor unit${n === 1 ? "" : "s"} cost${n === 1 ? "s" : ""} $${usd$1(cost)} — not enough cash.`);
       g.cash -= cost;
       const readyMonth = g.month + floorCommissionMonths(n);
       (hall.expansions ??= []).push({ units: n, readyMonth });
@@ -10086,7 +10172,7 @@ const failures = {
       }
     }
     if (failedNow) {
-      log("bad", `${failedNow} rack(s) went down${stressed ? " — cooling capacity is below IT load, heat is killing hardware (3x failure rate)" : ""}.`);
+      log("bad", `${failedNow} rack${failedNow === 1 ? "" : "s"} went down${stressed ? " — cooling capacity is below IT load, heat is killing hardware (3x failure rate)" : ""}.`);
       c.refreshStats();
     }
   }
@@ -10657,7 +10743,7 @@ const serveContracts = {
         s2.stats.contractsCompleted += 1;
         if ((ac.revenueEarned ?? 0) > (s2.stats.bestDeal?.revenue ?? 0)) s2.stats.bestDeal = { customer: k2.customer, model: k2.model.name, revenue: Math.round(ac.revenueEarned ?? 0) };
       }
-      log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
+      log("good", `${k2.customer} contract complete: ${k2.model.name}, ${k2.durationMonths} mo served, ${ac.slaMisses === 0 ? "no SLA misses" : ac.slaMisses === 1 ? "1 SLA miss" : `${ac.slaMisses} SLA misses`}. Reputation ${gain >= 0 ? "+" : ""}${gain}.`);
       if (!ac.renewalQueued && (ac.slaMisses === 0 || ac.slaMisses <= 1 && s2.reputation >= 20)) {
         queueRenewal(s2, k2);
         log("good", `${k2.customer} wants to renew — a larger contract is on the board for 6 months.${voiceOf(k2.customer) ? ` "${voiceOf(k2.customer).renews}"` : ""}`);
@@ -10679,8 +10765,8 @@ const contractMarket = {
     const regular = [...alive.filter((k2) => !isRenewal(k2)), ...fresh];
     const room = Math.max(0, o2.maxAvailableContracts - renewals.length);
     s2.availableContracts = [...regular.slice(-room), ...renewals];
-    if (expired.length) log("info", `${expired.length} contract offer(s) expired unserved.`);
-    if (fresh.length) log("info", `${fresh.length} new contract offer(s) on the market.`);
+    if (expired.length) log("info", `${expired.length} contract offer${expired.length === 1 ? "" : "s"} expired unserved.`);
+    if (fresh.length) log("info", `${fresh.length} new contract offer${fresh.length === 1 ? "" : "s"} on the market.`);
   }
 };
 const pe = (id) => {
@@ -10728,7 +10814,7 @@ function scriptedEvents(s2, log) {
         units += o2.qty;
       }
     }
-    log("bad", `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator(s) already in the pipeline slip 2 months.`);
+    log("bad", `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator${units === 1 ? "" : "s"} already in the pipeline slip${units === 1 ? "s" : ""} 2 months.`);
   } else if (s2.month === 52) {
     log("info", "💧 Apr 2024 — the Blackwell generation makes liquid cooling mainstream: GB200 NVL72 racks (~120 kW) cannot be air-cooled at all.");
   } else if (s2.month === 74) {
@@ -10763,7 +10849,7 @@ function disasterPool(s2, rng, log) {
   if (s2.orders.length) pool.push(() => {
     const n = s2.orders.length;
     for (const o2 of s2.orders) o2.arriveMonth += 2;
-    log("bad", `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: all ${n} in-transit order(s) slip 2 months.`);
+    log("bad", `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: ${n === 1 ? "your in-transit order slips" : `all ${n} in-transit orders slip`} 2 months.`);
   });
   if (live.length) pool.push(() => {
     const hall = live[Math.floor(rng() * live.length)];
@@ -11210,7 +11296,7 @@ const deployActions = (c) => {
       if (!g.racks.some((r) => r.id === designId)) return fail("Unknown rack design.");
       if (!Number.isFinite(racks) || Math.floor(racks) < 0) return fail("Reserve a whole number of racks (0 or more).");
       reserve(g, designId, Math.floor(racks));
-      return ok(`Reserved ${Math.floor(racks)} rack(s) of this design.`);
+      return ok(`Reserved ${Math.floor(racks)} rack${Math.floor(racks) === 1 ? "" : "s"} of this design.`);
     }),
     placeRack: (hallId, designId) => commit((g) => {
       const hall = g.halls.find((h) => h.id === hallId);
@@ -11602,7 +11688,7 @@ function buildOptions(g, c, signedAt) {
       cover.push({ label: "Outage protection", need: `${(c.slaAvailability * 100).toFixed(1)}% SLA → tier N or better`, have: `${r.tier}${r.gaps[0] ? " — " + r.gaps[0] : ""}`, ok: r.score >= 0.9 });
     }
     cover.push({ label: "Deploy window", need: `by ${Math.round(deployBy)}`, have: `ready ${readyMonth}`, ok: readyMonth <= deployBy });
-    cover.push({ label: "Hall power / cooling / space", need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? "needs plant" : "fits", ok: hallGaps.length === 0 });
+    cover.push({ label: "Hall power / cooling / space", need: `${kw.toFixed(0)} kW · ${racks} rack${racks === 1 ? "" : "s"}`, have: hallGaps.length ? "needs plant" : "fits", ok: hallGaps.length === 0 });
     const exact = templateOrder(g, t, racks, { preorder: false });
     const canOrder = !exact.blocker && exact.cost <= g.cash;
     const fitsRamp = readyMonth <= deployBy;
@@ -11684,11 +11770,17 @@ function stepProject(st2, pid) {
       const it2 = getItem(pl.id);
       if (have2 > 0 && it2) {
         const inst = (it2.kind === "power" ? hall.powerEquip : hall.coolingEquip)[pl.id] ?? 0;
-        const need = Math.max(0, pl.n - inst);
+        const need = Math.max(0, pl.done === void 0 ? pl.n - inst : pl.n - pl.done);
         const n = Math.min(have2, need);
         if (n > 0) {
           const r = it2.kind === "power" ? st2.installPower(hall.id, pl.id, n) : st2.installCooling(hall.id, pl.id, n);
-          if (r.ok) note(`installed ${n} × ${it2.name}`);
+          if (r.ok) {
+            note(`installed ${n} × ${it2.name}`);
+            if (pl.done !== void 0) {
+              const cur = G$3().projects.find((x) => x.id === pid);
+              st2.patchProject(pid, { plant: cur.plant.map((x) => x.id === pl.id ? { ...x, done: (x.done ?? 0) + n } : x) });
+            }
+          }
         }
       }
     }
@@ -11851,7 +11943,7 @@ function startProject(st2, contractId, templateId, racks) {
     const n = Math.ceil((loadNow - fresh.itPowerKW) / pw2.item.capacityKW);
     const b = st2.buy(pw2.item.id, n);
     if (b.ok) {
-      plant.push({ id: pw2.item.id, n });
+      plant.push({ id: pw2.item.id, n, done: 0 });
       notes.push(`ordered ${n} × ${pw2.item.name} (power)`);
     } else notes.push(`power plant: ${b.message}`);
   }
@@ -11859,7 +11951,7 @@ function startProject(st2, contractId, templateId, racks) {
     const n = Math.ceil((loadNow - fresh.coolingKW) / cl.item.capacityKW);
     const b = st2.buy(cl.item.id, n);
     if (b.ok) {
-      plant.push({ id: cl.item.id, n });
+      plant.push({ id: cl.item.id, n, done: 0 });
       notes.push(`ordered ${n} × ${cl.item.name} (cooling)`);
     } else notes.push(`cooling plant: ${b.message}`);
   }
@@ -11887,7 +11979,7 @@ function assignFromRacks(st2, contractId, rackIds) {
   const cl = G$3().clusters[G$3().clusters.length - 1];
   const a = st2.assignContract(contractId, [cl.id]);
   if (!a.ok) st2.disbandCluster(cl.id);
-  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
+  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack${rackIds.length === 1 ? "" : "s"} (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
 }
 const contractsActions = (c) => {
   const { get, set, commit, logln } = c;
@@ -12120,6 +12212,7 @@ const sessionActions = (c) => {
         st2.seen.push(open.id);
         st2.open = void 0;
         g.log.push({ month: g.month, level: "info", text: `✔ ${d.title}: ${ch.label}. ${ch.outcome}` });
+        if (g.log.length > 400) g.log.splice(0, g.log.length - 400);
         return { game: g };
       });
       return ok(ch.outcome);

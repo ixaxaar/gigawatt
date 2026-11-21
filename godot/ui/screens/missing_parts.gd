@@ -35,7 +35,7 @@ static func build(app, parent: Control, design_id: String, racks: int, on_msg: C
 					if sp_state.get("sp", true) and sq > 0: b.act("buy", [l.id, sq, true])
 			b.act("reserveRacks", [design_id, racks])   # these parts are now earmarked for THIS design
 			var bad := out.filter(func(x): return x != "✓")
-			on_msg.call("Ordered %d part type(s) · arrives within ~%d mo." % [r.toBuy.size(), int(r.etaMonths)] if bad.is_empty() else " ".join(bad)), "go", 14)
+			on_msg.call("Ordered %s · arrives within ~%d mo." % [Kit.plural(r.toBuy.size(), "part type"), int(r.etaMonths)] if bad.is_empty() else " ".join(bad)), "go", 14)
 		order.disabled = r.cost > b.g.cash; if Layout.phone: order.custom_minimum_size.y = Layout.tap()
 		h.add_child(order); h.add_child(Kit.label("arrives in ~%d mo" % int(r.etaMonths), 13, Kit.DIM))
 	else: parent.add_child(Kit.label("Everything missing is already on order.", 13, Kit.DIM))

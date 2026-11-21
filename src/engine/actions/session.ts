@@ -38,7 +38,7 @@ export const sessionActions = (c: Ctx): Partial<GameStore> => {
       const d = DILEMMAS.find((x) => x.id === open.id); const ch = d?.choices[choice];
       if (!d || !ch) return fail('Pick one of the two options.');
       if ((ch.effect.cash ?? 0) < 0 && g0.cash + (ch.effect.cash ?? 0) < 0) return fail('You cannot afford that option right now.');
-      set(s => { const g = JSON.parse(JSON.stringify(s.game)) as typeof s.game; applyEffect(g, ch.effect); const st = storyOf(g); st.seen.push(open.id); st.open = undefined; g.log.push({ month: g.month, level: 'info', text: `✔ ${d.title}: ${ch.label}. ${ch.outcome}` }); return { game: g }; });
+      set(s => { const g = JSON.parse(JSON.stringify(s.game)) as typeof s.game; applyEffect(g, ch.effect); const st = storyOf(g); st.seen.push(open.id); st.open = undefined; g.log.push({ month: g.month, level: 'info', text: `✔ ${d.title}: ${ch.label}. ${ch.outcome}` }); if (g.log.length > 400) g.log.splice(0, g.log.length - 400); return { game: g }; });
       return ok(ch.outcome);
     },
 

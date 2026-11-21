@@ -2,6 +2,32 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Fourth review round: engine code, front-end code, a desktop play-through and a phone/handheld play-through.
+
+### Added
+- **RTX cards.** GeForce RTX 3090, 4090 and 5090 and the workstation RTX A6000 and RTX 6000 Ada join the L40S and RTX PRO 6000 in the parts bin. Two ready-made budget platforms (six RTX 3090s or six RTX 4090s per 4U server) can be ordered from the guided planner. Consumer cards deliver less than their spec sheet in a packed server, hold only small models and cannot serve training contracts.
+- **Month close.** When a month ends, one line at the top of the hall shows its revenue, costs and change in cash, plus the month's quiet headline.
+
+### Fixed
+- The clock no longer runs behind a confirm dialog.
+- Saving over a slot that holds a different game asks first, and a failed save says so instead of "Saved".
+- Changing the rack model or chassis in the Design Lab asks before clearing what you placed.
+- Easy Path could buy a transformer or cooling unit and never install it when the hall already had one of the same model; the project then failed after ten months.
+- Decommissioning a rack that is serving a customer says so; the rack card closes once the rack is gone.
+- Loading a game after seeing an ending no longer hides that game's own ending.
+- Phone: an open offer in Clients no longer runs off the right edge.
+- Light themes: the Accessibility switches were unreadable.
+- BUY stays disabled when cash covers the parts but not the spares ticked with them.
+- "Show me where" on Build scrolls to the plant panel again.
+- Arrow keys and WASD no longer move the camera behind a dialog; reduced motion now also stills the tutorial ring and the overload beacon; mute is remembered.
+- The event log could grow past its cap after a decision card.
+- Wording: no more "rack(s)" and "1 racks"; the Easy Path confirm explains why its monthly figure can be higher than the offer card's.
+
+### Website
+- Home page copy rewritten in plainer language; the wiki's hardware page lists the budget cards.
+
 ## [0.9.4] - 2026-11-21 (alpha 5)
 
 - **The hall is alive.** Technicians in hi-vis walk the hot aisles and work at the racks that need them (down first, then installs and burn-in). A rack that arrives, comes online or fails gets a pulse of light in that state's colour, with a sound for online and failure.

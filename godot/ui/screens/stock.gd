@@ -117,7 +117,7 @@ func _rebuild() -> void:
 	_fill_designs()
 	if not g.racks.is_empty():
 		var h2: Container = HFlowContainer.new() if Layout.compact else HBoxContainer.new(); h2.add_theme_constant_override("separation", 8); h2.add_theme_constant_override("h_separation", 8); h2.add_theme_constant_override("v_separation", 6); ra[1].add_child(h2)
-		h2.add_child(Kit.label("Plan for", 13, Kit.DIM)); h2.add_child(Kit.spin(n, 1, 500, 1, func(v): n = int(v); refresh())); h2.add_child(Kit.label("racks each" if Layout.phone else "rack(s) of each design.", 13, Kit.DIM))
+		h2.add_child(Kit.label("Plan for", 13, Kit.DIM)); h2.add_child(Kit.spin(n, 1, 500, 1, func(v): n = int(v); refresh())); h2.add_child(Kit.label("racks each" if Layout.phone else "racks of each design.", 13, Kit.DIM))
 	# --- spares
 	var sv: Dictionary = b.q("sparesView"); var spp := _sec("Spares — parts WILL break", "spares", right, false)
 	if sv.rows.is_empty(): spp[1].add_child(Kit.label("Deploy racks first; then keep a few spare GPUs, PSUs, NICs and drives on the shelf. A failed rack with a spare is back in 1 month; without one it waits ~4 months for RMA.", 13, Kit.DIM, true))

@@ -49,7 +49,7 @@ export const facilityActions = (c: Ctx): Partial<GameStore> => {
         const n = Math.floor(units);
         if (!(n >= 1)) return fail('Buy at least one floor unit.');
         const cost = n * FLOOR_UNIT_COST;
-        if (cost > g.cash) return fail(`${n} floor unit(s) cost $${usd(cost)} — not enough cash.`);
+        if (cost > g.cash) return fail(`${n} floor unit${n === 1 ? '' : 's'} cost${n === 1 ? 's' : ''} $${usd(cost)} — not enough cash.`);
         g.cash -= cost;
         const readyMonth = g.month + floorCommissionMonths(n);
         (hall.expansions ??= []).push({ units: n, readyMonth });

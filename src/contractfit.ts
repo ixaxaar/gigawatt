@@ -201,7 +201,7 @@ export function buildOptions(g: GameState, c: Contract, signedAt?: number): Buil
     cover.push({ label: 'Internet uplink', need: `${needNet.toFixed(1)} Gb/s`, have: g.uplinks ? `${Number.isFinite(headroom) ? Math.max(0, headroom).toFixed(0) : '∞'} Gb/s free${headroom >= needNet ? '' : ' — buy transit (Easy path does)'}` : 'unlimited', ok: headroom >= needNet });
     if (c.slaAvailability >= 0.995 && hall) { const r = hallResilience(hall); cover.push({ label: 'Outage protection', need: `${(c.slaAvailability * 100).toFixed(1)}% SLA → tier N or better`, have: `${r.tier}${r.gaps[0] ? ' — ' + r.gaps[0] : ''}`, ok: r.score >= 0.9 }); }
     cover.push({ label: 'Deploy window', need: `by ${Math.round(deployBy)}`, have: `ready ${readyMonth}`, ok: readyMonth <= deployBy });
-    cover.push({ label: 'Hall power / cooling / space', need: `${kw.toFixed(0)} kW · ${racks} racks`, have: hallGaps.length ? 'needs plant' : 'fits', ok: hallGaps.length === 0 });
+    cover.push({ label: 'Hall power / cooling / space', need: `${kw.toFixed(0)} kW · ${racks} rack${racks === 1 ? '' : 's'}`, have: hallGaps.length ? 'needs plant' : 'fits', ok: hallGaps.length === 0 });
     const exact = templateOrder(g, t, racks, { preorder: false });
     const canOrder = !exact.blocker && exact.cost <= g.cash;
     const fitsRamp = readyMonth <= deployBy;

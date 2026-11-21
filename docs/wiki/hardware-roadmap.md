@@ -28,6 +28,22 @@ A few beats worth planning around (dates as they land in-game):
 - **Oct 2025 — Vera Rubin orders open.** Longer queues than any prior generation; earlier-generation prices soften as buyers wait. Sell older racks while residual value holds.
 - **GTC 2026 — Rubin Ultra, 102.4 Tb/s switches.** 576-GPU NVLink domains; bigger switch silicon means fewer tiers and hops per GPU.
 
+## Budget cards: RTX and other PCIe GPUs
+
+Not every rack needs a flagship. PCIe cards fit ordinary servers, run on air and arrive in a month or two.
+
+| Card | Ships | Memory | Notes |
+|---|---|---|---|
+| GeForce RTX 3090 | late 2020 | 24 GB | cheapest compute of its year |
+| RTX A6000 | late 2020 | 48 GB | workstation card: ECC memory, blower cooler |
+| GeForce RTX 4090 | late 2022 | 24 GB | close to L40S compute at a fifth of the price |
+| RTX 6000 Ada | late 2022 | 48 GB | an L40S a year early |
+| L40S | late 2023 | 48 GB | the standard budget server card |
+| GeForce RTX 5090 | early 2025 | 32 GB | 575 W each; supports FP4 |
+| RTX PRO 6000 Blackwell | 2025 | 96 GB | most memory per dollar |
+
+The GeForce cards are consumer parts: no ECC memory and coolers built for a desktop case, so in a packed server they deliver less than the spec sheet says. The game models that as lower efficiency, not as a ban. With 24 to 32 GB each they also cannot hold large models, and with no fast link between cards a model split across several of them runs slowly. They suit small inference contracts. Training contracts need GPUs linked in groups of eight or more, which no PCIe card can do.
+
 ## When to buy
 
 - **Plan the building two generations ahead.** Racks change yearly; power and cooling plants last decades. Buy transformers and CDU capacity for the rack that ships next, not the one shipping today.

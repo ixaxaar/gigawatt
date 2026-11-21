@@ -27,6 +27,7 @@ var rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rng.randomize()
 	_setup_buses()
+	muted = Settings.muted; AudioServer.set_bus_mute(0, muted)
 	var f := FileAccess.open(DIR + "catalog.json", FileAccess.READ)
 	if f != null:
 		var j: Variant = JSON.parse_string(f.get_as_text())
@@ -57,7 +58,7 @@ func _set_bus(n: String, lin: float, trim_db: float) -> void:
 	if i != -1: AudioServer.set_bus_volume_db(i, linear_to_db(maxf(lin, 0.0001)) + trim_db)
 
 func toggle_mute() -> void:
-	muted = not muted; AudioServer.set_bus_mute(0, muted)
+	muted = not muted; AudioServer.set_bus_mute(0, muted); Settings.muted = muted; Settings.save_all()   # stays muted next launch
 
 # ---------- SFX ----------
 func _cue(kind: String) -> AudioStream:

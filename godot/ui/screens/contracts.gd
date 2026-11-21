@@ -133,13 +133,20 @@ func _checks(parent: Control, c: Dictionary, show_verdict := true) -> Dictionary
 	if f.verdict != "ready" and not Layout.phone: parent.add_child(Kit.label("Pipeline not yet clustered: %s online · %s commissioning · %s in warehouse · %s on order (accelerators)." % [Kit.num(p.freeOnline), Kit.num(p.installing), Kit.num(p.warehouse), Kit.num(p.ordered)], 11, Kit.DIM, true))
 	return f
 
+## The offer card quotes the contract at its minimum size; whole racks usually hold more GPUs than that, and the customer pays for
+## what is served. When the two figures differ the confirm says why, so "+$38.8k/mo" on the card and "$58.2k" here do not look like a mistake.
+func _why_more(c: Dictionary, o: Dictionary) -> String:
+	var m: Dictionary = money.get(c.id, {})
+	if m.is_empty() or float(o.revenueMo) <= float(m.monthly) * 1.03: return ""
+	return " (the offer's %s is for its minimum size; these racks serve more)" % Kit.usd(float(m.monthly))
+
 ## EASY PATH for one build option (the engine's canStartEasy / easyBlocker gate it).
 func _easy_btn(c: Dictionary, o: Dictionary, kind: String, label := "") -> Button:
 	var b: Bridge = app.b
 	var afford: bool = float(o.get("orderCost", o.cost)) <= b.g.cash
 	var txt := label if label != "" else ("EASY PATH — do it all for me" if o.get("canStartEasy", o.fitsRamp) else "Easy path unavailable")
 	if not afford: txt = "Need more cash — take a loan"
-	var easy := Kit.btn(txt, func(): Kit.confirm(self, "Easy path signs %s for you, orders what is needed (up to %s, %s) and sets everything up. %s" % [str(c.customer), Kit.plural(int(o.racks), "rack"), Kit.usd(o.get("orderCost", o.cost)), (("It earns about %s a month and pays back in %s; this contract runs %d months, and the racks keep earning on the next ones." % [Kit.usd(o.revenueMo), Kit.plural(int(o.paybackMo), "month"), int(c.get("durationMonths", 0))]) if o.get("paybackMo") != null else "At this price it does not pay back.")], func(): var r: Dictionary = b.act("startEasy", [c.id, o.t.id, int(o.racks)]); msg = "" if r.get("ok", false) else str(r.get("message", "")); app.sfx("buy"); app.toast(str(r.get("message", "")), "good") if r.get("ok", false) else null; refresh(), "Do it"), kind, 14 if Layout.phone else 13)
+	var easy := Kit.btn(txt, func(): Kit.confirm(self, "Easy path signs %s for you, orders what is needed (up to %s, %s) and sets everything up. %s" % [str(c.customer), Kit.plural(int(o.racks), "rack"), Kit.usd(o.get("orderCost", o.cost)), (("It earns about %s a month%s and pays back in %s; this contract runs %d months, and the racks keep earning on the next ones." % [Kit.usd(o.revenueMo), _why_more(c, o), Kit.plural(int(o.paybackMo), "month"), int(c.get("durationMonths", 0))]) if o.get("paybackMo") != null else "At this price it does not pay back.")], func(): var r: Dictionary = b.act("startEasy", [c.id, o.t.id, int(o.racks)]); msg = "" if r.get("ok", false) else str(r.get("message", "")); app.sfx("buy"); app.toast(str(r.get("message", "")), "good") if r.get("ok", false) else null; refresh(), "Do it"), kind, 14 if Layout.phone else 13)
 	easy.disabled = not afford or not o.get("canStartEasy", o.fitsRamp)
 	return easy
 
@@ -158,8 +165,11 @@ func _needs(parent: Control, c: Dictionary, signed_at = null, opts_in = null, wa
 		if not Layout.compact: h.add_child(Kit.label("%d × %s" % [int(o.racks), o.t.name], 14))
 		h.add_child(Kit.label("DIY" if o.t.tier == "diy" else _vname(str(o.t.integrator)), 11, Kit.DIM))
 		for t in o.tags: h.add_child(Kit.tag(str(t)))
-		var rows := []; for x in o.cover: rows.append([Kit.label("✓" if x.ok else "✗", 12, Kit.GR if x.ok else Kit.RD), x.label, _clean(x.need), _clean(x.have)])
-		v.add_child(Kit.table(["", "", "Need", "Have"], rows))
+		if Layout.phone:   # a four-column table is wider than a phone drawer and pushed the whole card off the right edge: one wrapping line per need
+			for x in o.cover: v.add_child(_rich("[color=#%s]%s[/color] %s: need %s · have %s" % [(Kit.GR if x.ok else Kit.RD).to_html(false), "✓" if x.ok else "✗", x.label, _clean(x.need), _clean(x.have)], 12))
+		else:
+			var rows := []; for x in o.cover: rows.append([Kit.label("✓" if x.ok else "✗", 12, Kit.GR if x.ok else Kit.RD), x.label, _clean(x.need), _clean(x.have)])
+			v.add_child(Kit.table(["", "", "Need", "Have"], rows))
 		v.add_child(_rich("%s · parts+install ready ≈ %s  [color=#%s](%s)[/color]" % [Kit.usd(o.get("orderCost", o.cost)), Kit.date_of(o.readyMonth), (Kit.GR if o.fitsRamp else Kit.RD).to_html(false), ("%d mo spare" % int(o.slack)) if o.fitsRamp else ("%d mo too late" % int(-o.slack))], 12))
 		if o.get("paybackMo") != null:
 			v.add_child(Kit.label(("Earns ≈ %s/mo, power ≈ %s/mo → pays back in %d months" % [Kit.usd(o.revenueMo), Kit.usd(o.powerMo), int(o.paybackMo)]) if not Layout.phone else "Pays back in %d mo" % int(o.paybackMo), 11 if not Layout.phone else 12, Kit.DIM, true))

@@ -321,7 +321,7 @@ func rebuild(force := false) -> void:
 	_bat.clear(); _face_tf.clear(); _face_col.clear(); _face_dat.clear()
 	for c in dyn.get_children(): c.queue_free()
 	_rack_boxes.clear(); _slot_box.clear(); _beacon = null; _lamps.clear(); _labels.clear(); _boards.clear(); _walls.clear(); _row_over.clear(); _smokes.clear(); _rods.clear(); _ceil = null; _over = null
-	_lamp_n = 0; _label_turn = 99.0; _emit_cache.clear(); _rack_nodes.clear(); _spec_cache.clear(); _cab_cam = Vector3(1e9, 0, 0)
+	_lamp_n = 0; _label_turn = 99.0; _emit_cache.clear(); _fade_cache.clear(); _rack_nodes.clear(); _spec_cache.clear(); _cab_cam = Vector3(1e9, 0, 0)
 	_ensure_face_mat()
 	_site = Site.style_of(b.g); Site.current = _site; _mood = Site.mood(_site); _apply_mood()
 	hall_i = clampi(hall_i, 0, b.g.halls.size() - 1)
@@ -1130,11 +1130,12 @@ func _process(dt: float) -> void:
 	_t += dt
 	if _drag != 0 and Input.get_mouse_button_mask() == 0: _drag = 0   # the button was released over the interface: do not keep dragging the camera
 	if auto_orbit and not Settings.reduced_motion: yaw += dt * orbit_speed; _update_cam()
-	if _beacon != null: _beacon.light_energy = 1.5 + 1.5 * sin(_t * 6.0)
+	if _beacon != null: _beacon.light_energy = 2.2 if Settings.reduced_motion else 1.5 + 1.5 * sin(_t * 6.0)
 	if not _fault_mats.is_empty(): for m in _fault_mats: (m as StandardMaterial3D).emission_energy_multiplier = 1.2 + (0.0 if Settings.reduced_motion else 1.6 * (0.5 + 0.5 * sin(_t * 7.0)))
 	var k := Vector2.ZERO
 	var typing := get_viewport().gui_get_focus_owner()   # typing a hall name must not move the camera
 	if typing is LineEdit or typing is SpinBox or typing is TextEdit: return
+	if blocked or keys_off: return   # a full page or a dialog is up: arrows and WASD belong to it, not the camera
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): k.x -= 1
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): k.x += 1
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP): k.y -= 1
@@ -1234,6 +1235,7 @@ func _touch_input(e: InputEvent) -> bool:
 		return false
 	return false
 
+var keys_off := false   # set by main while any dialog is open
 var blocked := false   # a full-screen page (Design Lab, Supercomputer, Codex) covers the hall: nothing under it may react
 func _unhandled_input(e: InputEvent) -> void:
 	if b == null or blocked: return

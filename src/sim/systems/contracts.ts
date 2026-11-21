@@ -137,7 +137,7 @@ export const serveContracts: System = {
       const gain = 2 + ARCH_BONUS[k.archetype] + (clean ? 1 : 0) - (sloppy ? 3 : 0);
       s.reputation = clamp(s.reputation + gain, 0, 100);
       if (s.stats) { s.stats.contractsCompleted += 1; if ((ac.revenueEarned ?? 0) > (s.stats.bestDeal?.revenue ?? 0)) s.stats.bestDeal = { customer: k.customer, model: k.model.name, revenue: Math.round(ac.revenueEarned ?? 0) }; }
-      log('good', `${k.customer} contract complete: ${k.model.name}, ${k.durationMonths} mo served, ${ac.slaMisses} SLA miss(es). Reputation ${gain >= 0 ? '+' : ''}${gain}.`);
+      log('good', `${k.customer} contract complete: ${k.model.name}, ${k.durationMonths} mo served, ${ac.slaMisses === 0 ? 'no SLA misses' : ac.slaMisses === 1 ? '1 SLA miss' : `${ac.slaMisses} SLA misses`}. Reputation ${gain >= 0 ? '+' : ''}${gain}.`);
       if (!ac.renewalQueued && (ac.slaMisses === 0 || (ac.slaMisses <= 1 && s.reputation >= 20))) {
         queueRenewal(s, k);
         log('good', `${k.customer} wants to renew — a larger contract is on the board for 6 months.${voiceOf(k.customer) ? ` "${voiceOf(k.customer)!.renews}"` : ''}`);
@@ -162,7 +162,7 @@ export const contractMarket: System = {
     const regular = [...alive.filter((k) => !isRenewal(k)), ...fresh];
     const room = Math.max(0, o.maxAvailableContracts - renewals.length);
     s.availableContracts = [...regular.slice(-room), ...renewals];
-    if (expired.length) log('info', `${expired.length} contract offer(s) expired unserved.`);
-    if (fresh.length) log('info', `${fresh.length} new contract offer(s) on the market.`);
+    if (expired.length) log('info', `${expired.length} contract offer${expired.length === 1 ? '' : 's'} expired unserved.`);
+    if (fresh.length) log('info', `${fresh.length} new contract offer${fresh.length === 1 ? '' : 's'} on the market.`);
   },
 };

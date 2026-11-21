@@ -70,7 +70,7 @@ export const failures: System = {
       }
     }
     if (failedNow) {
-      log('bad', `${failedNow} rack(s) went down${stressed ? ' — cooling capacity is below IT load, heat is killing hardware (3x failure rate)' : ''}.`);
+      log('bad', `${failedNow} rack${failedNow === 1 ? '' : 's'} went down${stressed ? ' — cooling capacity is below IT load, heat is killing hardware (3x failure rate)' : ''}.`);
       c.refreshStats();
     }
   },

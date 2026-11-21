@@ -313,7 +313,7 @@ func _parts(root: Control) -> void:
 				var m := b.act("buy", [it.id, qty])
 				if m.ok and spares and sq > 0: b.act("buy", [it.id, sq, true])
 				bmsg = m.message; app.sfx("buy" if m.ok else "bad"); refresh(), "go", 15)
-			buy.disabled = total > b.g.cash; h.add_child(buy)
+			buy.disabled = total + spare_cost > b.g.cash; h.add_child(buy)
 			if sq > 0: h.add_child(Kit.check("+ %d spare%s" % [sq, "s" if sq > 1 else ""], spares, func(on): spares = on; refresh()))
 			var line := "%s ea" % Kit.usd(o.unitPrice)
 			if Layout.phone: line = "%s ea · arrives in %s mo" % [Kit.usd(o.unitPrice), o.leadMonths]

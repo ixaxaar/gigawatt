@@ -33,7 +33,7 @@ var holder: Control
 var screens := {}
 var cur := "dash"
 var started := false
-var cur_slot := "main"   # the slot the Save button writes to (the one last saved to or loaded from)
+var cur_slot := ""   # the slot this run was last saved to or loaded from: saving over any other occupied slot asks first
 var speed := 0
 var clock := 0.0
 var _seen_log := 0
@@ -204,6 +204,8 @@ func _build_shell() -> void:
 	hall.hover_changed.connect(_on_rack_hover)
 	hall.rack_event.connect(func(kind: String, _n: int): if not quiet and started and kind != "arrived": sfx("online" if kind == "online" else "incident"))   # racks coming online / going down are heard as well as seen
 	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
+	month_strip = PanelContainer.new(); month_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE; month_strip.visible = false; root.add_child(month_strip)
+	var msb := HBoxContainer.new(); msb.add_theme_constant_override("separation", 18); msb.mouse_filter = Control.MOUSE_FILTER_IGNORE; month_strip.add_child(msb)
 	_build_cam_tools()
 	bar_tip = PanelContainer.new(); bar_tip.add_theme_stylebox_override("panel", Kit.sb(Kit.field(0.97), Kit.CY, 8, 1, 10)); bar_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE; bar_tip.visible = false
 	var btl := Kit.label("", 14, Kit.TX, true); btl.custom_minimum_size = Vector2(260, 0); bar_tip.add_child(btl); root.add_child(bar_tip)
@@ -539,7 +541,7 @@ func _load_scenario(id: String) -> void:
 		var c := cam.split_floats(","); hall.yaw = c[0]; hall.pitch = c[1]; hall.dist = c[2]; hall.target = Vector3(c[3], 0.8, c[4]); hall.auto_orbit = false; hall._update_cam()
 
 func _new_game(mode: String) -> void:
-	b.act("newGame", [int(Time.get_unix_time_from_system()) % 100000, mode]); b.act("setMode", [mode]); _begin()
+	b.act("newGame", [int(Time.get_unix_time_from_system()) % 100000, mode]); b.act("setMode", [mode]); cur_slot = ""; end_seen = false; _begin()
 	if (Settings.tutorial != "off" and mode != "tycoon" and not OS.has_environment("GW_SMOKE") and not OS.has_environment("GW_NOCOACH")) or OS.has_environment("GW_COACH"): coach.start()   # Tycoon: no hand-holding, no tutorial
 
 func _begin() -> void:
@@ -621,10 +623,13 @@ func _on_changed() -> void:
 		lbl.netw.label_settings = Kit.ls(20, col); lbl.netw_box.set_meta("tip", "Network: %s. Click to open the Supercomputer screen." % nh.summary)
 	lbl.mode.text = {"learner": "Learner", "operator": "Operator", "tycoon": "Tycoon"}.get(g.get("mode", "operator"), "")
 	_speed_label()
+	var news := ""
 	for i in range(_seen_log, g.log.size()):
 		var e: Dictionary = g.log[i]
 		if e.level != "info": toast(e.text, e.level)
+		elif int(e.month) == int(g.month) and not (str(e.text).begins_with("📖") or str(e.text).begins_with("❓") or str(e.text).begins_with("📣")): news = str(e.text)   # cards have their own screens
 	_seen_log = g.log.size()
+	_month_strip(news)
 	hall.rebuild()
 	_fit_top()
 	_apply_unlocks()
@@ -634,6 +639,34 @@ func _on_changed() -> void:
 	coach.tick()
 	if hall.get_meta("n", 0) == 0: pass
 	_refresh_cur()
+
+## Month close: when a month ends, one line at the top of the hall says what it did to the business: revenue, costs, the change
+## in cash, and the month's quiet headline (new offers, a rival's move: news that is not worth a toast). It fades after a few
+## seconds; at speed it simply updates in place. Loads, fast-forwards and captures never show it.
+var month_strip: PanelContainer
+var _strip_mo := -1
+var _strip_tw: Tween
+func _month_strip(news: String) -> void:
+	var g := b.g; var mo := int(g.month); var was := _strip_mo; _strip_mo = mo
+	if month_strip == null or was < 0 or mo != was + 1 or quiet or _clean or OS.has_environment("GW_SMOKE"): return
+	var h: Array = g.get("history", [])
+	if h.is_empty(): return
+	var e: Dictionary = h[-1]
+	var d := (float(e.cash) - float(h[-2].cash)) if h.size() > 1 else (float(e.revenue) - float(e.opex))
+	var hb := month_strip.get_child(0)
+	for c in hb.get_children(): c.queue_free()
+	var add := func(t: String, col: Color, sz := 14): var l := Kit.label(t, sz, col); l.mouse_filter = Control.MOUSE_FILTER_IGNORE; hb.add_child(l)
+	add.call(Kit.date_of(mo - 1).to_upper() + " CLOSED", Kit.DIM, 12)
+	if not Layout.phone:
+		add.call("Revenue " + Kit.usd(float(e.revenue)), Kit.GR)
+		add.call("Costs " + Kit.usd(float(e.opex)), Kit.AM)
+	add.call("Cash " + ("+" if d >= 0 else "") + Kit.usd(d), Kit.GR if d >= 0 else Kit.RD, 15)
+	if news != "" and Layout.kind == "desktop": add.call(news if news.length() <= 64 else news.substr(0, 62).strip_edges() + "…", Kit.TX, 13)
+	month_strip.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.9), Kit.GR if d >= 0 else Kit.RD, 10, 1, 8))
+	month_strip.set_meta("life", 4.5); month_strip.visible = true; month_strip.reset_size()
+	if _strip_tw != null and _strip_tw.is_valid(): _strip_tw.kill()
+	if Settings.reduced_motion or speed >= 2: month_strip.modulate.a = 1.0
+	else: month_strip.modulate.a = 0.0; _strip_tw = create_tween(); _strip_tw.tween_property(month_strip, "modulate:a", 1.0, 0.25)
 
 ## The open screen is rebuilt on every change. While the game auto-advances, rebuilds are coalesced to a few per second so a
 ## month tick never stalls a frame twice a second; paused play still refreshes immediately so buttons feel instant.
@@ -717,7 +750,9 @@ func _inspect(slot: int) -> void:
 	var spot: bool = b.g.get("spotRacks", []).has(rk.id)
 	if m.status == "online" and rk.get("clusterId") == null:
 		row.add_child(Kit.btn("Spot market: " + ("ON" if spot else "off"), func(): b.act("setSpotRack", [rk.id, not spot]); _inspect(slot), "pri" if spot else "", 12))
-	row.add_child(Kit.btn("Decommission", func(): Kit.confirm(self, "Decommission %s? It is sold at 85%% of residual value." % m.serial, func(): var r := b.act("decommissionRack", [rk.id]); toast(str(r.get("message", "")), "good" if r.get("ok", false) else "bad"); hall.rebuild(), "Sell"), "danger", 12))
+	row.add_child(Kit.btn("Decommission", func(): Kit.confirm(self, "Decommission %s? It is sold at 85%% of residual value.%s" % [m.serial, (" It is serving %s right now: their contract loses this rack and may miss its SLA." % str(m.customer)) if m.get("customer") != null else ""], func():
+		var r := b.act("decommissionRack", [rk.id]); toast(str(r.get("message", "")), "good" if r.get("ok", false) else "bad"); hall.rebuild()
+		if r.get("ok", false) and inspector != null and is_instance_valid(inspector): inspector.queue_free(); inspector = null, "Sell"), "danger", 12))
 	root.add_child(inspector)
 
 ## The modal stack. Every dialog and card is a direct child of `root`; the one drawn last is on top and is the one that gets
@@ -960,7 +995,7 @@ func _process(dt: float) -> void:
 	elif _refresh_due and Time.get_ticks_msec() >= _refresh_at and not TouchScroll.is_busy(): _refresh_cur()
 	var idle := started and speed == 0 and Time.get_ticks_msec() - _last_input > 3000
 	if idle != Settings.idle: Settings.idle = idle; Settings.apply_fps()
-	if not started or speed == 0 or menu_ui != null or keynote.visible or story_ui.visible: return
+	if not started or speed == 0 or modal() != null: return   # the clock never runs under a dialog: a confirm must not go stale while you read it
 	clock += dt / SECS[speed]; bar_month.value = clock
 	if clock >= 1.0: clock = 0.0; next_month()
 
@@ -1045,12 +1080,20 @@ func _age_toasts(dt: float) -> void:
 		_last_vp = vpsz; _fit_top(); _place_cam_tools()
 	_fit_dialogs()
 	var show_now := modal() == null
+	if hall != null: hall.keys_off = not show_now
 	if cam_tools != null: cam_tools.visible = started and Layout.touch and show_now and not FULL.has(cur)
 	# The drawer's divider is drawn under dialogs but would still win the click at its position (the GUI picks by tree order, not z-index):
 	# a dialog button near the drawer edge ignored taps. Under a dialog the divider takes no input at all.
 	if drawer_tab != null: drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP if show_now else Control.MOUSE_FILTER_IGNORE
 	toasts.visible = started and show_now and not _clean   # hidden, not transparent: an invisible toast must never take a tap meant for a dialog
 	_place_floaters()
+	if month_strip != null and month_strip.has_meta("life"):
+		var ml := float(month_strip.get_meta("life")) - (dt if show_now else 0.0)
+		month_strip.set_meta("life", ml); month_strip.visible = started and show_now and ml > 0.0 and not FULL.has(cur)
+		if ml <= 0.6 and (_strip_tw == null or not _strip_tw.is_valid()): month_strip.modulate.a = maxf(0.0, ml / 0.6)
+		if month_strip.visible:
+			var mfr := free_hall_rect(); month_strip.reset_size()
+			month_strip.position = Vector2(maxf(mfr.position.x, mfr.end.x - month_strip.size.x), mfr.position.y)   # right-aligned: the money chips drop under the left of the bar
 	if not show_now: return
 	for t in toasts.get_children():
 		var life := float(t.get_meta("life", 7.0)) - dt
@@ -1151,7 +1194,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if not started or modal() != null: return   # no hotkeys behind a dialog (Space used to skip months under a chapter card)
 	if e.keycode == KEY_SPACE: next_month(); return
 	if e.keycode >= KEY_1 and e.keycode <= KEY_9 and e.keycode - KEY_1 < DOCK.size(): _dock(DOCK[e.keycode - KEY_1][0])
-	elif e.keycode == KEY_0: show_screen("codex")
+	elif e.keycode == KEY_0: _dock("codex")
 	elif e.keycode == KEY_V: hall.top_view()
 	elif e.keycode == KEY_L: hall.labels_on = not hall.labels_on; hall.rebuild()
 	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
@@ -1300,7 +1343,9 @@ func _value_row(parent: Control, title: String, lo: float, hi: float, step: floa
 ## A real on/off switch with its label (the state is the switch position, not the button's text).
 func _switch_row(parent: Control, title: String, on: bool, cb: Callable) -> CheckButton:
 	var c := CheckButton.new(); c.text = title; c.button_pressed = on; c.add_theme_font_size_override("font_size", 16); c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	c.custom_minimum_size.y = maxf(36.0, Layout.tap()); c.focus_mode = Kit.focus_mode(); c.toggled.connect(cb); parent.add_child(c); return c
+	c.custom_minimum_size.y = maxf(36.0, Layout.tap()); c.focus_mode = Kit.focus_mode(); c.toggled.connect(cb); parent.add_child(c)
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]: c.add_theme_color_override(k, Kit.TX)   # the default is white-ish: invisible on the light themes
+	return c
 
 ## Slider readout for UI size / text boost: "150%", or "200% → 142%" when this screen cannot take that much together with the other slider.
 func _pct_label(v: float, other: float, auto_at_one := false) -> String:
@@ -1431,7 +1476,8 @@ func close_end() -> void:
 func _load_slot(slot: String, on_loaded: Callable = Callable()) -> void:
 	var r := b.act("load", [slot])
 	if not r.get("ok", false): toast(str(r.get("message", "Load failed.")), "bad"); return
-	cur_slot = slot if slot != "auto" else "main"
+	cur_slot = slot if slot != "auto" else ""; end_seen = false   # a different run: its own ending is still to come
+	if inspector != null and is_instance_valid(inspector): inspector.queue_free(); inspector = null
 	if on_loaded.is_valid(): on_loaded.call()
 	var t := root.get_node_or_null("title")
 	if t: t.queue_free()
@@ -1453,7 +1499,15 @@ func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 		if info.has(slot):
 			var i: Dictionary = info[slot]; d = "%s · %s · %d racks%s" % [Kit.date_of(int(i.month)), Kit.usd(float(i.cash)), int(i.racks), "" if i.status == "playing" else " · " + str(i.status).to_upper()]
 		var bt := Kit.btn("%s\n%s" % [nm, d], func():
-			if mode == "save": b.act("save", [slot]); cur_slot = slot; toast("Saved to %s." % nm, "good"); h.queue_free()
+			if mode == "save":
+				var do_save := func():
+					var sr := b.act("save", [slot])
+					if sr.get("ok", true): cur_slot = slot; toast("Saved to %s." % nm, "good")
+					else: toast(str(sr.get("message", "Could not save.")), "bad")
+					if is_instance_valid(h): h.queue_free()
+				# Writing over a different run asks first; saving again to the slot this run already uses does not.
+				if info.has(slot) and slot != cur_slot: Kit.confirm(self, "%s holds another game (%s). Replace it?" % [nm, d], do_save, "Replace")
+				else: do_save.call()
 			else: h.queue_free(); _load_slot(slot, on_loaded), "", 17)
 		bt.custom_minimum_size = Vector2(0, 62); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	if mode == "load" and info.is_empty(): vb.add_child(Kit.label("No saved games yet.", 16, Kit.DIM))

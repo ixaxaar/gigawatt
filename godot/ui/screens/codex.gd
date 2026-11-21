@@ -21,7 +21,10 @@ func _search_box(min_w: float) -> LineEdit:
 	return le
 func _on_q(t: String) -> void:
 	q = t; _qtok += 1; var tok := _qtok
-	get_tree().create_timer(0.35).timeout.connect(func(): if tok == _qtok and is_inside_tree(): refresh())
+	var me: Variant = weakref(self)
+	get_tree().create_timer(0.35).timeout.connect(func():
+		var s = me.get_ref()   # the screen may have been rebuilt while the timer ran
+		if s != null and tok == s._qtok and s.is_inside_tree(): s.refresh())
 func _hay(parts: Array) -> String: return " ".join(parts.map(func(x): return str(x))).to_lower()
 
 func _rebuild() -> void:

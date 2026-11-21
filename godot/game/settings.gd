@@ -16,6 +16,7 @@ static var layout := "auto"
 static var drawer_frac := -1.0   # share of the screen width a drawer takes, set by dragging its edge; -1 = the layout's default (30% on phones)
 static var colorblind := false
 static var reduced_motion := false
+static var muted := false
 static var high_contrast := false
 ## UI colour theme id (see Kit.THEMES).
 static var theme := "midnight"
@@ -150,12 +151,12 @@ static func load_all() -> void:
 	site_seen = bool(c.get_value("a", "site_seen", false)); var sl = c.get_value("a", "site_last", {}); site_last = sl if sl is Dictionary else {}
 	preset = int(c.get_value("a", "preset", -1)); render_scale = float(c.get_value("a", "render_scale", 0.0))
 	window_mode = clampi(int(c.get_value("a", "window_mode", 1)), 0, 2); vsync = clampi(int(c.get_value("a", "vsync", 1)), 0, 2); fps_cap = int(c.get_value("a", "fps_cap", 0))
-	tutorial = str(c.get_value("a", "tutorial", "on")); tutorial_step = int(c.get_value("a", "tutorial_step", 0))
+	muted = bool(c.get_value("a", "muted", false)); tutorial = str(c.get_value("a", "tutorial", "on")); tutorial_step = int(c.get_value("a", "tutorial_step", 0))
 
 static func save_all() -> void:
 	var c := ConfigFile.new()
 	c.set_value("a", "volume", volume); c.set_value("a", "music_volume", music_volume); c.set_value("a", "sfx_volume", sfx_volume); c.set_value("a", "music_mode", music_mode)
-	c.set_value("a", "ui_size", ui_scale); c.set_value("a", "text_boost", text_boost)
+	c.set_value("a", "muted", muted); c.set_value("a", "ui_size", ui_scale); c.set_value("a", "text_boost", text_boost)
 	c.set_value("a", "colorblind", colorblind); c.set_value("a", "reduced_motion", reduced_motion); c.set_value("a", "high_contrast", high_contrast)
 	c.set_value("a", "theme", theme); c.set_value("a", "layout", layout); c.set_value("a", "drawer_frac", drawer_frac); c.set_value("a", "gpu", gpu); c.set_value("a", "site_seen", site_seen); c.set_value("a", "site_last", site_last); c.set_value("a", "preset", preset); c.set_value("a", "render_scale", render_scale); c.set_value("a", "window_mode", window_mode); c.set_value("a", "vsync", vsync); c.set_value("a", "fps_cap", fps_cap)
 	c.set_value("a", "tutorial", tutorial); c.set_value("a", "tutorial_step", tutorial_step)

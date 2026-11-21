@@ -57,7 +57,7 @@ export function stepProject(st: GameStore, pid: string): void {
   const note = (s: string) => st.patchProject(pid, { notes: [...(g.projects!.find(x => x.id === pid)!.notes), `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, '0')}: ${s}`].slice(-12) });
   if (p.stage === 'building') {
     // install whatever plant has arrived
-    for (const pl of p.plant) { const have = g.inventory[pl.id] ?? 0; const it = getItem(pl.id); if (have > 0 && it) { const inst = (it.kind === 'power' ? hall.powerEquip : hall.coolingEquip)[pl.id] ?? 0; const need = Math.max(0, pl.n - inst); const n = Math.min(have, need); if (n > 0) { const r = it.kind === 'power' ? st.installPower(hall.id, pl.id, n) : st.installCooling(hall.id, pl.id, n); if (r.ok) note(`installed ${n} × ${it.name}`); } } }
+    for (const pl of p.plant) { const have = g.inventory[pl.id] ?? 0; const it = getItem(pl.id); if (have > 0 && it) { const inst = (it.kind === 'power' ? hall.powerEquip : hall.coolingEquip)[pl.id] ?? 0; /* pl.n is how many THIS project ordered; pl.done how many of them it has installed. (Saves from before `done` existed fall back to the old rule, which stranded a unit when the hall already had one of the same model.) */ const need = Math.max(0, pl.done === undefined ? pl.n - inst : pl.n - pl.done); const n = Math.min(have, need); if (n > 0) { const r = it.kind === 'power' ? st.installPower(hall.id, pl.id, n) : st.installCooling(hall.id, pl.id, n); if (r.ok) { note(`installed ${n} × ${it.name}`); if (pl.done !== undefined) { const cur = G().projects!.find(x => x.id === pid)!; st.patchProject(pid, { plant: cur.plant.map(x => x.id === pl.id ? { ...x, done: (x.done ?? 0) + n } : x) }); } } } } }
     const h2 = useStoreHall(st, hall.id);
     const load = h2.racks.reduce((n, r) => n + (r.status === 'failed' ? 0 : templateFactsOfDesign(G(), r.designId)), 0) + f.kWPerRack * (p.racks - p.rackIds.length);
     const free = h2.rackSlots - h2.racks.length;
@@ -162,12 +162,12 @@ export function startProject(st: GameStore, contractId: string, templateId: stri
   const kwOf = (did: string) => { const d = G().racks.find(r => r.id === did); return d ? validateRack(d, G().trays, getItem).stats.kW : 0; };
   const inFlightKW = (G().projects ?? []).filter(pp => pp.hallId === hall!.id && pp.stage === 'building').reduce((n, pp) => { const tt = getTemplate(pp.templateId); return n + (tt ? templateFacts(tt).kWPerRack * Math.max(0, pp.racks - pp.rackIds.length) : 0); }, 0);
   const need = f.kWPerRack * racks + hall.racks.reduce((n, r) => n + kwOf(r.designId), 0) + inFlightKW;
-  const plant: { id: string; n: number }[] = [];
+  const plant: { id: string; n: number; done?: number }[] = [];
   const g = G(); const fresh = g.halls.find(h => h.id === hall!.id)!;
   const pw = plantChoice(g, fresh.coolingClass, 'power'), cl = plantChoice(g, fresh.coolingClass, 'cooling');
   const loadNow = fresh.racks.length ? need : need;
-  if (fresh.itPowerKW < loadNow && pw) { const n = Math.ceil((loadNow - fresh.itPowerKW) / (pw.item as any).capacityKW); const b = st.buy(pw.item.id, n); if (b.ok) { plant.push({ id: pw.item.id, n }); notes.push(`ordered ${n} × ${pw.item.name} (power)`); } else notes.push(`power plant: ${b.message}`); }
-  if (fresh.coolingKW < loadNow && cl) { const n = Math.ceil((loadNow - fresh.coolingKW) / (cl.item as any).capacityKW); const b = st.buy(cl.item.id, n); if (b.ok) { plant.push({ id: cl.item.id, n }); notes.push(`ordered ${n} × ${cl.item.name} (cooling)`); } else notes.push(`cooling plant: ${b.message}`); }
+  if (fresh.itPowerKW < loadNow && pw) { const n = Math.ceil((loadNow - fresh.itPowerKW) / (pw.item as any).capacityKW); const b = st.buy(pw.item.id, n); if (b.ok) { plant.push({ id: pw.item.id, n, done: 0 }); notes.push(`ordered ${n} × ${pw.item.name} (power)`); } else notes.push(`power plant: ${b.message}`); }
+  if (fresh.coolingKW < loadNow && cl) { const n = Math.ceil((loadNow - fresh.coolingKW) / (cl.item as any).capacityKW); const b = st.buy(cl.item.id, n); if (b.ok) { plant.push({ id: cl.item.id, n, done: 0 }); notes.push(`ordered ${n} × ${cl.item.name} (cooling)`); } else notes.push(`cooling plant: ${b.message}`); }
   const proj: Project = { id: `pj-${g.month}-${(g.projects ?? []).length + 1}`, contractId, templateId, racks, hallId: fresh.id, name: `Cluster ${(g.clusters.length + 1)}`, stage: 'building', rackIds: [], plant, notes: notes.map(n => `${2020 + Math.floor(g.month / 12)}-${String(g.month % 12 + 1).padStart(2, '0')}: ${n}`), startMonth: g.month };
   st.addProject(proj);
   return { ok: true, message: `Easy path started: ${notes.join('; ')}. I will install, deploy, cluster and assign as parts arrive.` };
@@ -190,5 +190,5 @@ export function assignFromRacks(st: GameStore, contractId: string, rackIds: stri
   const cl = G().clusters[G().clusters.length - 1];
   const a = st.assignContract(contractId, [cl.id]);
   if (!a.ok) st.disbandCluster(cl.id);
-  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack(s) (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
+  return a.ok ? { ok: true, message: `Serving ${c.customer} from ${rackIds.length} rack${rackIds.length === 1 ? '' : 's'} (auto-clustered: ${af.note}).` } : { ok: false, message: `${a.message} (nothing was changed — racks are still free.)` };
 }

@@ -241,7 +241,12 @@ func _tray_tools(parent: Control, ch: Dictionary, chl: Array, stacked: bool) -> 
 	var b: Bridge = app.b
 	var tools: Container = VBoxContainer.new() if stacked else HFlowContainer.new(); tools.add_theme_constant_override("h_separation", 8); tools.add_theme_constant_override("separation", 8); _gap(tools); parent.add_child(tools)
 	var copts := []; for c in chl: copts.append([c.id, "%s (%s, %sU)" % [c.name, c.cooling, int(c.rackUnits)]])
-	var co := BK.slim(Kit.option(copts, cid, func(id): _load_chassis(id); refresh()), 260.0 if not stacked else 150.0); tools.add_child(_tap(co))
+	var co := BK.slim(Kit.option(copts, cid, func(id):
+		var filled := 0
+		for k in sock: for x in sock[k]: if x != null: filled += 1
+		if id == cid: return
+		if filled == 0: _load_chassis(id); refresh()
+		else: Kit.confirm(app, "Switch chassis? The %s fitted to this tray will be cleared." % Kit.plural(filled, "part"), func(): _load_chassis(id); refresh(), "Switch"); refresh()), 260.0 if not stacked else 150.0); tools.add_child(_tap(co))
 	var topts := [["", "load pre-built system…"]]
 	for t in b.templates:
 		if t.availableFrom <= b.year() and (t.get("eolAfter") == null or b.year() <= t.eolAfter): topts.append([t.id, "%s — %s" % [t.name, t.integrator]])
@@ -496,7 +501,11 @@ func _rack_tools(parent: Control, racks: Array, stacked: bool) -> void:
 	if stacked: (tools as GridContainer).columns = 2
 	var mw := 130.0 if stacked else 200.0
 	var ropts := []; for r in racks: ropts.append([r.id, "%s (%dU, %s kW)" % [r.name, int(r.units), r.maxKW]])
-	tools.add_child(_tap(BK.slim(Kit.option(ropts, rid, func(id): rid = id; ritems = []; sel_dev = -1; refresh()), mw)))
+	tools.add_child(_tap(BK.slim(Kit.option(ropts, rid, func(id):
+		var go := func(): rid = id; ritems = []; sel_dev = -1; refresh()
+		if id == rid: return
+		if ritems.is_empty(): go.call()   # nothing placed yet: nothing to lose
+		else: Kit.confirm(app, "Switch rack model? The %s placed in this rack will be cleared." % Kit.plural(ritems.size(), "device"), go, "Switch"); refresh()), mw)))
 	tools.add_child(_tap(BK.slim(Kit.option(["air", "rdhx", "dlc", "immersion"], cool, func(c): cool = c; refresh()), 100.0)))
 	var topts := [["", "pre-built rack…"]]
 	for t in b.templates:

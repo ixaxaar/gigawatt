@@ -54,7 +54,7 @@ func _ready() -> void:
 	card.add_theme_stylebox_override("panel", Kit.card_sb(Kit.CY, Kit.BG, 3, 14)); app.root.add_child(card)
 	ring = PanelContainer.new(); ring.visible = false; ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var rs := StyleBoxFlat.new(); rs.bg_color = Color(0, 0, 0, 0); rs.border_color = Kit.AM; rs.set_border_width_all(4); rs.set_corner_radius_all(12); ring.add_theme_stylebox_override("panel", rs); app.root.add_child(ring)
-	_tw = create_tween().set_loops(); _tw.tween_property(ring, "modulate:a", 0.25, 0.55); _tw.tween_property(ring, "modulate:a", 1.0, 0.55)
+	if not Settings.reduced_motion: _tw = create_tween().set_loops(); _tw.tween_property(ring, "modulate:a", 0.25, 0.55); _tw.tween_property(ring, "modulate:a", 1.0, 0.55)   # reduced motion: a steady ring
 
 func start(at := 0, force := false) -> void:
 	active = true; idx = at; seen = {}; base_month = int(app.b.g.month); forced = force; _open = false; _folded = false
@@ -105,13 +105,13 @@ func _next() -> void:
 
 func _build() -> void:
 	if active and Settings.tutorial_step != idx: Settings.tutorial_step = idx; Settings.save_all()   # so a later session resumes at this step
-	for c in card.get_children(): c.queue_free()
+	for c in card.get_children(): card.remove_child(c); c.queue_free()   # removed now: a dying full card must not size the pill that replaces it
 	if not active or idx >= STEPS.size() or _muted(): card.visible = false; ring.visible = false; return
 	var s: Dictionary = STEPS[idx]
 	card.visible = true
 	if _folded or (_tight and not _open):   # a pill: one line, tap to open the card
 		var pill := Kit.btn("TUTORIAL %d/%d · %s  ▴" % [idx + 1, STEPS.size(), str(s.title)], func(): _open = true; _folded = false; _build(), "", 14)
-		pill.clip_text = true; pill.alignment = HORIZONTAL_ALIGNMENT_LEFT; pill.custom_minimum_size = Vector2(150, maxf(40.0, Layout.tap() * 0.85)); card.add_child(pill)
+		pill.clip_text = true; pill.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; pill.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; pill.alignment = HORIZONTAL_ALIGNMENT_LEFT; pill.custom_minimum_size = Vector2(150, maxf(40.0, Layout.tap() * 0.85)); card.add_child(pill)
 		_fit(); return
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 7); card.add_child(v)
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)

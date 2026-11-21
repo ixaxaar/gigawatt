@@ -52,7 +52,9 @@ static func refresh(node: Control, app, rebuild: Callable) -> void:
 	if f is LineEdit and app != null and Time.get_ticks_msec() - int(app.get("_last_input")) > 700:
 		if not f.has_meta("held"):
 			f.set_meta("held", true)
-			f.focus_exited.connect(func(): if is_instance_valid(node) and node.is_inside_tree(): node.call_deferred("refresh"), CONNECT_ONE_SHOT)
+			f.focus_exited.connect(func():
+				if is_instance_valid(f): f.remove_meta("held")
+				if is_instance_valid(node) and node.is_inside_tree(): node.call_deferred("refresh"), CONNECT_ONE_SHOT)
 		return
 	var key := str(f.get_meta("key")) if f != null else ""
 	var caret := (f as LineEdit).caret_column if f is LineEdit else -1

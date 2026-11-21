@@ -105,7 +105,9 @@ func _rebuild() -> void:
 	if not Layout.phone: ip[1].add_child(Kit.label("Installed: " + (", ".join(inst) if inst.size() > 0 else "nothing"), 11, Kit.DIM, true))
 	# buy plant
 	var bp := Kit.panel("Buy plant for this hall", false, col)
-	_focus_panel = bp[0]; _scroll = col.get_parent() as ScrollContainer
+	_focus_panel = bp[0]; _scroll = null
+	var up: Node = col.get_parent()   # the column sits in a margin inside the scroller
+	while up != null and _scroll == null: _scroll = up as ScrollContainer; up = up.get_parent()
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 10 if Layout.phone else 4); bp[1].add_child(tb)
 	for k in ["cooling", "power"]:
 		var kb := Kit.btn(k, func(): plant_kind = k; refresh(), "pri" if plant_kind == k else "", 12); kb.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tb.add_child(kb)
@@ -176,7 +178,7 @@ func _rebuild() -> void:
 		if not BK.gate("place", 700): return
 		msg = b.act("placeRack", [hall.id, design]).message; app.sfx("rack_place"); refresh(), "go", 15); pb.disabled = design == "" or missing.size() > 0 or not ready_now; dr.add_child(pb)
 	if design != "" and missing.size() == 0 and not ready_now: dr.add_child(Kit.label("these parts are reserved for another design", 12, Kit.AM))
-	if missing.size() > 0: dr.add_child(Kit.label("missing %d part type(s)" % missing.size(), 12, Kit.AM))
+	if missing.size() > 0: dr.add_child(Kit.label("missing " + Kit.plural(missing.size(), "part type"), 12, Kit.AM))
 	if design != "" and missing.size() > 0:
 		var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(0, 170 if not Layout.compact else 90); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; var mv := VBoxContainer.new(); mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(mv); bv.add_child(sc)
 		MissingParts.build(app, mv, design, 1, func(m): msg = m; refresh(), sp_state)

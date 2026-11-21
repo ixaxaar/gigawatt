@@ -16,7 +16,7 @@ export function scriptedEvents(s: GameState, log: Log): void {
     for (const o of s.orders) {
       if (getItem(o.itemId)?.kind === 'accelerator' && o.arriveMonth > s.month) { o.arriveMonth += 2; units += o.qty; }
     }
-    log('bad', `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator(s) already in the pipeline slip 2 months.`);
+    log('bad', `📦 Mar 2023 — ChatGPT went viral and every buyer on earth wants GPUs: allocation is slashed and ${units} accelerator${units === 1 ? '' : 's'} already in the pipeline slip${units === 1 ? 's' : ''} 2 months.`);
   } else if (s.month === 52) {
     log('info', '💧 Apr 2024 — the Blackwell generation makes liquid cooling mainstream: GB200 NVL72 racks (~120 kW) cannot be air-cooled at all.');
   } else if (s.month === 74) {
@@ -62,7 +62,7 @@ export function disasterPool(s: GameState, rng: RNG, log: Log): Array<() => void
   if (s.orders.length) pool.push(() => {
     const n = s.orders.length;
     for (const o of s.orders) o.arriveMonth += 2;
-    log('bad', `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: all ${n} in-transit order(s) slip 2 months.`);
+    log('bad', `🚢 Supply-chain shock — a substrate shortage closes a fab and a port strike strands containers: ${n === 1 ? 'your in-transit order slips' : `all ${n} in-transit orders slip`} 2 months.`);
   });
 
   // Cooling-plant fault: one chiller trip misses SLAs across the serving book.

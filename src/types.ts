@@ -562,7 +562,7 @@ export type GameMode = 'learner' | 'operator' | 'tycoon';
 export interface Project {
   id: string; contractId: string; templateId: string; racks: number; hallId: string; name: string;
   stage: 'building' | 'commissioning' | 'clustering' | 'assigning' | 'done' | 'failed';
-  rackIds: string[]; plant: { id: string; n: number }[]; clusterId?: string; notes: string[]; startMonth: number;
+  rackIds: string[]; plant: { id: string; n: number; done?: number }[]; clusterId?: string; notes: string[]; startMonth: number;
   /** Month the project first got blocked, and the month the player was last alerted about it. */
   stalledSince?: number; alertedMonth?: number;
 }
