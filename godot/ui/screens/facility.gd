@@ -152,7 +152,7 @@ func _rebuild() -> void:
 	var hc := Kit.panel("Hall checks", false, col); Kit.issues(hc[1], b.q("validateHall", [hall.id]))
 	var nhp := Kit.panel("Build new hall", false, col)
 	var nr: Container = VBoxContainer.new() if Layout.phone else HFlowContainer.new(); nr.add_theme_constant_override("h_separation" if not Layout.phone else "separation", 6 if not Layout.phone else 10); nhp[1].add_child(nr)
-	var le := LineEdit.new(); _tap(le); le.text = nh_name; le.custom_minimum_size.x = 110; le.text_changed.connect(func(t): nh_name = t); nr.add_child(le)
+	var le := LineEdit.new(); Kit.style_edit(le, true); _tap(le); le.text = nh_name; le.set_meta("key", "nh_name"); le.custom_minimum_size.x = 110; le.text_changed.connect(func(t): nh_name = t); nr.add_child(le)
 	nr.add_child(_tap(Kit.option(["air", "rdhx", "dlc", "immersion"], nh_cool, func(v): nh_cool = v))); nr.add_child(_tap(Kit.spin(nh_slots, 4, 200, 1, func(v): nh_slots = int(v))))
 	nr.add_child(Kit.btn("Build", func(): msg = b.act("buildHall", [nh_name, nh_cool, nh_slots]).message; app.sfx("buy"); app.hall.rebuild(); refresh(), "", 13))
 	# ---- bottom-left placement strip

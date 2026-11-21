@@ -108,7 +108,7 @@ func _rebuild() -> void:
 	# text, focus and caret (and the phone keyboard stays up). The × clears it.
 	if g.racks.is_empty(): ra[1].add_child(Kit.label("No rack designs yet. Buy a system in Procure (it saves its design automatically) or build one in the Design Lab.", 14, Kit.DIM, true))
 	else:
-		var le := LineEdit.new(); le.placeholder_text = "Filter designs by name"; le.text = design_q; le.clear_button_enabled = true; le.set_meta("key", "design_q")
+		var le := LineEdit.new(); Kit.style_edit(le, false); le.placeholder_text = "Filter designs by name"; le.text = design_q; le.clear_button_enabled = true; le.set_meta("key", "design_q")
 		le.custom_minimum_size = Vector2(160, Layout.tap() if Layout.compact else 0.0); le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		le.text_changed.connect(func(t): design_q = t; _fill_designs())
 		le.text_submitted.connect(func(_t): le.release_focus())

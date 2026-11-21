@@ -80,6 +80,9 @@ func _drawer(dir: int) -> void:
 	for i in app.DOCK.size():
 		if app.DOCK[i][0] == app.dock_key(app.cur): idx = i
 	idx = posmod(idx + dir, app.DOCK.size())
+	for _i in app.DOCK.size():   # locked drawers are skipped, as the dock itself refuses them
+		if app.is_unlocked(app.DOCK[idx][0]): break
+		idx = posmod(idx + dir, app.DOCK.size())
 	var key: String = app.DOCK[idx][0]
 	app.show_screen(app.last_tab.get(key, key))
 	call_deferred("ensure_focus", true)   # focus moves into the new drawer, not left on a dock tab

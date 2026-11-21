@@ -36,7 +36,8 @@ export function hallResilience(hall: HallState): Resilience {
   // N+1 needs an extra engine (and paralleling gear to share the bus) or an oversized UPS
   const n1 = (gensetCount >= 2 && gensetKW - gensetKW / gensetCount >= load && (parallel || gensetCount < 2)) || upsKW >= load * 1.8;
   if (ups && backup && transfer && n1) score = 1; else if (ups && backup && transfer) score = 0.92;
-  if (feedB && score > 0) score = Math.min(1, score + 0.08);
+  // A second utility feed helps every tier, but it is not a spare engine: N+1 still needs the redundant generator or UPS above.
+  if (feedB && score > 0) score = Math.min(ups && backup && transfer && n1 ? 1 : 0.99, score + 0.08);
   const tier = score >= 1 ? 'N+1' : score >= 0.9 ? 'N' : score >= 0.5 ? 'basic' : 'none';
   return { score, tier, ups, backup, transfer, upsKW, gensetKW, batteryKW, gensetCount, feedB, gaps };
 }

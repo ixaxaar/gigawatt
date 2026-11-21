@@ -2,6 +2,7 @@ import type { ActiveContract, GameState, RackDesign, TrayDesign } from '../types
 import { getItem } from '../data';
 import { uplinkMonthlyUSD } from './internet';
 import { maintenanceUSD } from './policy';
+import { validateRack } from './validate';
 
 export const HOURS_PER_MONTH = 730;
 export const STAFF_COST_PER_MONTH = 12000;
@@ -41,8 +42,22 @@ const weightedPue = (state: GameState): number => {
   return state.halls.reduce((s, h) => s + h.pue * h.itPowerKW, 0) / total;
 };
 
+/** What the meter sees: every online rack at its design power (CPUs, memory, drives and fans included), in a cluster or not.
+ *  The bill used to be taken from cluster network stats, which count only accelerators, NICs and switches (about 28% light)
+ *  and nothing at all for racks outside a cluster, so spot-market racks ran on free electricity. */
+const onlineRackPowerKW = (state: GameState): number => {
+  const kwOf = new Map<string, number>(); let total = 0;
+  for (const h of state.halls) for (const r of h.racks) {
+    if (r.status !== 'online') continue;
+    let kw = kwOf.get(r.designId);
+    if (kw === undefined) { const d = state.racks.find((x) => x.id === r.designId); kw = d ? validateRack(d, state.trays, getItem).stats.kW : 0; kwOf.set(r.designId, kw); }
+    total += kw;
+  }
+  return total;
+};
+
 export function monthlyOpex(state: GameState, opts: OpexOptions = {}): OpexBreakdown {
-  const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state));
+  const itPowerKW = Math.max(0, opts.itPowerKW ?? Math.max(clusterPowerKW(state), onlineRackPowerKW(state)));
   const pue = opts.pue ?? weightedPue(state);
   const kwh = itPowerKW * pue * HOURS_PER_MONTH;
   const powerUSD = kwh * state.utilityUSDPerKWh;

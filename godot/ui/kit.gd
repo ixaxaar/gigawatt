@@ -604,6 +604,13 @@ static func spin(value: float, mn: float, mx: float, step: float, cb: Callable) 
 	var s := SpinBox.new(); s.min_value = mn; s.max_value = mx; s.step = step; s.value = value; s.custom_minimum_size = Vector2(110, maxf(0.0, Layout.tap()))
 	style_spin(s); s.value_changed.connect(cb); return s
 
+## Text fields read on every theme (the engine default is grey on grey) and show a clear focus edge.
+static func style_edit(le: LineEdit, select_all := false) -> void:
+	le.add_theme_stylebox_override("normal", sb(FIELD, PANEL_EDGE, R_S, 1, 8)); le.add_theme_stylebox_override("focus", sb(FIELD, FOCUS, R_S, 2, 8))
+	for c in ["font_color", "font_selected_color", "caret_color"]: le.add_theme_color_override(c, TX)
+	le.add_theme_color_override("font_placeholder_color", Color(DIM.r, DIM.g, DIM.b, 0.8)); le.add_theme_color_override("selection_color", SEL)
+	le.select_all_on_focus = select_all   # a name field: typing replaces the suggested name instead of adding to it
+
 static func style_spin(s: SpinBox) -> void:
 	if s.has_meta("kit_ctl"): return
 	s.set_meta("kit_ctl", true)

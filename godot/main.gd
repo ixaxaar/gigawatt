@@ -204,6 +204,8 @@ func _build_shell() -> void:
 	hall.hover_changed.connect(_on_rack_hover)
 	hall.rack_event.connect(func(kind: String, _n: int): if not quiet and started and kind != "arrived": sfx("online" if kind == "online" else "incident"))   # racks coming online / going down are heard as well as seen
 	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
+	heat_key = PanelContainer.new(); heat_key.mouse_filter = Control.MOUSE_FILTER_IGNORE; heat_key.visible = false; heat_key.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.9), Kit.LINE, 10, 1, 8)); root.add_child(heat_key)
+	var hk := Kit.rich("HEAT   [color=#3b82f6]■[/color] cool   [color=#22c55e]■[/color] fine   [color=#eab308]■[/color] warm   [color=#ef4444]■[/color] too hot", 13); hk.mouse_filter = Control.MOUSE_FILTER_IGNORE; hk.autowrap_mode = TextServer.AUTOWRAP_OFF; hk.fit_content = true; heat_key.add_child(hk)
 	month_strip = PanelContainer.new(); month_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE; month_strip.visible = false; root.add_child(month_strip)
 	var msb := HBoxContainer.new(); msb.add_theme_constant_override("separation", 18); msb.mouse_filter = Control.MOUSE_FILTER_IGNORE; month_strip.add_child(msb)
 	_build_cam_tools()
@@ -485,7 +487,8 @@ func _title(backdrop := true) -> void:
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; h.add_child(sc)
 		bv = VBoxContainer.new(); bv.add_theme_constant_override("separation", 10); bv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(bv)
 	vb.add_child(Kit.label("AI DATACENTER TYCOON", int(18 * ts), Kit.DIM)); vb.add_child(Kit.label("GIGAWATT", int(110 * ts) if not two else 64, Kit.CY))
-	vb.add_child(Kit.label("Buy real GPUs. Design trays, racks and fabrics. Wire power and liquid cooling. Lease capacity for training and inference — and learn the whole AI hardware stack by surviving it. 2020 → 2028." if not Layout.phone else "Buy real GPUs, wire power and cooling, and lease capacity to AI labs. 2020 → 2028.", int(20 * ts), Kit.TX, true))
+	var blurb := PanelContainer.new(); blurb.add_theme_stylebox_override("panel", Kit.sb(Kit.deep(0.62), Color(0, 0, 0, 0), 8, 0, 10)); vb.add_child(blurb)   # a backing: the demo hall behind the title is bright in places
+	blurb.add_child(Kit.label("You run a GPU datacenter from 2020 to 2028. Buy the hardware that existed each year, keep it powered and cooled, and rent it to AI labs." if not Layout.phone else "Run a GPU datacenter from 2020 to 2028: buy hardware, keep it cool, rent it to AI labs.", int(20 * ts), Kit.TX, true))
 	for m in [["learner", "LEARNER", "I don't know what a chiller is · $80M · explainers everywhere · \"Do it for me\" Easy path" if not Layout.phone else "New to datacenters · $80M · explains everything"], ["operator", "OPERATOR", "I know the basics · $50M · guided planner and checklists" if not Layout.phone else "I know the basics · $50M"], ["tycoon", "TYCOON", "Just give me the keys · $30M · no hand-holding" if not Layout.phone else "Just the keys · $30M"]]:
 		var bt := Kit.btn("%s\n%s" % [m[1], m[2]], func(): _pick_site(m[0], h), "", int(18 * ts)); bt.custom_minimum_size = Vector2(minf(640.0 * ts, vw() - 48.0) if not two else 0.0, (76.0 * ts) if not Layout.phone else 68.0)
 		bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; bt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if two else TextServer.AUTOWRAP_OFF; bv.add_child(bt)   # no pre-selected look: every mode is a plain choice
@@ -643,6 +646,7 @@ func _on_changed() -> void:
 ## Month close: when a month ends, one line at the top of the hall says what it did to the business: revenue, costs, the change
 ## in cash, and the month's quiet headline (new offers, a rival's move: news that is not worth a toast). It fades after a few
 ## seconds; at speed it simply updates in place. Loads, fast-forwards and captures never show it.
+var heat_key: PanelContainer   # legend for the HEAT view, shown only while it is on
 var month_strip: PanelContainer
 var _strip_mo := -1
 var _strip_tw: Tween
@@ -925,7 +929,7 @@ func check_keynote() -> void:
 	_drop_queued_cards(false)
 	var news: Array = b.g.get("news", [])
 	if news.is_empty(): check_story(); return
-	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE"): _drop_queued_cards(true); return
+	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE") or _clean: _drop_queued_cards(true); return
 	var l: Dictionary = b.q("launches")
 	if l.news.is_empty(): check_story(); return
 	keynote.open(l.news[0], l.news.size() - 1); speed = 0; clock = 0.0; audio.play("keynote")
@@ -963,7 +967,7 @@ func check_story() -> void:
 	if not started or story_ui == null or story_ui.visible or keynote.visible or end_ui != null or menu_ui != null or _hold_changes: return
 	if Engine.get_frames_drawn() < 5: get_tree().create_timer(0.25).timeout.connect(check_story); return
 	var st: Dictionary = b.q("story")
-	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE"):
+	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE") or _clean:
 		if st.chapter != null: b.act("ackStory")
 		return
 	if st.chapter != null:
@@ -1087,6 +1091,9 @@ func _age_toasts(dt: float) -> void:
 	if drawer_tab != null: drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP if show_now else Control.MOUSE_FILTER_IGNORE
 	toasts.visible = started and show_now and not _clean   # hidden, not transparent: an invisible toast must never take a tap meant for a dialog
 	_place_floaters()
+	if heat_key != null:
+		heat_key.visible = started and show_now and hall.thermal and not FULL.has(cur) and not _clean
+		if heat_key.visible: var hfr := free_hall_rect(); heat_key.reset_size(); heat_key.position = Vector2(hfr.position.x, hfr.position.y + 44.0)   # under the money chips
 	if month_strip != null and month_strip.has_meta("life"):
 		var ml := float(month_strip.get_meta("life")) - (dt if show_now else 0.0)
 		month_strip.set_meta("life", ml); month_strip.visible = started and show_now and ml > 0.0 and not FULL.has(cur)
@@ -1126,6 +1133,7 @@ func _place_floaters() -> void:
 	var fr := free_hall_rect()
 	var bottom := fr.end.y
 	if coach != null and coach.card != null and coach.card.visible: bottom = minf(bottom, coach.card.position.y - 8.0)
+	bottom = maxf(bottom, fr.position.y + 120.0)   # too little free hall: sit just under the bar rather than on it
 	var w := clampf(fr.size.x, 180.0, 380.0)
 	toasts.set_anchors_preset(Control.PRESET_TOP_LEFT); toasts.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	toasts.offset_left = fr.position.x; toasts.offset_right = fr.position.x + w

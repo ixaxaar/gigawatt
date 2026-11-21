@@ -31,7 +31,7 @@ func _empty(parent: Control, text: String, btn_text: String, cb: Callable) -> vo
 	var bt := Kit.btn(btn_text, cb, "pri", 13); bt.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN; parent.add_child(bt)
 
 func _cell(t: String, w: float, col: Color = Kit.TX, size := 11) -> Label:
-	var l := Kit.label(t, size, col); l.custom_minimum_size = Vector2(w, 0); return l
+	var l := Kit.label(t, size, col); l.custom_minimum_size = Vector2(w, 0); l.clip_text = true; l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; l.tooltip_text = t; l.mouse_filter = Control.MOUSE_FILTER_PASS; return l
 
 ## Phone: make every button in a flow row at least 140 px wide and let it grow, so rows hold two thumbs at most.
 func _wide(flow: Container) -> void:

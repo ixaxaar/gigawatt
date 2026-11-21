@@ -168,7 +168,7 @@ func _rebuild() -> void:
 	if stats == null: ck[1].add_child(Kit.label("—", 13, Kit.DIM))
 	else: Kit.issues(ck[1], stats.issues)
 	var br2 := _pair(); ck[1].add_child(br2)
-	var le := LineEdit.new(); _tap(le); le.text = cname; le.set_meta("key", "cname"); le.placeholder_text = "Cluster name"; le.custom_minimum_size.x = 120; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): cname = t); br2.add_child(le)
+	var le := LineEdit.new(); Kit.style_edit(le, true); _tap(le); le.text = cname; le.set_meta("key", "cname"); le.placeholder_text = "Cluster name"; le.custom_minimum_size.x = 120; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL; le.text_changed.connect(func(t): cname = t); br2.add_child(le)
 	var go := Kit.btn("BUILD CLUSTER", func(): var r := b.act("createCluster", [cname, sel, f]); msg = r.message; if r.ok: sel = []; app.sfx("buy"); refresh(), "go", 14); go.disabled = stats == null; br2.add_child(go)
 	if paged: _machines(c3, g, b)
 

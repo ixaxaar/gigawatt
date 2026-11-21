@@ -147,6 +147,7 @@ func _process(dt: float) -> void:
 		if _dbg_t > 0.7:
 			_dbg_t = 0.0
 			for k in 3: pulse(view.slot_pos(int(_jobs[k * 2 % _jobs.size()].slot)), [Color(0.25, 1.0, 0.55), Color(1.0, 0.15, 0.1), Color(0.45, 0.8, 1.0)][k])
+			deliver(view.slot_pos(int(_jobs[4 % _jobs.size()].slot)))
 	if _actors.is_empty() or view == null or Settings.reduced_motion: return
 	dt = minf(dt, 0.1)
 	for a in _actors:
@@ -175,6 +176,21 @@ func _process(dt: float) -> void:
 				if float(a.t) <= 0.0: a.state = "idle"; a.t = _rng.randf_range(0.3, 1.5); a.slot = -1
 
 ## A rack changed state: a shell of light rises off it and a ring spreads on the floor, in the colour of the new state.
+## A delivery: a plywood shipping crate the size of the rack drops onto its slot, settles, and dissolves to show the rack
+## that was inside. Reduced motion skips it (the pulse alone marks the arrival).
+func deliver(p: Vector3, delay := 0.0) -> void:
+	if Settings.reduced_motion: return
+	var m := StandardMaterial3D.new(); m.albedo_color = Color(0.72, 0.56, 0.36, 1.0); m.roughness = 0.9; m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var n := MeshInstance3D.new(); n.mesh = _m("shell"); n.material_override = m; n.scale = Vector3(1.05, 1.02, 1.05)
+	n.position = p + Vector3(0, RH * 0.5 + 3.2, 0); n.visible = false; add_child(n)
+	var tw := create_tween()
+	if delay > 0.0: tw.tween_interval(delay)
+	tw.tween_callback(func(): n.visible = true)
+	tw.tween_property(n, "position:y", p.y + RH * 0.5 * 1.02, 0.55).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.35)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.6).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(n.queue_free)
+
 func pulse(p: Vector3, col: Color) -> void:
 	var m := StandardMaterial3D.new(); m.albedo_color = Color(col.r, col.g, col.b, 0.0); m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD; m.cull_mode = BaseMaterial3D.CULL_DISABLED

@@ -6,7 +6,7 @@ var view := "list"
 var sel := ""
 var folds := {}
 
-const KIND_LBL := {"accelerator": "Accelerators", "cpu": "CPUs", "memory": "Memory", "nic": "Network cards", "switch": "Switches", "cable": "Cables & optics", "chassis": "Chassis & boards", "storage": "Storage", "power": "Power", "cooling": "Cooling", "rack": "Racks", "uplink": "Internet uplinks"}
+const KIND_LBL := {"accelerator": "Accelerators", "cpu": "CPUs", "memory": "Memory", "nic": "Network cards", "nvme": "NVMe drives", "switch": "Switches", "cable": "Cables & optics", "chassis": "Chassis & boards", "storage": "Storage", "power": "Power", "cooling": "Cooling", "rack": "Racks", "uplink": "Internet uplinks"}
 
 static var next_view := ""
 const BK := preload("res://ui/build_keep.gd")
@@ -14,7 +14,7 @@ func refresh() -> void: BK.refresh(self, app, _rebuild)
 var _qtok := 0
 ## Search as you type (after a short pause), in every tab; the field keeps focus and caret across the rebuild.
 func _search_box(min_w: float) -> LineEdit:
-	var le := LineEdit.new(); le.placeholder_text = "search: hbm, nvlink, dpu, liquid…"; le.text = q; le.clear_button_enabled = true; le.set_meta("key", "codex_q")
+	var le := LineEdit.new(); Kit.style_edit(le, false); le.placeholder_text = "search: hbm, nvlink, dpu, liquid…"; le.text = q; le.clear_button_enabled = true; le.set_meta("key", "codex_q")
 	le.custom_minimum_size = Vector2(min_w, Layout.tap() if Layout.compact else 0.0); le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	le.text_submitted.connect(func(t): q = t; refresh())
 	le.text_changed.connect(_on_q)
@@ -58,7 +58,8 @@ func _rebuild() -> void:
 			var card := PanelContainer.new(); var vc := Kit.vendor_color(a.vendor)
 			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			card.add_theme_stylebox_override("panel", Kit.sb(Kit.PANEL, Color(vc.r, vc.g, vc.b, 0.5), 8, 1, 10)); var v := VBoxContainer.new(); card.add_child(v)
-			v.add_child(Kit.label(_when(float(a.availableFrom)), 12, Kit.DIM)); v.add_child(Kit.label(a.name, 14, vc if Kit.dark else Kit.TX, true))   # vendor yellow on Paper is unreadable: the border carries the colour there; v.add_child(Kit.label("%d GB · %s TB/s · %d W" % [int(a.memGB), Kit.num(a.memBWTBs, 1), int(a.tdpW)], 11, Kit.DIM)); v.add_child(Kit.label(a.scaleUp, 11, Kit.DIM))
+			v.add_child(Kit.label(_when(float(a.availableFrom)), 12, Kit.DIM)); v.add_child(Kit.label(a.name, 14, Kit.legible(vc, Kit.PANEL) if Kit.dark else Kit.TX, true))   # vendor yellow on Paper is unreadable: the border carries the colour there
+			v.add_child(Kit.label("%d GB · %s TB/s · %d W" % [int(a.memGB), Kit.num(a.memBWTBs, 1), int(a.tdpW)], 11, Kit.DIM)); v.add_child(Kit.label(str(a.scaleUp).to_upper(), 11, Kit.DIM))
 			var bt := Button.new(); bt.flat = true; bt.set_anchors_preset(Control.PRESET_FULL_RECT); bt.focus_mode = Kit.focus_mode(); bt.pressed.connect(func(): sel = a.id; view = "list"; refresh()); card.add_child(bt); fl.add_child(card)
 	else:
 		var cols := Kit.cols_row(); root.add_child(cols)
@@ -115,7 +116,7 @@ func _overview(parent: Control, groups: Dictionary) -> void:
 	var accel: Array = b.items.values().filter(func(i): return i.kind == "accelerator" and float(i.availableFrom) <= float(b.year())); accel.sort_custom(func(a, c): return a.availableFrom > c.availableFrom)
 	if not accel.is_empty():
 		var lp := Kit.panel("Newest accelerators you can buy", false, parent)
-		for a in accel.slice(0, 5): lp[1].add_child(Kit.link("%s  ·  %s  ·  %d" % [a.name, a.vendor, int(a.availableFrom)], func(): sel = a.id; refresh(), 13))
+		for a in accel.slice(0, 5): lp[1].add_child(Kit.link("%s  ·  %s  ·  %d" % [a.name, str(a.vendor).to_upper() if str(a.vendor).length() <= 3 else str(a.vendor).capitalize(), int(a.availableFrom)], func(): sel = a.id; refresh(), 13))
 
 func _when(y: float) -> String:
 	return "%s %d" % [["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][clampi(int(round((y - floorf(y)) * 12.0)), 0, 11)], int(floorf(y))]

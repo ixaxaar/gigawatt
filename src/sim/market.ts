@@ -82,7 +82,11 @@ const refCache = new Map<string, number>();
 /** Output tokens/s one top-of-generation accelerator sustains for this model (what a competent operator can get),
  *  so inference prices can be tied to what a GPU-hour earns instead of drifting away from it. */
 export function refTokensPerGpu(year: number, model: ModelSpec, contextTokens: number, tpotMs: number): number {
-  const key = `${Math.floor(year * 2)}|${model.id}|${contextTokens}|${Math.round(tpotMs / 10)}`;
+  // The answer must depend only on its inputs. It used to be cached under a coarser key than it was computed from, so the
+  // first caller in a half-year decided the price for everyone after, and a loaded game could price differently from the
+  // same month played straight through. The year is now snapped to the half-year before computing; the rest is exact.
+  year = Math.floor(year * 2) / 2;
+  const key = `${year}|${model.id}|${contextTokens}|${tpotMs}`;
   const hit = refCache.get(key); if (hit !== undefined) return hit;
   let accel: Accelerator | undefined;
   for (const a of FLAGSHIPS) if (a.availableFrom <= year && (!accel || a.availableFrom > accel.availableFrom || (a.availableFrom === accel.availableFrom && a.memGB > accel.memGB))) accel = a;

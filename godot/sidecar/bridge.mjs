@@ -7489,7 +7489,8 @@ const gpuHourAnchor = (year) => lerpCurve$1(GPU_HOUR_ANCHOR, year);
 const FLAGSHIPS = ALL_ITEMS.filter((i) => i.kind === "accelerator" && i.memGB >= 40);
 const refCache = /* @__PURE__ */ new Map();
 function refTokensPerGpu(year, model, contextTokens, tpotMs) {
-  const key = `${Math.floor(year * 2)}|${model.id}|${contextTokens}|${Math.round(tpotMs / 10)}`;
+  year = Math.floor(year * 2) / 2;
+  const key = `${year}|${model.id}|${contextTokens}|${tpotMs}`;
   const hit = refCache.get(key);
   if (hit !== void 0) return hit;
   let accel;
@@ -7679,6 +7680,409 @@ const maintenanceUSD = (g) => {
   const racks = g.halls.reduce((n, h) => n + h.racks.filter((r) => r.status === "online").length, 0);
   return racks * (MAINT_COST_PER_RACK[policyOf(g).maintenance] ?? 0);
 };
+const NVME_LANES_PER_DRIVE = 4;
+const GPUS_PER_SPINE_TRAY = 8;
+const COOL_LEVEL$2 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+const err = (code, message, learn) => ({ severity: "error", code, message, learn });
+function partFitsSlot(slot, item) {
+  switch (slot.kind) {
+    case "accelerator":
+      return item.kind === "accelerator" && (!slot.accepts || slot.accepts.includes(item.formFactor));
+    case "cpu":
+      return item.kind === "cpu" && (!slot.accepts || slot.accepts.includes(item.arch));
+    case "dimm":
+      return item.kind === "memory" && (!slot.accepts || slot.accepts.includes(item.type));
+    case "nic":
+      return item.kind === "nic";
+    case "dpu":
+      return item.kind === "nic" && item.nicClass !== "nic";
+    case "nvme":
+      return item.kind === "nvme";
+    case "psu":
+      return item.kind === "power" && (item.powerType === "pdu" || item.powerType === "power-shelf");
+    case "switchchip":
+      return item.kind === "switch" && item.rackUnits === 0;
+    case "coldplate":
+      return item.kind === "cooling" && item.coolingType === "cold-plate-loop";
+    default:
+      return false;
+  }
+}
+function partWatts(item) {
+  switch (item.kind) {
+    case "accelerator":
+      return item.tdpW;
+    case "cpu":
+      return item.tdpW;
+    case "memory":
+      return item.watts;
+    case "nvme":
+      return item.watts;
+    case "nic":
+      return item.watts;
+    case "switch":
+      return item.watts;
+    default:
+      return 0;
+  }
+}
+function partPcieLanes(item) {
+  if (item.kind === "nic") return item.pcieLanes;
+  if (item.kind === "nvme") return NVME_LANES_PER_DRIVE;
+  if (item.kind === "accelerator" && item.formFactor === "pcie") return item.pcieLanes;
+  return 0;
+}
+function validateTray(design, get) {
+  const stats = { watts: 0, pcieLanesUsed: 0, costUSD: 0, accels: 0, tflopsFp8: 0, memGB: 0 };
+  const chassisItem = get(design.chassisId);
+  if (!chassisItem || chassisItem.kind !== "chassis") {
+    return {
+      issues: [err(
+        "TRAY_UNKNOWN_CHASSIS",
+        `Chassis '${design.chassisId}' is not in the catalog — a tray is built around a real chassis and its slot map; pick one first.`
+      )],
+      stats
+    };
+  }
+  const chassis = chassisItem;
+  stats.costUSD = chassis.priceUSD;
+  const slotByKind = new Map(chassis.slots.map((s2) => [s2.kind, s2]));
+  const filled = /* @__PURE__ */ new Map();
+  const seenAccels = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (const entry of design.parts) {
+    const item = get(entry.itemId);
+    const slot = slotByKind.get(entry.slot);
+    if (!item) {
+      issues.push(err(
+        "TRAY_UNKNOWN_PART",
+        `Part '${entry.itemId}' is not in the catalog — every component must be a real purchasable item.`
+      ));
+      continue;
+    }
+    if (!slot) {
+      issues.push(err(
+        "TRAY_PART_FIT",
+        `${item.name} needs a '${entry.slot}' slot but the ${chassis.name} has none — this chassis physically cannot hold that part class.`,
+        chassis.id
+      ));
+      continue;
+    }
+    if (!partFitsSlot(slot, item)) {
+      const want = slot.accepts?.join("/") ?? slot.kind;
+      const got = item.kind === "accelerator" ? item.formFactor : item.kind === "cpu" ? item.arch : item.kind === "memory" ? item.type : item.kind;
+      issues.push(err(
+        "TRAY_PART_FIT",
+        `${item.name} (${got}) does not fit the ${chassis.name}'s ${slot.kind} slot (accepts: ${want}). Module form factors are physical standards — an OAM card has no SXM socket to drop into.`,
+        chassis.id
+      ));
+    }
+    filled.set(entry.slot, (filled.get(entry.slot) ?? 0) + entry.count);
+    stats.watts += partWatts(item) * entry.count;
+    stats.pcieLanesUsed += partPcieLanes(item) * entry.count;
+    stats.costUSD += item.priceUSD * entry.count;
+    if (item.kind === "accelerator") {
+      stats.accels += entry.count;
+      stats.tflopsFp8 += (item.tflops.fp8 ?? 0) * entry.count;
+      stats.memGB += item.memGB * entry.count;
+      if (!seenAccels.has(item.id) && !item.cooling.includes(chassis.cooling)) {
+        seenAccels.add(item.id);
+        issues.push(err(
+          "TRAY_ACCEL_COOLING",
+          `${item.name} is a ${item.tdpW} W part that only cools by ${item.cooling.join("/")} — it cannot live in the ${chassis.name}, which is a ${chassis.cooling} chassis. At this TDP the heat has to leave through a cold plate, not air.`,
+          item.id
+        ));
+      }
+    }
+  }
+  for (const slot of chassis.slots) {
+    const n = filled.get(slot.kind) ?? 0;
+    if (n > slot.count) {
+      issues.push(err(
+        "TRAY_SLOT_OVERFLOW",
+        `${n}x ${slot.kind} parts assigned but the ${chassis.name} only has ${slot.count} '${slot.kind}' slot(s) — slots are physical sockets and board lanes, not bookkeeping.`,
+        chassis.id
+      ));
+    }
+    if (slot.required !== void 0 && n < slot.required) {
+      issues.push(err(
+        "TRAY_SLOT_REQUIRED",
+        `Only ${n}/${slot.required} '${slot.kind}' slots filled on the ${chassis.name}. The chassis will not POST (or validate) below its minimum: ${slot.required} is the floor for power rails and boot devices.`,
+        chassis.id
+      ));
+    }
+  }
+  const partW = stats.watts;
+  stats.watts += chassis.overheadW;
+  if (stats.pcieLanesUsed > chassis.pcieLanesAvail) {
+    issues.push(err(
+      "TRAY_PCIE_LANES",
+      `NICs and NVMe need ${stats.pcieLanesUsed} PCIe lanes but the ${chassis.name} has ${chassis.pcieLanesAvail} left after the accelerators take theirs — every lane is a physical differential pair on the board; oversubscribing them means ports that down-train or vanish.`,
+      chassis.id
+    ));
+  }
+  if (stats.watts > chassis.maxPowerW) {
+    issues.push(err(
+      "TRAY_POWER",
+      `Tray draws ~${stats.watts} W (parts ${partW} W + ${chassis.overheadW} W fans/BMC/VRM overhead) but the ${chassis.name} power feed tops out at ${chassis.maxPowerW} W. Above the feed limit PSUs trip — pick lower-TDP parts or a beefier chassis.`,
+      chassis.id
+    ));
+  }
+  if (chassis.cooling === "air" && chassis.maxAirWattsPerU !== void 0 && partW > chassis.maxAirWattsPerU * chassis.rackUnits) {
+    issues.push(err(
+      "TRAY_AIR_WATTS",
+      `${partW} W of parts in an air-cooled ${chassis.rackUnits}U chassis exceeds its ~${chassis.maxAirWattsPerU} W/U air budget (max ~${chassis.maxAirWattsPerU * chassis.rackUnits} W). Air carries roughly 1-1.5 kW per U before heatsinks and fans saturate — this is exactly the wall that pushed AI silicon to liquid.`,
+      chassis.id
+    ));
+  }
+  return { issues, stats };
+}
+const SPINE_LEARN = {
+  nvlink5: "nv-nvlink-switch-tray5",
+  nvlink6: "nv-nvlink-switch-tray6",
+  "ualink": "gen-ualink-sw"
+};
+function validateRack(design, trays, get) {
+  const stats = { kW: 0, units: 0, weightKg: 0, costUSD: 0, accels: 0, scaleUpDomain: 0 };
+  const rackItem = get(design.rackId);
+  if (!rackItem || rackItem.kind !== "rack") {
+    return {
+      issues: [err(
+        "RACK_UNKNOWN_RACK",
+        `Rack '${design.rackId}' is not in the catalog — pick a real rack (its U count, kW rating and cooling options define what fits).`
+      )],
+      stats
+    };
+  }
+  const rack = rackItem;
+  stats.costUSD = rack.priceUSD;
+  const issues = [];
+  if (!rack.cooling.includes(design.coolingInterface)) {
+    issues.push(err(
+      "RACK_INTERFACE_UNSUPPORTED",
+      `The ${rack.name} cannot serve a '${design.coolingInterface}' cooling interface (supports: ${rack.cooling.join("/")}). Cooling interface means what actually captures the heat — air in the aisle, a rear-door coil, or coolant manifolds on the rack spine.`,
+      rack.id
+    ));
+  }
+  const spineByTech = /* @__PURE__ */ new Map();
+  const trayById = new Map(trays.map((t) => [t.id, t]));
+  let watts = 0;
+  for (const item of design.items) {
+    if (item.type !== "switch") continue;
+    const sw2 = get(item.switchId);
+    if (sw2 && sw2.kind === "switch" && sw2.role === "scale-up") {
+      spineByTech.set(sw2.tech, (spineByTech.get(sw2.tech) ?? 0) + item.count);
+    }
+  }
+  for (const item of design.items) {
+    if (item.type === "tray") {
+      const td = trayById.get(item.trayId);
+      if (!td) {
+        issues.push(err(
+          "RACK_UNKNOWN_TRAY",
+          `Tray '${item.trayId}' referenced but not designed yet — design the tray before racking it.`
+        ));
+        continue;
+      }
+      const tv = validateTray(td, get);
+      issues.push(...tv.issues);
+      watts += tv.stats.watts * item.count;
+      stats.costUSD += tv.stats.costUSD * item.count;
+      stats.accels += tv.stats.accels * item.count;
+      const ch = get(td.chassisId);
+      if (ch && ch.kind === "chassis") {
+        const chassis = ch;
+        stats.units += chassis.rackUnits * item.count;
+        stats.weightKg += chassis.weightKg * item.count;
+        if (chassis.rackStandard !== rack.standard) {
+          issues.push(err(
+            "RACK_STANDARD_MISMATCH",
+            `The ${chassis.name} is a ${chassis.rackStandard} design and will not mount in the ${rack.name} (${rack.standard}). Rack standards fix rail spacing and width — a 21-inch ORv3 tray simply has no rails in a 19-inch cabinet.`,
+            chassis.id
+          ));
+        }
+        if (COOL_LEVEL$2[chassis.cooling] > COOL_LEVEL$2[design.coolingInterface]) {
+          issues.push(err(
+            "RACK_TRAY_COOLING",
+            `${chassis.name} trays need ${chassis.cooling.toUpperCase()} cooling but this rack's interface is '${design.coolingInterface}' — liquid-cooled trays have cold plates plumbed to rack manifolds; without them the tray cooks.`,
+            chassis.id
+          ));
+        }
+        if (!rack.hasBusbar && !chassis.slots.some((s2) => s2.kind === "psu")) {
+          issues.push(err(
+            "RACK_TRAY_NEEDS_BUSBAR",
+            `${chassis.name} trays carry no PSUs — they expect 48V from the rack busbar, and the ${rack.name} has none. Busbar-fed trays need an ORv3/MGX-style rack with power shelves.`,
+            rack.id
+          ));
+        }
+        const bb = chassis.baseboard;
+        if (bb && tv.stats.accels > 0) {
+          const perTrayAccels = tv.stats.accels;
+          const totalAccels = perTrayAccels * item.count;
+          let accelDomainCap = 0;
+          for (const p of td.parts) {
+            const pi = get(p.itemId);
+            if (pi && pi.kind === "accelerator") accelDomainCap = Math.max(accelDomainCap, pi.maxScaleUpDomain);
+          }
+          const domainCap = Math.min(bb.domainSize, accelDomainCap || bb.domainSize);
+          const needsSpine = !bb.includesSwitchChips && bb.domainSize > perTrayAccels;
+          if (needsSpine) {
+            const needed = Math.ceil(Math.min(totalAccels, bb.domainSize) / GPUS_PER_SPINE_TRAY);
+            const have = spineByTech.get(bb.scaleUp) ?? 0;
+            if (have < needed) {
+              issues.push(err(
+                "RACK_NEEDS_SCALEUP_SWITCH",
+                `The ${chassis.name} baseboard expects a ${bb.domainSize}-accelerator ${bb.scaleUp} domain but has no switch silicon on-board: ${needed} spine switch tray(s) are required and ${have} are placed. Without the spine trays each tray is an island — no NVLink-scale memory semantics across trays.`,
+                SPINE_LEARN[bb.scaleUp] ?? chassis.id
+              ));
+              stats.scaleUpDomain = Math.max(stats.scaleUpDomain, Math.min(perTrayAccels, domainCap));
+            } else {
+              stats.scaleUpDomain = Math.max(stats.scaleUpDomain, Math.min(totalAccels, domainCap));
+            }
+          } else {
+            stats.scaleUpDomain = Math.max(stats.scaleUpDomain, Math.min(totalAccels, domainCap));
+          }
+        }
+      }
+    } else if (item.type === "switch") {
+      const sw2 = get(item.switchId);
+      if (!sw2 || sw2.kind !== "switch") {
+        issues.push(err("RACK_UNKNOWN_ITEM", `Switch '${item.switchId}' is not in the catalog.`));
+        continue;
+      }
+      stats.units += sw2.rackUnits * item.count;
+      watts += sw2.watts * item.count;
+      stats.costUSD += sw2.priceUSD * item.count;
+      if (sw2.role === "scale-up") {
+        spineByTech.set(sw2.tech, (spineByTech.get(sw2.tech) ?? 0) + item.count);
+      }
+    } else if (item.type === "storage") {
+      const st2 = get(item.storageId);
+      if (!st2 || st2.kind !== "storage") {
+        issues.push(err("RACK_UNKNOWN_ITEM", `Storage system '${item.storageId}' is not in the catalog.`));
+        continue;
+      }
+      stats.units += st2.rackUnits * item.count;
+      watts += st2.watts * item.count;
+      stats.costUSD += st2.priceUSD * item.count;
+    } else {
+      const pw2 = get(item.powerId);
+      if (!pw2 || pw2.kind !== "power") {
+        issues.push(err("RACK_UNKNOWN_ITEM", `Power equipment '${item.powerId}' is not in the catalog.`));
+        continue;
+      }
+      stats.costUSD += pw2.priceUSD * item.count;
+    }
+  }
+  stats.kW = watts / 1e3;
+  if (stats.units > rack.units) {
+    issues.push(err(
+      "RACK_UNITS",
+      `${stats.units}U of gear in a ${rack.units}U rack — U is physical height; the excess simply has nowhere to bolt in.`,
+      rack.id
+    ));
+  }
+  const maxKW = rack.maxKW + (design.coolingInterface === "rdhx" && rack.cooling.includes("rdhx") ? 20 : 0);
+  if (stats.kW > maxKW) {
+    issues.push(err(
+      "RACK_POWER",
+      `Rack draws ~${stats.kW.toFixed(1)} kW but the ${rack.name} is rated ${maxKW} kW${maxKW > rack.maxKW ? " with a rear-door heat exchanger" : ""}. Rack power is limited by feed/breakers and how much heat its cooling path removes — either thin the rack or move to a higher-density rack.`,
+      rack.id
+    ));
+  }
+  if (stats.weightKg > rack.maxWeightKg) {
+    issues.push(err(
+      "RACK_WEIGHT",
+      `Loaded trays weigh ~${stats.weightKg} kg against the ${rack.name}'s ${rack.maxWeightKg} kg rating — racks are structural; an overloaded frame warps rails and fails floor loading.`,
+      rack.id
+    ));
+  }
+  return { issues, stats };
+}
+function validateHall(hall, racks, get) {
+  const issues = [];
+  const byDesign = new Map(racks.map((r) => [r.design.id, r]));
+  const placed2 = hall.racks.filter((p) => p.status !== "failed");
+  if (placed2.length > hall.rackSlots) {
+    issues.push(err(
+      "HALL_RACK_SLOTS",
+      `${placed2.length} racks placed but the hall has ${hall.rackSlots} floor slots — each rack needs a tile position with power whip and coolant drop.`
+    ));
+  }
+  let itKW = 0;
+  for (const p of placed2) {
+    const ctx = byDesign.get(p.designId);
+    if (!ctx) {
+      issues.push(err(
+        "HALL_UNKNOWN_DESIGN",
+        `Placed rack '${p.id}' references design '${p.designId}' which does not exist — remove it or restore the design.`
+      ));
+      continue;
+    }
+    const rv = validateRack(ctx.design, ctx.trays, get);
+    issues.push(...rv.issues);
+    itKW += rv.stats.kW;
+    if (COOL_LEVEL$2[ctx.design.coolingInterface] > COOL_LEVEL$2[hall.coolingClass]) {
+      issues.push(err(
+        "HALL_COOLING_CLASS",
+        `Rack design '${ctx.design.name}' needs a ${ctx.design.coolingInterface} row but the hall is ${hall.coolingClass}-class. A liquid rack without facility coolant (CDUs, chilled water) is a very expensive space heater — upgrade the hall's cooling class or use air trays.`,
+        "ct-cdu-1600"
+      ));
+    }
+    if (rv.stats.weightKg > hall.floorLoadKgPerRack) {
+      issues.push(err(
+        "HALL_FLOOR_LOAD",
+        `Rack design '${ctx.design.name}' weighs ~${rv.stats.weightKg} kg but the hall floor is rated ${hall.floorLoadKgPerRack} kg per rack. Raised floors and slabs have point-load limits — liquid AI racks regularly need floor reinforcement.`,
+        ctx.design.rackId
+      ));
+    }
+  }
+  if (itKW > hall.itPowerKW) {
+    issues.push(err(
+      "HALL_IT_POWER",
+      `Racks draw ~${itKW.toFixed(1)} kW of IT power but the hall's transformers/UPS only deliver ${hall.itPowerKW} kW. Every IT watt must exist as installed power capacity — add a transformer/UPS or commission fewer racks.`,
+      "et-padmount-2500"
+    ));
+  }
+  if (itKW > hall.coolingKW) {
+    issues.push(err(
+      "HALL_COOLING",
+      `Racks reject ~${itKW.toFixed(1)} kW of heat but the hall's cooling plant removes only ${hall.coolingKW} kW. IT power turns into heat almost 1:1; without matching CDU/CRAH/chiller capacity the room thermal-runs and hardware throttles.`,
+      "ct-cdu-1600"
+    ));
+  }
+  return issues;
+}
+function computePUE(hall, get) {
+  const itKW = hall.itPowerKW;
+  if (itKW <= 0) return 1;
+  const isPlant = (c) => ["chiller", "dry-cooler", "cooling-tower"].includes(c.coolingType) || c.coolingType === "crah" && c.wattsPerKW >= 120;
+  const stage = (plant2) => {
+    let capT = 0, w = 0;
+    for (const [id, count] of Object.entries(hall.coolingEquip)) {
+      const c = get(id);
+      if (!c || c.kind !== "cooling" || isPlant(c) !== plant2) continue;
+      capT += count * c.capacityKW;
+      w += count * c.capacityKW * c.wattsPerKW;
+    }
+    return { capT, avg: capT > 0 ? w / capT : 0 };
+  };
+  const term = stage(false), plant = stage(true);
+  const liquid = hall.coolingClass === "dlc" || hall.coolingClass === "immersion";
+  const plantAvg = plant.capT > 0 ? plant.avg : term.capT > 0 ? liquid ? 60 : 250 : 0;
+  const termAvg = term.capT > 0 ? term.avg : plant.capT > 0 && plant.avg < 120 ? liquid ? 15 : 40 : 0;
+  const coolingElecKW = itKW * ((termAvg + plantAvg) / 1e3);
+  const overheadKW = term.capT + plant.capT > 0 ? itKW * 0.02 : 0;
+  let cap = 0, effSum = 0;
+  for (const [id, count] of Object.entries(hall.powerEquip)) {
+    const p = get(id);
+    if (!p || p.kind !== "power" || p.efficiency >= 1 || !["transformer", "ups", "busway", "pdu", "power-shelf", "switchgear"].includes(p.powerType)) continue;
+    cap += count * p.capacityKW;
+    effSum += count * p.capacityKW * p.efficiency;
+  }
+  const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
+  return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
+}
 const HOURS_PER_MONTH = 730;
 const STAFF_COST_PER_MONTH = 12e3;
 const SUPPORT_RATE_PER_YEAR = 0.035;
@@ -7694,8 +8098,23 @@ const weightedPue = (state2) => {
   }
   return state2.halls.reduce((s2, h) => s2 + h.pue * h.itPowerKW, 0) / total;
 };
+const onlineRackPowerKW = (state2) => {
+  const kwOf = /* @__PURE__ */ new Map();
+  let total = 0;
+  for (const h of state2.halls) for (const r of h.racks) {
+    if (r.status !== "online") continue;
+    let kw = kwOf.get(r.designId);
+    if (kw === void 0) {
+      const d = state2.racks.find((x) => x.id === r.designId);
+      kw = d ? validateRack(d, state2.trays, getItem).stats.kW : 0;
+      kwOf.set(r.designId, kw);
+    }
+    total += kw;
+  }
+  return total;
+};
 function monthlyOpex(state2, opts = {}) {
-  const itPowerKW = Math.max(0, opts.itPowerKW ?? clusterPowerKW(state2));
+  const itPowerKW = Math.max(0, opts.itPowerKW ?? Math.max(clusterPowerKW(state2), onlineRackPowerKW(state2)));
   const pue2 = opts.pue ?? weightedPue(state2);
   const kwh = itPowerKW * pue2 * HOURS_PER_MONTH;
   const powerUSD = kwh * state2.utilityUSDPerKWh;
@@ -7924,7 +8343,7 @@ const SAVE_KEY = "gigawatt-save-v1";
 const ok = (message = "", issues) => ({ ok: true, message, issues });
 const fail = (message, issues) => ({ ok: false, message, issues });
 const usd$1 = (n) => Math.round(n).toLocaleString("en-US");
-const COOL_LEVEL$2 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
+const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
 const POWER_FEED_TYPES = [
   "transformer",
   "ups",
@@ -8059,409 +8478,6 @@ function priceIndexOf(s2, playerAccels = onlineAccels(s2)) {
   const rivalMean = rivals.reduce((n, r) => n + r.accels * r.priceMult, 0) / rivalAccels;
   const playerShare = playerAccels / (playerAccels + rivalAccels);
   return clamp$3(0.5 + 0.42 * rivalMean + 0.28 * playerShare, 0.7, 1.15);
-}
-const NVME_LANES_PER_DRIVE = 4;
-const GPUS_PER_SPINE_TRAY = 8;
-const COOL_LEVEL$1 = { air: 0, rdhx: 1, dlc: 2, immersion: 3 };
-const err = (code, message, learn) => ({ severity: "error", code, message, learn });
-function partFitsSlot(slot, item) {
-  switch (slot.kind) {
-    case "accelerator":
-      return item.kind === "accelerator" && (!slot.accepts || slot.accepts.includes(item.formFactor));
-    case "cpu":
-      return item.kind === "cpu" && (!slot.accepts || slot.accepts.includes(item.arch));
-    case "dimm":
-      return item.kind === "memory" && (!slot.accepts || slot.accepts.includes(item.type));
-    case "nic":
-      return item.kind === "nic";
-    case "dpu":
-      return item.kind === "nic" && item.nicClass !== "nic";
-    case "nvme":
-      return item.kind === "nvme";
-    case "psu":
-      return item.kind === "power" && (item.powerType === "pdu" || item.powerType === "power-shelf");
-    case "switchchip":
-      return item.kind === "switch" && item.rackUnits === 0;
-    case "coldplate":
-      return item.kind === "cooling" && item.coolingType === "cold-plate-loop";
-    default:
-      return false;
-  }
-}
-function partWatts(item) {
-  switch (item.kind) {
-    case "accelerator":
-      return item.tdpW;
-    case "cpu":
-      return item.tdpW;
-    case "memory":
-      return item.watts;
-    case "nvme":
-      return item.watts;
-    case "nic":
-      return item.watts;
-    case "switch":
-      return item.watts;
-    default:
-      return 0;
-  }
-}
-function partPcieLanes(item) {
-  if (item.kind === "nic") return item.pcieLanes;
-  if (item.kind === "nvme") return NVME_LANES_PER_DRIVE;
-  if (item.kind === "accelerator" && item.formFactor === "pcie") return item.pcieLanes;
-  return 0;
-}
-function validateTray(design, get) {
-  const stats = { watts: 0, pcieLanesUsed: 0, costUSD: 0, accels: 0, tflopsFp8: 0, memGB: 0 };
-  const chassisItem = get(design.chassisId);
-  if (!chassisItem || chassisItem.kind !== "chassis") {
-    return {
-      issues: [err(
-        "TRAY_UNKNOWN_CHASSIS",
-        `Chassis '${design.chassisId}' is not in the catalog — a tray is built around a real chassis and its slot map; pick one first.`
-      )],
-      stats
-    };
-  }
-  const chassis = chassisItem;
-  stats.costUSD = chassis.priceUSD;
-  const slotByKind = new Map(chassis.slots.map((s2) => [s2.kind, s2]));
-  const filled = /* @__PURE__ */ new Map();
-  const seenAccels = /* @__PURE__ */ new Set();
-  const issues = [];
-  for (const entry of design.parts) {
-    const item = get(entry.itemId);
-    const slot = slotByKind.get(entry.slot);
-    if (!item) {
-      issues.push(err(
-        "TRAY_UNKNOWN_PART",
-        `Part '${entry.itemId}' is not in the catalog — every component must be a real purchasable item.`
-      ));
-      continue;
-    }
-    if (!slot) {
-      issues.push(err(
-        "TRAY_PART_FIT",
-        `${item.name} needs a '${entry.slot}' slot but the ${chassis.name} has none — this chassis physically cannot hold that part class.`,
-        chassis.id
-      ));
-      continue;
-    }
-    if (!partFitsSlot(slot, item)) {
-      const want = slot.accepts?.join("/") ?? slot.kind;
-      const got = item.kind === "accelerator" ? item.formFactor : item.kind === "cpu" ? item.arch : item.kind === "memory" ? item.type : item.kind;
-      issues.push(err(
-        "TRAY_PART_FIT",
-        `${item.name} (${got}) does not fit the ${chassis.name}'s ${slot.kind} slot (accepts: ${want}). Module form factors are physical standards — an OAM card has no SXM socket to drop into.`,
-        chassis.id
-      ));
-    }
-    filled.set(entry.slot, (filled.get(entry.slot) ?? 0) + entry.count);
-    stats.watts += partWatts(item) * entry.count;
-    stats.pcieLanesUsed += partPcieLanes(item) * entry.count;
-    stats.costUSD += item.priceUSD * entry.count;
-    if (item.kind === "accelerator") {
-      stats.accels += entry.count;
-      stats.tflopsFp8 += (item.tflops.fp8 ?? 0) * entry.count;
-      stats.memGB += item.memGB * entry.count;
-      if (!seenAccels.has(item.id) && !item.cooling.includes(chassis.cooling)) {
-        seenAccels.add(item.id);
-        issues.push(err(
-          "TRAY_ACCEL_COOLING",
-          `${item.name} is a ${item.tdpW} W part that only cools by ${item.cooling.join("/")} — it cannot live in the ${chassis.name}, which is a ${chassis.cooling} chassis. At this TDP the heat has to leave through a cold plate, not air.`,
-          item.id
-        ));
-      }
-    }
-  }
-  for (const slot of chassis.slots) {
-    const n = filled.get(slot.kind) ?? 0;
-    if (n > slot.count) {
-      issues.push(err(
-        "TRAY_SLOT_OVERFLOW",
-        `${n}x ${slot.kind} parts assigned but the ${chassis.name} only has ${slot.count} '${slot.kind}' slot(s) — slots are physical sockets and board lanes, not bookkeeping.`,
-        chassis.id
-      ));
-    }
-    if (slot.required !== void 0 && n < slot.required) {
-      issues.push(err(
-        "TRAY_SLOT_REQUIRED",
-        `Only ${n}/${slot.required} '${slot.kind}' slots filled on the ${chassis.name}. The chassis will not POST (or validate) below its minimum: ${slot.required} is the floor for power rails and boot devices.`,
-        chassis.id
-      ));
-    }
-  }
-  const partW = stats.watts;
-  stats.watts += chassis.overheadW;
-  if (stats.pcieLanesUsed > chassis.pcieLanesAvail) {
-    issues.push(err(
-      "TRAY_PCIE_LANES",
-      `NICs and NVMe need ${stats.pcieLanesUsed} PCIe lanes but the ${chassis.name} has ${chassis.pcieLanesAvail} left after the accelerators take theirs — every lane is a physical differential pair on the board; oversubscribing them means ports that down-train or vanish.`,
-      chassis.id
-    ));
-  }
-  if (stats.watts > chassis.maxPowerW) {
-    issues.push(err(
-      "TRAY_POWER",
-      `Tray draws ~${stats.watts} W (parts ${partW} W + ${chassis.overheadW} W fans/BMC/VRM overhead) but the ${chassis.name} power feed tops out at ${chassis.maxPowerW} W. Above the feed limit PSUs trip — pick lower-TDP parts or a beefier chassis.`,
-      chassis.id
-    ));
-  }
-  if (chassis.cooling === "air" && chassis.maxAirWattsPerU !== void 0 && partW > chassis.maxAirWattsPerU * chassis.rackUnits) {
-    issues.push(err(
-      "TRAY_AIR_WATTS",
-      `${partW} W of parts in an air-cooled ${chassis.rackUnits}U chassis exceeds its ~${chassis.maxAirWattsPerU} W/U air budget (max ~${chassis.maxAirWattsPerU * chassis.rackUnits} W). Air carries roughly 1-1.5 kW per U before heatsinks and fans saturate — this is exactly the wall that pushed AI silicon to liquid.`,
-      chassis.id
-    ));
-  }
-  return { issues, stats };
-}
-const SPINE_LEARN = {
-  nvlink5: "nv-nvlink-switch-tray5",
-  nvlink6: "nv-nvlink-switch-tray6",
-  "ualink": "gen-ualink-sw"
-};
-function validateRack(design, trays, get) {
-  const stats = { kW: 0, units: 0, weightKg: 0, costUSD: 0, accels: 0, scaleUpDomain: 0 };
-  const rackItem = get(design.rackId);
-  if (!rackItem || rackItem.kind !== "rack") {
-    return {
-      issues: [err(
-        "RACK_UNKNOWN_RACK",
-        `Rack '${design.rackId}' is not in the catalog — pick a real rack (its U count, kW rating and cooling options define what fits).`
-      )],
-      stats
-    };
-  }
-  const rack = rackItem;
-  stats.costUSD = rack.priceUSD;
-  const issues = [];
-  if (!rack.cooling.includes(design.coolingInterface)) {
-    issues.push(err(
-      "RACK_INTERFACE_UNSUPPORTED",
-      `The ${rack.name} cannot serve a '${design.coolingInterface}' cooling interface (supports: ${rack.cooling.join("/")}). Cooling interface means what actually captures the heat — air in the aisle, a rear-door coil, or coolant manifolds on the rack spine.`,
-      rack.id
-    ));
-  }
-  const spineByTech = /* @__PURE__ */ new Map();
-  const trayById = new Map(trays.map((t) => [t.id, t]));
-  let watts = 0;
-  for (const item of design.items) {
-    if (item.type !== "switch") continue;
-    const sw2 = get(item.switchId);
-    if (sw2 && sw2.kind === "switch" && sw2.role === "scale-up") {
-      spineByTech.set(sw2.tech, (spineByTech.get(sw2.tech) ?? 0) + item.count);
-    }
-  }
-  for (const item of design.items) {
-    if (item.type === "tray") {
-      const td = trayById.get(item.trayId);
-      if (!td) {
-        issues.push(err(
-          "RACK_UNKNOWN_TRAY",
-          `Tray '${item.trayId}' referenced but not designed yet — design the tray before racking it.`
-        ));
-        continue;
-      }
-      const tv = validateTray(td, get);
-      issues.push(...tv.issues);
-      watts += tv.stats.watts * item.count;
-      stats.costUSD += tv.stats.costUSD * item.count;
-      stats.accels += tv.stats.accels * item.count;
-      const ch = get(td.chassisId);
-      if (ch && ch.kind === "chassis") {
-        const chassis = ch;
-        stats.units += chassis.rackUnits * item.count;
-        stats.weightKg += chassis.weightKg * item.count;
-        if (chassis.rackStandard !== rack.standard) {
-          issues.push(err(
-            "RACK_STANDARD_MISMATCH",
-            `The ${chassis.name} is a ${chassis.rackStandard} design and will not mount in the ${rack.name} (${rack.standard}). Rack standards fix rail spacing and width — a 21-inch ORv3 tray simply has no rails in a 19-inch cabinet.`,
-            chassis.id
-          ));
-        }
-        if (COOL_LEVEL$1[chassis.cooling] > COOL_LEVEL$1[design.coolingInterface]) {
-          issues.push(err(
-            "RACK_TRAY_COOLING",
-            `${chassis.name} trays need ${chassis.cooling.toUpperCase()} cooling but this rack's interface is '${design.coolingInterface}' — liquid-cooled trays have cold plates plumbed to rack manifolds; without them the tray cooks.`,
-            chassis.id
-          ));
-        }
-        if (!rack.hasBusbar && !chassis.slots.some((s2) => s2.kind === "psu")) {
-          issues.push(err(
-            "RACK_TRAY_NEEDS_BUSBAR",
-            `${chassis.name} trays carry no PSUs — they expect 48V from the rack busbar, and the ${rack.name} has none. Busbar-fed trays need an ORv3/MGX-style rack with power shelves.`,
-            rack.id
-          ));
-        }
-        const bb = chassis.baseboard;
-        if (bb && tv.stats.accels > 0) {
-          const perTrayAccels = tv.stats.accels;
-          const totalAccels = perTrayAccels * item.count;
-          let accelDomainCap = 0;
-          for (const p of td.parts) {
-            const pi = get(p.itemId);
-            if (pi && pi.kind === "accelerator") accelDomainCap = Math.max(accelDomainCap, pi.maxScaleUpDomain);
-          }
-          const domainCap = Math.min(bb.domainSize, accelDomainCap || bb.domainSize);
-          const needsSpine = !bb.includesSwitchChips && bb.domainSize > perTrayAccels;
-          if (needsSpine) {
-            const needed = Math.ceil(Math.min(totalAccels, bb.domainSize) / GPUS_PER_SPINE_TRAY);
-            const have = spineByTech.get(bb.scaleUp) ?? 0;
-            if (have < needed) {
-              issues.push(err(
-                "RACK_NEEDS_SCALEUP_SWITCH",
-                `The ${chassis.name} baseboard expects a ${bb.domainSize}-accelerator ${bb.scaleUp} domain but has no switch silicon on-board: ${needed} spine switch tray(s) are required and ${have} are placed. Without the spine trays each tray is an island — no NVLink-scale memory semantics across trays.`,
-                SPINE_LEARN[bb.scaleUp] ?? chassis.id
-              ));
-              stats.scaleUpDomain = Math.max(stats.scaleUpDomain, Math.min(perTrayAccels, domainCap));
-            } else {
-              stats.scaleUpDomain = Math.max(stats.scaleUpDomain, Math.min(totalAccels, domainCap));
-            }
-          } else {
-            stats.scaleUpDomain = Math.max(stats.scaleUpDomain, Math.min(totalAccels, domainCap));
-          }
-        }
-      }
-    } else if (item.type === "switch") {
-      const sw2 = get(item.switchId);
-      if (!sw2 || sw2.kind !== "switch") {
-        issues.push(err("RACK_UNKNOWN_ITEM", `Switch '${item.switchId}' is not in the catalog.`));
-        continue;
-      }
-      stats.units += sw2.rackUnits * item.count;
-      watts += sw2.watts * item.count;
-      stats.costUSD += sw2.priceUSD * item.count;
-      if (sw2.role === "scale-up") {
-        spineByTech.set(sw2.tech, (spineByTech.get(sw2.tech) ?? 0) + item.count);
-      }
-    } else if (item.type === "storage") {
-      const st2 = get(item.storageId);
-      if (!st2 || st2.kind !== "storage") {
-        issues.push(err("RACK_UNKNOWN_ITEM", `Storage system '${item.storageId}' is not in the catalog.`));
-        continue;
-      }
-      stats.units += st2.rackUnits * item.count;
-      watts += st2.watts * item.count;
-      stats.costUSD += st2.priceUSD * item.count;
-    } else {
-      const pw2 = get(item.powerId);
-      if (!pw2 || pw2.kind !== "power") {
-        issues.push(err("RACK_UNKNOWN_ITEM", `Power equipment '${item.powerId}' is not in the catalog.`));
-        continue;
-      }
-      stats.costUSD += pw2.priceUSD * item.count;
-    }
-  }
-  stats.kW = watts / 1e3;
-  if (stats.units > rack.units) {
-    issues.push(err(
-      "RACK_UNITS",
-      `${stats.units}U of gear in a ${rack.units}U rack — U is physical height; the excess simply has nowhere to bolt in.`,
-      rack.id
-    ));
-  }
-  const maxKW = rack.maxKW + (design.coolingInterface === "rdhx" && rack.cooling.includes("rdhx") ? 20 : 0);
-  if (stats.kW > maxKW) {
-    issues.push(err(
-      "RACK_POWER",
-      `Rack draws ~${stats.kW.toFixed(1)} kW but the ${rack.name} is rated ${maxKW} kW${maxKW > rack.maxKW ? " with a rear-door heat exchanger" : ""}. Rack power is limited by feed/breakers and how much heat its cooling path removes — either thin the rack or move to a higher-density rack.`,
-      rack.id
-    ));
-  }
-  if (stats.weightKg > rack.maxWeightKg) {
-    issues.push(err(
-      "RACK_WEIGHT",
-      `Loaded trays weigh ~${stats.weightKg} kg against the ${rack.name}'s ${rack.maxWeightKg} kg rating — racks are structural; an overloaded frame warps rails and fails floor loading.`,
-      rack.id
-    ));
-  }
-  return { issues, stats };
-}
-function validateHall(hall, racks, get) {
-  const issues = [];
-  const byDesign = new Map(racks.map((r) => [r.design.id, r]));
-  const placed2 = hall.racks.filter((p) => p.status !== "failed");
-  if (placed2.length > hall.rackSlots) {
-    issues.push(err(
-      "HALL_RACK_SLOTS",
-      `${placed2.length} racks placed but the hall has ${hall.rackSlots} floor slots — each rack needs a tile position with power whip and coolant drop.`
-    ));
-  }
-  let itKW = 0;
-  for (const p of placed2) {
-    const ctx = byDesign.get(p.designId);
-    if (!ctx) {
-      issues.push(err(
-        "HALL_UNKNOWN_DESIGN",
-        `Placed rack '${p.id}' references design '${p.designId}' which does not exist — remove it or restore the design.`
-      ));
-      continue;
-    }
-    const rv = validateRack(ctx.design, ctx.trays, get);
-    issues.push(...rv.issues);
-    itKW += rv.stats.kW;
-    if (COOL_LEVEL$1[ctx.design.coolingInterface] > COOL_LEVEL$1[hall.coolingClass]) {
-      issues.push(err(
-        "HALL_COOLING_CLASS",
-        `Rack design '${ctx.design.name}' needs a ${ctx.design.coolingInterface} row but the hall is ${hall.coolingClass}-class. A liquid rack without facility coolant (CDUs, chilled water) is a very expensive space heater — upgrade the hall's cooling class or use air trays.`,
-        "ct-cdu-1600"
-      ));
-    }
-    if (rv.stats.weightKg > hall.floorLoadKgPerRack) {
-      issues.push(err(
-        "HALL_FLOOR_LOAD",
-        `Rack design '${ctx.design.name}' weighs ~${rv.stats.weightKg} kg but the hall floor is rated ${hall.floorLoadKgPerRack} kg per rack. Raised floors and slabs have point-load limits — liquid AI racks regularly need floor reinforcement.`,
-        ctx.design.rackId
-      ));
-    }
-  }
-  if (itKW > hall.itPowerKW) {
-    issues.push(err(
-      "HALL_IT_POWER",
-      `Racks draw ~${itKW.toFixed(1)} kW of IT power but the hall's transformers/UPS only deliver ${hall.itPowerKW} kW. Every IT watt must exist as installed power capacity — add a transformer/UPS or commission fewer racks.`,
-      "et-padmount-2500"
-    ));
-  }
-  if (itKW > hall.coolingKW) {
-    issues.push(err(
-      "HALL_COOLING",
-      `Racks reject ~${itKW.toFixed(1)} kW of heat but the hall's cooling plant removes only ${hall.coolingKW} kW. IT power turns into heat almost 1:1; without matching CDU/CRAH/chiller capacity the room thermal-runs and hardware throttles.`,
-      "ct-cdu-1600"
-    ));
-  }
-  return issues;
-}
-function computePUE(hall, get) {
-  const itKW = hall.itPowerKW;
-  if (itKW <= 0) return 1;
-  const isPlant = (c) => ["chiller", "dry-cooler", "cooling-tower"].includes(c.coolingType) || c.coolingType === "crah" && c.wattsPerKW >= 120;
-  const stage = (plant2) => {
-    let capT = 0, w = 0;
-    for (const [id, count] of Object.entries(hall.coolingEquip)) {
-      const c = get(id);
-      if (!c || c.kind !== "cooling" || isPlant(c) !== plant2) continue;
-      capT += count * c.capacityKW;
-      w += count * c.capacityKW * c.wattsPerKW;
-    }
-    return { capT, avg: capT > 0 ? w / capT : 0 };
-  };
-  const term = stage(false), plant = stage(true);
-  const liquid = hall.coolingClass === "dlc" || hall.coolingClass === "immersion";
-  const plantAvg = plant.capT > 0 ? plant.avg : term.capT > 0 ? liquid ? 60 : 250 : 0;
-  const termAvg = term.capT > 0 ? term.avg : plant.capT > 0 && plant.avg < 120 ? liquid ? 15 : 40 : 0;
-  const coolingElecKW = itKW * ((termAvg + plantAvg) / 1e3);
-  const overheadKW = term.capT + plant.capT > 0 ? itKW * 0.02 : 0;
-  let cap = 0, effSum = 0;
-  for (const [id, count] of Object.entries(hall.powerEquip)) {
-    const p = get(id);
-    if (!p || p.kind !== "power" || p.efficiency >= 1 || !["transformer", "ups", "busway", "pdu", "power-shelf", "switchgear"].includes(p.powerType)) continue;
-    cap += count * p.capacityKW;
-    effSum += count * p.capacityKW * p.efficiency;
-  }
-  const lossKW = cap > 0 ? itKW * (1 - effSum / cap) : 0;
-  return 1 + (coolingElecKW + lossKW + overheadKW) / itKW;
 }
 const trayIdOf = (t) => `tray-${t.id}`;
 const rackIdOf = (t) => `rack-${t.id}`;
@@ -10801,7 +10817,7 @@ function hallResilience(hall) {
   const n1 = gensetCount >= 2 && gensetKW - gensetKW / gensetCount >= load && (parallel || gensetCount < 2) || upsKW >= load * 1.8;
   if (ups2 && backup && transfer && n1) score = 1;
   else if (ups2 && backup && transfer) score = 0.92;
-  if (feedB && score > 0) score = Math.min(1, score + 0.08);
+  if (feedB && score > 0) score = Math.min(ups2 && backup && transfer && n1 ? 1 : 0.99, score + 0.08);
   const tier = score >= 1 ? "N+1" : score >= 0.9 ? "N" : score >= 0.5 ? "basic" : "none";
   return { score, tier, ups: ups2, backup, transfer, upsKW, gensetKW, batteryKW, gensetCount, feedB, gaps };
 }
@@ -11306,7 +11322,7 @@ const deployActions = (c) => {
       if (hall.racks.length >= hall.rackSlots) {
         return fail(`${hall.name} is full (${hall.rackSlots} slots). Build another hall.`);
       }
-      if (COOL_LEVEL$2[design.coolingInterface] > COOL_LEVEL$2[hall.coolingClass]) {
+      if (COOL_LEVEL$1[design.coolingInterface] > COOL_LEVEL$1[hall.coolingClass]) {
         return fail(
           `${design.name} needs ${design.coolingInterface.toUpperCase()} cooling; ${hall.name} is only ${hall.coolingClass.toUpperCase()}.`,
           [

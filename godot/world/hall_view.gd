@@ -861,6 +861,7 @@ func _rack_changes(hall: Dictionary, fresh: bool) -> void:
 		n[kind] += 1
 		if int(n.online) + int(n.failed) + int(n.arrived) <= 24:
 			life.pulse(slot_pos(slot), Color(1.0, 0.15, 0.1) if kind == "failed" else (Color(0.25, 1.0, 0.55) if kind == "online" else Color(0.45, 0.8, 1.0)))
+			if kind == "arrived": life.deliver(slot_pos(slot), 0.06 * float(int(n.arrived) - 1))   # a row of crates lands one after another
 	_prev_st = now
 	for k in n:
 		if int(n[k]) > 0: rack_event.emit(k, int(n[k]))

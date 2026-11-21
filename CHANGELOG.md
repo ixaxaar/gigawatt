@@ -2,7 +2,7 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.5] - 2026-11-21 (alpha 6)
 
 Fourth review round: engine code, front-end code, a desktop play-through and a phone/handheld play-through.
 
@@ -25,8 +25,25 @@ Fourth review round: engine code, front-end code, a desktop play-through and a p
 - The event log could grow past its cap after a decision card.
 - Wording: no more "rack(s)" and "1 racks"; the Easy Path confirm explains why its monthly figure can be higher than the offer card's.
 
+### Changed (balance)
+- **The power bill is real.** Electricity is charged on what every online rack draws (CPUs, memory, drives and fans included), in a cluster or not. It used to count only accelerators and network gear (about 28% light), and racks outside a cluster, including ones sold on the spot market, ran for free. Expect a higher power line.
+- **N+1 needs a spare.** A second utility feed still improves every outage outcome, but no longer counts as N+1 on its own: that takes a redundant generator or UPS.
+- Inference reference prices no longer depend on which offer was priced first in a half-year, so a loaded game prices the same as one played straight through.
+
+### Added (more)
+- **Deliveries land.** A shipping crate drops onto the slot when a rack arrives.
+- A legend for the HEAT view.
+
+### Fixed (more)
+- Text fields (cluster, hall and design names, search boxes) are readable on every theme, and typing replaces the suggested name.
+- Codex: accelerator cards were missing their memory / bandwidth / power line.
+- Controller LB/RB no longer open drawers that are still locked.
+- Toasts no longer climb over the top bar when a wide drawer leaves little hall.
+- Long accelerator names no longer push the Ops lifecycle table sideways.
+- The title blurb is readable over the demo hall.
+
 ### Website
-- Home page copy rewritten in plainer language; the wiki's hardware page lists the budget cards.
+- Home page copy rewritten in plainer language; the wiki's hardware page lists the budget cards; new social preview image.
 
 ## [0.9.4] - 2026-11-21 (alpha 5)
 
