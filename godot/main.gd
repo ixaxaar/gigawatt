@@ -549,6 +549,47 @@ func _begin() -> void:
 	_shell_visible(true); show_screen("dash"); _on_changed(); hall.rebuild(); hall.top_view()
 	if OS.get_environment("GW_SETTINGS") != "": get_tree().create_timer(0.5).timeout.connect(func(): if settings_ui == null: _settings())
 
+## Top-bar money never just swaps: the figure counts from the old value to the new one, and for cash and revenue a small
+## "+$1.2M" / "-$350k" chip drops out of it and fades, so every purchase, sale and month-end is seen where the money lives.
+var _shown := {}      # key -> {v: value on display, to: target, tw: Tween}
+var _roll_month := -1
+func _roll(key: String, l: Label, v: float, box: Control, chip: bool) -> void:
+	var e = _shown.get(key)
+	var mo := int(b.g.month)
+	var jump: bool = e == null or quiet or Settings.reduced_motion or not is_inside_tree() or OS.has_environment("GW_SMOKE") or absi(mo - int(e.get("mo", mo))) > 1
+	if e == null: e = {"v": v, "to": v, "tw": null, "mo": mo}; _shown[key] = e
+	e.mo = mo
+	if is_equal_approx(float(e.to), v) and not jump: return   # already showing (or counting toward) this value
+	var from: float = float(e.v); var d := v - float(e.to)
+	e.to = v
+	if e.tw != null and (e.tw as Tween).is_valid(): (e.tw as Tween).kill()
+	if jump or Kit.usd(from) == Kit.usd(v): e.v = v; l.text = Kit.usd(v); return
+	var tw := create_tween(); e.tw = tw
+	tw.tween_method(func(x: float): e.v = x; l.text = Kit.usd(x), from, v, 0.45).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	l.pivot_offset = l.size * 0.5; l.scale = Vector2(1.12, 1.12)
+	create_tween().tween_property(l, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if chip and l.is_visible_in_tree() and absf(d) >= 1.0: _money_chip(key, l, d)
+
+var _chips := {}   # key -> {node, label, d, t}: one chip per figure; changes arriving together add up instead of stacking
+func _money_chip(key: String, l: Label, d: float) -> void:
+	var now := Time.get_ticks_msec()
+	var e = _chips.get(key)
+	if e != null and is_instance_valid(e.node) and now - int(e.t) < 500:
+		e.d = float(e.d) + d
+	else:
+		var pc := PanelContainer.new(); pc.mouse_filter = Control.MOUSE_FILTER_IGNORE; pc.z_index = 50
+		var c := Label.new(); c.mouse_filter = Control.MOUSE_FILTER_IGNORE; pc.add_child(c); root.add_child(pc)
+		e = {"node": pc, "label": c, "d": d, "t": now}; _chips[key] = e
+		var r := l.get_global_rect(); pc.position = Vector2(r.position.x - 6.0, r.end.y + 4.0)
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(pc, "position:y", pc.position.y + 14.0, 1.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(pc, "modulate:a", 0.0, 0.5).set_delay(1.3)
+		tw.chain().tween_callback(pc.queue_free)
+	var dd: float = e.d; var col := Kit.GR if dd > 0 else Kit.RD
+	(e.label as Label).text = ("+" if dd > 0 else "") + Kit.usd(dd); (e.label as Label).label_settings = Kit.ls(15, col)
+	(e.node as PanelContainer).add_theme_stylebox_override("panel", Kit.sb(Kit.field(0.94), col, 8, 1, 6))
+	(e.node as Control).visible = absf(dd) >= 1.0
+
 var _changed_pending := false
 func _on_changed() -> void:
 	if not started: return
@@ -556,14 +597,14 @@ func _on_changed() -> void:
 	if TouchScroll.is_busy(): _changed_pending = true; return   # never rebuild a list under a scrolling finger; replayed right after
 	_changed_pending = false
 	var g := b.g
-	lbl.date.text = Kit.date_of(g.month); lbl.cash.text = Kit.usd(g.cash); lbl.cash.label_settings = Kit.ls(20, Kit.GR if g.cash >= 0 else Kit.RD)
-	lbl.debt.text = Kit.usd(g.debt); lbl.nw.text = Kit.usd(float(b.q("netWorth"))); lbl.rep.text = "★ %d" % int(g.reputation)
+	lbl.date.text = Kit.date_of(g.month); _roll("cash", lbl.cash, float(g.cash), lbl.cash_box, true); lbl.cash.label_settings = Kit.ls(20, Kit.GR if g.cash >= 0 else Kit.RD)
+	lbl.debt.text = Kit.usd(g.debt); _roll("nw", lbl.nw, float(b.q("netWorth")), lbl.nw_box, false); lbl.rep.text = "★ %d" % int(g.reputation)
 	lbl.debt_box.visible = float(g.debt) > 0.0 and Layout.kind == "desktop"   # no loans, nothing to show
 	var pn: Dictionary = b.q("pnl")
 	if not pn.is_empty():
-		lbl.rev.text = Kit.usd(pn.revenue); lbl.rev.label_settings = Kit.ls(20, Kit.GR)
-		lbl.burn.text = Kit.usd(pn.opex); lbl.burn.label_settings = Kit.ls(20, Kit.AM)
-		lbl.net.text = Kit.usd(pn.net); lbl.net.label_settings = Kit.ls(20, Kit.CY if pn.net >= 0 else Kit.RD)
+		_roll("rev", lbl.rev, float(pn.revenue), lbl.rev_box, true); lbl.rev.label_settings = Kit.ls(20, Kit.GR)
+		_roll("burn", lbl.burn, float(pn.opex), lbl.burn_box, false); lbl.burn.label_settings = Kit.ls(20, Kit.AM)
+		_roll("net", lbl.net, float(pn.net), lbl.net_box, false); lbl.net.label_settings = Kit.ls(20, Kit.CY if pn.net >= 0 else Kit.RD)
 		var serving: int = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0).size()
 		lbl.rev_box.set_meta("tip", "Monthly revenue: %s serving." % Kit.plural(serving, "contract")); lbl.burn_box.set_meta("tip", "Monthly cost: power, staff, support and interest."); lbl.net_box.set_meta("tip", "Revenue minus costs, after depreciation.")
 		lbl.nw_box.set_meta("tip", "Cash plus the value of what you own, minus debt."); lbl.cash_box.set_meta("tip", "Cash in the bank."); lbl.rep_box.set_meta("tip", "Reputation: better offers and prices from customers."); lbl.debt_box.set_meta("tip", "Outstanding loans.")
