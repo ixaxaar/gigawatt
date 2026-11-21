@@ -2,7 +2,7 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.4] - 2026-11-21 (alpha 5)
 
 - **The hall is alive.** Technicians in hi-vis walk the hot aisles and work at the racks that need them (down first, then installs and burn-in). A rack that arrives, comes online or fails gets a pulse of light in that state's colour, with a sound for online and failure.
 - **Money you can see move.** Top-bar figures count from the old value to the new one, and cash and revenue drop a small +/- chip showing the change after every purchase, sale and month-end.

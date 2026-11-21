@@ -79,7 +79,7 @@ func sync(racks: Array, staff: int, key: String, fresh: bool) -> void:
 		if pr > 0: _jobs.append({"slot": int(r.slot), "prio": pr})
 	var want := 0
 	if not _jobs.is_empty(): want = clampi(maxi(1, staff / 3), 1, 2 if Settings.quality <= 0 else 6)
-	if OS.has_environment("GW_TECHS"): want = int(OS.get_environment("GW_TECHS"))   # screenshots
+	if OS.has_environment("GW_TECHS") and not _jobs.is_empty(): want = int(OS.get_environment("GW_TECHS"))   # screenshots
 	if key != _key or fresh:
 		_key = key
 		for a in _actors: (a.root as Node3D).queue_free()

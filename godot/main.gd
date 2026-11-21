@@ -338,6 +338,7 @@ func _dock_paint(d: Button, on: bool) -> void:
 
 ## Small screens: a tab on the drawer's edge folds every drawer away so the hall fills the screen, and brings it back.
 var drawer_hidden := false
+var _clean := OS.has_environment("GW_CLEAN")   # website capture: the bare hall, no shell, toasts or drawer handle
 var drawer_tab: DrawerGrip
 var edge_fill: ColorRect
 func _cover_of(id: String) -> float:
@@ -355,6 +356,7 @@ func _place_tab() -> void:
 	var top := _bar_h + 10.0; var wd := 44.0 if Layout.touch else 30.0
 	var bottom := 6.0 if Layout.phone else _dock_h + 8.0
 	drawer_tab.position = Vector2(vw() - (0.0 if drawer_hidden else _cover_of(cur)) - wd, top); drawer_tab.size = Vector2(wd, vh - top - bottom)
+	if _clean: drawer_tab.visible = false
 	# Phones: the strip between a drawer and the screen edge (camera cut-out, rounded corners) is filled in the drawer's colour, not left as a black gap.
 	if edge_fill == null:
 		edge_fill = ColorRect.new(); edge_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE; root.add_child(edge_fill); root.move_child(edge_fill, 0)
@@ -1047,7 +1049,7 @@ func _age_toasts(dt: float) -> void:
 	# The drawer's divider is drawn under dialogs but would still win the click at its position (the GUI picks by tree order, not z-index):
 	# a dialog button near the drawer edge ignored taps. Under a dialog the divider takes no input at all.
 	if drawer_tab != null: drawer_tab.mouse_filter = Control.MOUSE_FILTER_STOP if show_now else Control.MOUSE_FILTER_IGNORE
-	toasts.visible = started and show_now   # hidden, not transparent: an invisible toast must never take a tap meant for a dialog
+	toasts.visible = started and show_now and not _clean   # hidden, not transparent: an invisible toast must never take a tap meant for a dialog
 	_place_floaters()
 	if not show_now: return
 	for t in toasts.get_children():

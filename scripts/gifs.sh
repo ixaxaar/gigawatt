@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Record the guide clips with Godot's movie writer and encode them: docs/gifs/*.gif (README) and site/assets/*.webp (site and wiki).
+# Record the guide clips with Godot's movie writer and encode them: docs/gifs/*.gif (README) and site/assets/*.webp (site and wiki), plus site/assets/clip-*.mp4 and poster-*.webp for the home page.
 # Recorded at 2560x1440 (the UI scales to match) and downscaled with Lanczos, so thin lines and text stay crisp after compression. Needs a display and ffmpeg; about 10 minutes. Clips are scripted tours (GW_TOUR in godot/main.gd).
 root=${0:A:h:h}; cd $root/godot || exit 1
 T=$(mktemp -d); mkdir -p $root/docs/gifs
@@ -15,6 +15,11 @@ rec() { # name, tour, extra env...
   ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=$gf,scale=$gw:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=32:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 $root/docs/gifs/$name.gif
   ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=$wf,scale=$ww:-1:flags=lanczos" -c:v libwebp_anim -quality $wq -compression_level 6 -loop 0 $root/site/assets/$name.webp
   cp $root/site/assets/$name.webp $root/site/wiki/img/$name.webp
+  case $name in tour-basics|tour-showroom|tour-cables)   # the home page plays these as small H.264 clips with a poster frame
+    local c=${name#tour-}
+    ffmpeg -loglevel error -y -i $T/$name.avi -vf "fps=15,scale=720:-2:flags=lanczos" -c:v libx264 -crf 30 -preset slow -pix_fmt yuv420p -movflags +faststart -an $root/site/assets/clip-$c.mp4
+    ffmpeg -loglevel error -y -ss 3 -i $T/$name.avi -frames:v 1 -vf "scale=720:-2:flags=lanczos" -quality 80 $root/site/assets/poster-$c.webp ;;
+  esac
 }
 ONLY="$*"
 for c in basics showroom cables looks themes; do
