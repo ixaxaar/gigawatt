@@ -53,6 +53,7 @@ func _rebuild() -> void:
 	var tp := Kit.panel("Team", true, top)
 	tp[1].add_child(Kit.label(("%d operators (you need %d)" % [int(s.have), int(s.needed)]) if s.have >= s.needed else ("%d of %d operators needed" % [int(s.have), int(s.needed)]), 20, Kit.GR if s.have >= s.needed else Kit.RD, true))
 	var full: bool = s.failureMult <= 1.01 and int(s.repairExtraMonths) < 1
+	if s.have > s.needed: tp[1].add_child(Kit.label("%s spare: %s/mo each on payroll. Fine as cover while the hall grows; let them go below if you want the money back." % [Kit.plural(int(s.have - s.needed), "operator"), Kit.usd(float(s.monthlyCostUSD) / maxf(1.0, float(s.have)))], 12, Kit.DIM, true))
 	tp[1].add_child(Kit.label("Fully staffed" if full else "Failures ×%.1f, repairs +%d month%s" % [s.failureMult, int(s.repairExtraMonths), "s" if int(s.repairExtraMonths) > 1 else ""], 13, Kit.GR if full else Kit.AM, true))
 	if not Layout.phone: for f in s.breakdown: tp[1].add_child(Kit.label("%s: %d" % [f.label, int(f.n)], 12, Kit.DIM))
 	tp[1].add_child(Kit.label(("Payroll %s/mo · hire %s each" % [Kit.usd(s.monthlyCostUSD), Kit.usd(s.hireCostUSD)]) if Layout.phone else ("Payroll %s/mo · hiring %s each · severance %s each" % [Kit.usd(s.monthlyCostUSD), Kit.usd(s.hireCostUSD), Kit.usd(s.severanceUSD)]), 12, Kit.DIM, true))

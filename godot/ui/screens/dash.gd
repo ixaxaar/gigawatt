@@ -134,7 +134,7 @@ func _rebuild() -> void:
 	var projs: Array = g.get("projects", []).filter(func(x): return x.stage != "done" or g.month - x.startMonth < 24)
 	if g.get("projects", []).size() > 0:
 		var active: Array = projs.filter(func(x): return x.stage != "done"); var finished := projs.size() - active.size()
-		var pp := _fold("Easy-path projects (%d active%s)" % [active.size(), (" · %d finished" % finished) if finished > 0 else ""], "easy", col, active.is_empty())
+		var pp := _fold(("Easy path (%d active%s)" if Layout.phone else "Easy-path projects (%d active%s)") % [active.size(), ((" · %d done" if Layout.phone else " · %d finished") % finished) if finished > 0 else ""], "easy", col, active.is_empty())
 		pp[1].add_child(Kit.btn("Check now", func(): b.act("stepEasy"), "", 12))
 		if Layout.phone: pp[1].add_theme_constant_override("separation", 10)
 		for x in active.slice(maxi(0, active.size() - 4)): _project(pp[1], x, active.size() >= 2)   # 2+: one line each, tap to expand

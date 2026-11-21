@@ -84,12 +84,17 @@ func _rebuild() -> void:
 	for r in racks:
 		var dn := ""; for d in g.racks:
 			if d.id == r.designId: dn = d.name
-		var cb := _chk("%s · %s" % [dn, r.status], g.get("spotRacks", []).has(r.id), func(on): msg = b.act("setSpotRack", [r.id, on]).message; refresh()); cb.disabled = r.status != "online"; if Layout.phone: cb.custom_minimum_size.y = Layout.tap()
+		var srv := ""; for a in g.activeContracts:   # a rack in a cluster that serves a customer leaves spot automatically
+			for cl in g.clusters:
+				if srv == "" and a.clusterIds.has(cl.id) and cl.rackIds.has(r.id): srv = str(a.contract.get("customer", "a customer"))
+		var cb := _chk("%s · %s" % [dn, ("serving %s" % srv) if srv != "" else r.status], g.get("spotRacks", []).has(r.id), func(on): msg = b.act("setSpotRack", [r.id, on]).message; refresh()); cb.disabled = r.status != "online" or srv != ""; if Layout.phone: cb.custom_minimum_size.y = Layout.tap()
 		p3[1].add_child(cb)
 	if g.clusters.size() > 0: p3[1].add_child(Kit.label("Whole clusters:", 11, Kit.DIM))
 	for c in g.clusters:
-		var serving: bool = g.activeContracts.any(func(a): return a.clusterIds.has(c.id))
-		var cb2 := _chk("%s%s" % [c.name, " (serving a contract)" if serving else ""], g.get("spotClusters", []).has(c.id), func(on): msg = b.act("setSpot", [c.id, on]).message; refresh()); if Layout.phone: cb2.custom_minimum_size.y = Layout.tap()
+		var serving: bool = g.activeContracts.any(func(a): return a.clusterIds.has(c.id)); var serving_name := ""
+		for a in g.activeContracts:
+			if serving_name == "" and a.clusterIds.has(c.id): serving_name = str(a.contract.get("customer", "a contract"))
+		var cb2 := _chk("%s%s" % [c.name, (" (serving %s)" % serving_name) if serving else ""], g.get("spotClusters", []).has(c.id), func(on): msg = b.act("setSpot", [c.id, on]).message; refresh()); if Layout.phone: cb2.custom_minimum_size.y = Layout.tap()
 		p3[1].add_child(cb2)
 	p3[1].add_child(_rich("Projected spot revenue: [color=#%s][b]%s[/b][/color]/mo%s" % [Kit.GR.to_html(false), Kit.usd(sp.revenue), " (below your reserve)" if price < g.get("spotReserve", 0.0) else ""], 13))
 	if not Layout.phone: sc.add_child(Kit.tip("A PPA is a long contract to buy fixed MW from a power plant. It is cheaper than spot, but you pay for the committed MW even if unused (surplus is resold at a discount). Spot GPU sells idle racks hour by hour — no cluster needed."))
@@ -118,9 +123,9 @@ func _rebuild() -> void:
 		else: v.add_child(Kit.table([], [["Firmness", "%d%% months delivered" % int(round(o.firmness * 100.0))], ["Oversubscription limit", "+%d%% over commit, billed ×%s" % [int(round(o.overdrawPct * 100.0)), o.overageMult]], ["Take-or-pay", "%s/mo" % Kit.usd(take)], ["Covers", "%d%% of today's %.2f MW draw" % [int(round(minf(1.0, m / draw) * 100.0)), draw_mw]]]))
 		if not Layout.phone: v.add_child(Kit.label(str(sources[o.source].lesson), 11, Kit.DIM, true))
 		var h := HFlowContainer.new(); h.add_theme_constant_override("h_separation", 8); h.add_theme_constant_override("v_separation", 6); v.add_child(h)
-		h.add_child(Kit.label("Commit", 13)); h.add_child(_spin(m, 1, 1000, 1, func(x): mw[o.id] = x; refresh())); h.add_child(Kit.label("MW", 13))
+		h.add_child(Kit.label("Commit", 13)); var spb := HBoxContainer.new(); spb.add_theme_constant_override("separation", 6); spb.add_child(_spin(m, 1, 1000, 1, func(x): mw[o.id] = x; refresh())); var mwl := Kit.label("MW", 13); mwl.autowrap_mode = TextServer.AUTOWRAP_OFF; spb.add_child(mwl); h.add_child(spb)
 		if Layout.phone:
-			var cs: SpinBox = h.get_child(1); cs.custom_minimum_size = Vector2(130, Layout.tap())
+			var cs: SpinBox = spb.get_child(0); cs.custom_minimum_size = Vector2(130, Layout.tap())
 			var sg := Kit.btn("SIGN PPA", func(): msg = b.act("signPower", [o.id, m]).message; app.sfx("buy"); refresh(), "go", 15)
 			var pad := Control.new(); pad.custom_minimum_size.y = 6; v.add_child(pad); v.add_child(sg)
 		else: h.add_child(Kit.btn("SIGN PPA", func(): msg = b.act("signPower", [o.id, m]).message; app.sfx("buy"); refresh(), "go", 14))

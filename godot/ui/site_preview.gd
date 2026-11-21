@@ -10,6 +10,8 @@ var env: Environment
 var key: DirectionalLight3D
 var yaw := 0.7
 var _drag := false
+var _ph := 0.0
+var _off := 0.0
 var _sky: ProceduralSkyMaterial
 var _face_mat: ShaderMaterial
 var _face_quad: QuadMesh
@@ -30,6 +32,13 @@ func _init() -> void:
 	_face_mat = ShaderMaterial.new(); _face_mat.shader = HallView.RACK_SHADER; _face_mat.set_shader_parameter("lod", int(Settings.tier().face_lod))
 	_face_quad = QuadMesh.new(); _face_quad.size = Vector2(HallView.RW - 0.03, 1.87)
 	if Settings.quality <= 0: stretch_shrink = 2
+	resized.connect(_fit_cam)
+
+## Keep the whole diorama in view when the box is narrower than the 520x380 it was composed for (narrow windows, phones): fit by width instead of height.
+func _fit_cam() -> void:
+	if size.y < 1.0: return
+	if size.x / size.y >= 1.37: cam.keep_aspect = Camera3D.KEEP_HEIGHT; cam.fov = 45.0
+	else: cam.keep_aspect = Camera3D.KEEP_WIDTH; cam.fov = 59.0
 
 func set_style(style: Dictionary) -> void:
 	for c in stage.get_children(): c.queue_free()
@@ -77,9 +86,10 @@ func _place() -> void:
 
 func _process(dt: float) -> void:
 	if not is_visible_in_tree(): return
-	if not _drag and not Settings.reduced_motion: yaw += dt * 0.12
+	# a slow sweep in front of the two walls (a full circle passed behind them and showed a bare wall for half the time); dragging nudges it, within the same limits
+	if not _drag and not Settings.reduced_motion: _ph += minf(dt, 0.1) * 0.25; yaw = clampf(0.8 + 0.7 * sin(_ph) + _off, 0.0, 1.6)
 	_place()
 
 func _gui_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT: _drag = (e as InputEventMouseButton).pressed
-	elif e is InputEventMouseMotion and _drag: yaw -= (e as InputEventMouseMotion).relative.x * 0.01
+	elif e is InputEventMouseMotion and _drag: _off -= (e as InputEventMouseMotion).relative.x * 0.01; yaw = clampf(0.8 + 0.7 * sin(_ph) + _off, 0.0, 1.6)

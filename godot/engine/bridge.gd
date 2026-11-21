@@ -138,6 +138,12 @@ func q(name: String, args: Array = []):
 	if not r.get("ok", false): push_error("q %s: %s" % [name, r.get("error", "?")]); return null
 	_cache[key] = r.get("result"); return _cache[key]
 
+## Array / Dictionary queries that never hand back null: an engine error gives [] / {} (callers must still cope with the empty answer).
+func qa(name: String, args: Array = []) -> Array:
+	var r = q(name, args); return r if r is Array else []
+func qd(name: String, args: Array = []) -> Dictionary:
+	var r = q(name, args); return r if r is Dictionary else {}
+
 func item(id: String) -> Dictionary: return items.get(id, {})
 func template(id: String) -> Dictionary:
 	for t in templates:

@@ -91,7 +91,7 @@ func _ready() -> void:
 	if OS.get_environment("GW_SETTINGS") != "": _settings()
 	if OS.get_environment("GW_AUTOPLAY") != "": quiet = true; var ap := OS.get_environment("GW_AUTOPLAY").split(":"); b.env("autoplay", [ap[0], int(ap[1])]);; quiet = false   # screenshots: "tycoon:48"
 	if OS.get_environment("GW_FF") != "": for i in int(OS.get_environment("GW_FF")): b.act("nextMonth")   # screenshots/tests: fast-forward
-	if OS.get_environment("GW_CONTINUE") != "" and b.q("saves").size() > 0: _load_slot(str(b.q("saves")[0].slot))   # tests: press CONTINUE
+	if OS.get_environment("GW_CONTINUE") != "" and b.qa("saves").size() > 0: _load_slot(str(b.qa("saves")[0].slot))   # tests: press CONTINUE
 	if OS.get_environment("GW_SCENARIO") != "": _load_scenario(OS.get_environment("GW_SCENARIO"))
 	if OS.get_environment("GW_CAM") != "" and OS.get_environment("GW_SCENARIO") == "" and started:   # screenshots: explicit camera on a normal game
 		var cc := OS.get_environment("GW_CAM").split_floats(","); if cc.size() >= 5: hall.yaw = cc[0]; hall.pitch = cc[1]; hall.dist = cc[2]; hall.target = Vector3(cc[3], 0.8, cc[4]); hall.auto_orbit = false; hall._update_cam()
@@ -495,7 +495,7 @@ func _title(backdrop := true) -> void:
 	if backdrop:
 		quiet = true; b.env("autosave", [false]); quiet = false   # the backdrop demo must never overwrite the player's autosave
 		b.act("newGame", [7, "operator"]); _demo_hall()
-	var recent: Array = b.q("saves")
+	var recent: Array = b.qa("saves")
 	if recent.size() > 0:
 		var rs: Dictionary = recent[0]
 		var cont := Kit.btn("CONTINUE\n%s · %s · %d racks" % [Kit.date_of(int(rs.month)), Kit.usd(float(rs.cash)), int(rs.racks)], func(): _load_slot(str(rs.slot)), "go", int(18 * ts)); cont.custom_minimum_size = Vector2(minf(640.0 * ts, vw() - 48.0) if not two else 0.0, 76.0 * ts); cont.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -580,13 +580,13 @@ func _roll(key: String, l: Label, v: float, box: Control, chip: bool) -> void:
 var _chips := {}   # key -> {node, label, d, t}: one chip per figure; changes arriving together add up instead of stacking
 func _money_chip(key: String, l: Label, d: float) -> void:
 	var now := Time.get_ticks_msec()
-	var e = _chips.get(key)
+	var e = _chips.get(key); var fresh := false
 	if e != null and is_instance_valid(e.node) and now - int(e.t) < 500:
 		e.d = float(e.d) + d
 	else:
 		var pc := PanelContainer.new(); pc.mouse_filter = Control.MOUSE_FILTER_IGNORE; pc.z_index = 50
 		var c := Label.new(); c.mouse_filter = Control.MOUSE_FILTER_IGNORE; pc.add_child(c); root.add_child(pc)
-		e = {"node": pc, "label": c, "d": d, "t": now}; _chips[key] = e
+		e = {"node": pc, "label": c, "d": d, "t": now}; _chips[key] = e; fresh = true
 		var r := l.get_global_rect(); pc.position = Vector2(r.position.x - 6.0, r.end.y + 4.0)
 		var tw := create_tween().set_parallel(true)
 		tw.tween_property(pc, "position:y", pc.position.y + 14.0, 1.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -596,6 +596,10 @@ func _money_chip(key: String, l: Label, d: float) -> void:
 	(e.label as Label).text = ("+" if dd > 0 else "") + Kit.usd(dd); (e.label as Label).label_settings = Kit.ls(15, col)
 	(e.node as PanelContainer).add_theme_stylebox_override("panel", Kit.sb(Kit.field(0.94), col, 8, 1, 6))
 	(e.node as Control).visible = absf(dd) >= 1.0
+	if fresh and cam_tools != null and cam_tools.visible and Layout.touch:   # the floating camera buttons (+ − TOP HEAT TAGS) are never covered by a chip
+		var pn_ := e.node as Control; var w := pn_.get_combined_minimum_size().x; var cr := cam_tools.get_global_rect().grow(8.0)
+		var cr2 := Rect2(pn_.position, Vector2(w, pn_.get_combined_minimum_size().y + 20.0))
+		if cr2.intersects(cr): pn_.position.x = minf(cr.end.x, vw() - w - 4.0)
 
 var _changed_pending := false
 func _on_changed() -> void:
@@ -607,7 +611,7 @@ func _on_changed() -> void:
 	lbl.date.text = Kit.date_of(g.month); _roll("cash", lbl.cash, float(g.cash), lbl.cash_box, true); lbl.cash.label_settings = Kit.ls(20, Kit.GR if g.cash >= 0 else Kit.RD)
 	lbl.debt.text = Kit.usd(g.debt); _roll("nw", lbl.nw, float(b.q("netWorth")), lbl.nw_box, false); lbl.rep.text = "★ %d" % int(g.reputation)
 	lbl.debt_box.visible = float(g.debt) > 0.0 and Layout.kind == "desktop"   # no loans, nothing to show
-	var pn: Dictionary = b.q("pnl")
+	var pn: Dictionary = b.qd("pnl")
 	if not pn.is_empty():
 		_roll("rev", lbl.rev, float(pn.revenue), lbl.rev_box, true); lbl.rev.label_settings = Kit.ls(20, Kit.GR)
 		_roll("burn", lbl.burn, float(pn.opex), lbl.burn_box, false); lbl.burn.label_settings = Kit.ls(20, Kit.AM)
@@ -615,8 +619,8 @@ func _on_changed() -> void:
 		var serving: int = g.activeContracts.filter(func(a): return a.clusterIds.size() > 0).size()
 		lbl.rev_box.set_meta("tip", "Monthly revenue: %s serving." % Kit.plural(serving, "contract")); lbl.burn_box.set_meta("tip", "Monthly cost: power, staff, support and interest."); lbl.net_box.set_meta("tip", "Revenue minus costs, after depreciation.")
 		lbl.nw_box.set_meta("tip", "Cash plus the value of what you own, minus debt."); lbl.cash_box.set_meta("tip", "Cash in the bank."); lbl.rep_box.set_meta("tip", "Reputation: better offers and prices from customers."); lbl.debt_box.set_meta("tip", "Outstanding loans.")
-	var nh = b.q("netHealth")
-	_net_on = nh is Dictionary and (nh.clusters.size() > 0 or float(nh.uplink.needGbps) > 0.0)
+	var nh: Dictionary = b.qd("netHealth")
+	_net_on = nh.has("clusters") and nh.has("uplink") and (nh.clusters.size() > 0 or float(nh.uplink.needGbps) > 0.0)
 	lbl.netw_box.visible = _net_on and Layout.kind != "phone"
 	if _net_on:
 		var lv := int(nh.level); var col: Color = [Kit.GR, Kit.AM, Kit.RD][lv]
@@ -732,7 +736,7 @@ func _inspect(slot: int) -> void:
 		if int(r.slot) == slot: rk = r
 	if rk.is_empty(): return
 	var m := {}
-	for x in b.q("machineLedger"): if x.id == rk.id: m = x
+	for x in b.qa("machineLedger"): if x.id == rk.id: m = x
 	if m.is_empty(): return
 	var acc := Color("#ff8a3d")
 	inspector = PanelContainer.new(); inspector.add_theme_stylebox_override("panel", Kit.card_sb(acc, Kit.PANEL_FILL, 3, 14))
@@ -930,8 +934,8 @@ func check_keynote() -> void:
 	var news: Array = b.g.get("news", [])
 	if news.is_empty(): check_story(); return
 	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE") or _clean: _drop_queued_cards(true); return
-	var l: Dictionary = b.q("launches")
-	if l.news.is_empty(): check_story(); return
+	var l: Dictionary = b.qd("launches")
+	if l.get("news", []).is_empty(): check_story(); return
 	keynote.open(l.news[0], l.news.size() - 1); speed = 0; clock = 0.0; audio.play("keynote")
 	_speed_label()
 
@@ -942,14 +946,15 @@ func _drop_queued_cards(all := false) -> void:
 	_hold_changes = true   # one refresh at the end, not one per acknowledged card
 	var n := 0
 	while n < 300 and not b.g.get("news", []).is_empty():
-		var l: Dictionary = b.q("launches")
+		var l: Dictionary = b.qd("launches")
+		if l.get("news", []).is_empty() and not all: break
 		if not all and not l.news.is_empty() and int(l.news[0].month) >= int(b.g.month): break
 		b.act("ackNews"); n += 1
 	while n < 600:
-		var st: Dictionary = b.q("story")
+		var st: Dictionary = b.qd("story")
 		var cards: Array = b.g.get("story", {}).get("cards", []) if b.g.get("story") is Dictionary else []
 		if cards.is_empty(): break
-		if not all and st.chapter != null and int(b.g.month) - (int(st.chapter.year) - 2020) * 12 <= 2: break   # a chapter opens its January; by April it is history
+		if not all and st.get("chapter") != null and int(b.g.month) - (int(st.chapter.year) - 2020) * 12 <= 2: break   # a chapter opens its January; by April it is history
 		b.act("ackStory"); n += 1
 	_hold_changes = false
 	if n > 0: _on_changed()
@@ -966,9 +971,10 @@ func skip_all_keynotes() -> void:
 func check_story() -> void:
 	if not started or story_ui == null or story_ui.visible or keynote.visible or end_ui != null or menu_ui != null or _hold_changes: return
 	if Engine.get_frames_drawn() < 5: get_tree().create_timer(0.25).timeout.connect(check_story); return
-	var st: Dictionary = b.q("story")
+	var st: Dictionary = b.qd("story")
+	if st.is_empty(): return
 	if OS.has_environment("GW_SMOKE") or OS.has_environment("GW_NOKEYNOTE") or _clean:
-		if st.chapter != null: b.act("ackStory")
+		if st.get("chapter") != null: b.act("ackStory")
 		return
 	if st.chapter != null:
 		story_ui.open_chapter(st.chapter); speed = 0; clock = 0.0; _speed_label(); audio.play("keynote"); return
@@ -1038,8 +1044,8 @@ func _build_cam_tools() -> void:
 	var defs := [["+", "Zoom in", func(): hall.dist = clampf(hall.dist * 0.8, 2.5, 60.0); hall._update_cam()],
 		["−", "Zoom out", func(): hall.dist = clampf(hall.dist * 1.25, 2.5, 60.0); hall._update_cam()],
 		["TOP", "Top view", func(): hall.top_view()],
-		["HEAT", "Heat view", func(): hall.thermal = not hall.thermal; hall.rebuild()],
-		["TAGS", "Rack labels", func(): hall.labels_on = not hall.labels_on; hall.rebuild()]]
+		["HEAT", "Heat view", func(): tip_panel.visible = false; hall.thermal = not hall.thermal; hall.rebuild()],
+		["TAGS", "Rack labels", func(): tip_panel.visible = false; hall.labels_on = not hall.labels_on; hall.rebuild()]]
 	for d in defs:
 		var bt := Kit.btn(d[0], d[2], "", 15); bt.tooltip_text = d[1]; bt.custom_minimum_size = Vector2(56, 52); bt.modulate.a = 0.88; cam_tools.add_child(bt)
 
@@ -1190,6 +1196,8 @@ func _process_tip() -> void:
 	if root == null or tip_panel == null or not tip_panel.visible: return
 	# the rack tooltip belongs to the 3D hall only: gone as soon as the pointer is over any interface control or a dialog is open
 	if modal() != null or get_viewport().gui_get_hovered_control() != null: tip_panel.visible = false; return
+	# ... and only while the pointer is truly over a rack, on the free part of the hall (not under a drawer or a floating card)
+	if hall._hover < 0 or not free_hall_rect().has_point(get_viewport().get_mouse_position()): tip_panel.visible = false; return
 	var vp := get_viewport().get_visible_rect().size
 	tip_panel.position = (get_viewport().get_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (vp - tip_panel.size).max(Vector2.ZERO))
 
@@ -1204,8 +1212,8 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	if e.keycode >= KEY_1 and e.keycode <= KEY_9 and e.keycode - KEY_1 < DOCK.size(): _dock(DOCK[e.keycode - KEY_1][0])
 	elif e.keycode == KEY_0: _dock("codex")
 	elif e.keycode == KEY_V: hall.top_view()
-	elif e.keycode == KEY_L: hall.labels_on = not hall.labels_on; hall.rebuild()
-	elif e.keycode == KEY_T: hall.thermal = not hall.thermal; hall.rebuild()
+	elif e.keycode == KEY_L: tip_panel.visible = false; hall.labels_on = not hall.labels_on; hall.rebuild()
+	elif e.keycode == KEY_T: tip_panel.visible = false; hall.thermal = not hall.thermal; hall.rebuild()
 
 
 
@@ -1263,7 +1271,7 @@ func _smoke() -> void:
 	print("COACH OK step=", coach.STEPS[coach.idx].id, " (was ", before, ") card=", coach.card.visible)
 	coach.stop(false)
 	b.act("ackNews")
-	var lk: Dictionary = b.q("launches"); print("LAUNCHES ", lk.list.size(), " news=", lk.news.size())
+	var lk: Dictionary = b.qd("launches"); print("LAUNCHES ", lk.get("list", []).size(), " news=", lk.get("news", []).size())
 	print("SMOKE OK screens=%d racks=%d" % [SCREENS.size(), b.g.halls[0].racks.size()])
 	b.stop(); get_tree().quit()
 
@@ -1342,9 +1350,15 @@ func _value_row(parent: Control, title: String, lo: float, hi: float, step: floa
 	var rd := Kit.label(str(fmt.call(val)), 15, Kit.DIM); rd.custom_minimum_size = Vector2(130 if vw() > 700.0 else 96, 0); rd.clip_text = true; rd.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; r.add_child(rd)
 	s.set_meta("drag", false)
 	s.drag_started.connect(func(): s.set_meta("drag", true))
-	s.drag_ended.connect(func(_changed): s.set_meta("drag", false); if apply_on_release: on_set.call(s.value); rd.text = str(fmt.call(s.value)))
+	s.drag_ended.connect(func(_changed):   # saved once when the drag ends, not on every tick
+		s.set_meta("drag", false)
+		if apply_on_release: on_set.call(s.value)
+		else: Settings.save_all()
+		rd.text = str(fmt.call(s.value)))
 	s.value_changed.connect(func(v):
-		if not apply_on_release or not bool(s.get_meta("drag", false)): on_set.call(v)
+		if not apply_on_release or not bool(s.get_meta("drag", false)):
+			on_set.call(v)
+			if not apply_on_release and not bool(s.get_meta("drag", false)): Settings.save_all()   # keyboard / controller step
 		rd.text = str(fmt.call(v)))
 	return s
 
@@ -1399,14 +1413,14 @@ func _set_graphics(vb: VBoxContainer) -> void:
 		_opt_row(vb, "Graphics card", ["Auto (best available)", "Discrete GPU", "Integrated GPU"], gi.find(Settings.gpu), func(i): if Settings.gpu != gi[i]: Settings.gpu = gi[i]; Settings.save_all(); toast("Graphics card changes after restarting the game.", "info"))
 		vb.add_child(Kit.label("Running on: %s (%s). Auto uses the discrete GPU when the system has one." % [Settings.adapter, RenderingServer.get_current_rendering_driver_name()], 13, Kit.DIM, true))
 	_value_row(vb, "3D resolution", 0.35, 1.0, 0.05, Settings.render_scale if Settings.render_scale > 0.0 else 0.35, func(v): return "Preset" if v < 0.38 else "%d%%" % int(round(v * 100.0)),
-		func(v): Settings.render_scale = 0.0 if v < 0.38 else snappedf(v, 0.05); Settings.save_all(); hall.apply_quality(); upd.call())
+		func(v): Settings.render_scale = 0.0 if v < 0.38 else snappedf(v, 0.05); hall.apply_quality(); upd.call())
 	vb.add_child(info); upd.call()
 	vb.add_child(Kit.label("The menus always draw at full resolution; only the 3D hall is scaled (FSR). Lower it on a weak GPU or a 4K screen.", 13, Kit.DIM, true))
 
 func _set_audio(vb: VBoxContainer) -> void:
-	_slider_row(vb, "Master volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()); Settings.save_all())
-	_slider_row(vb, "Music", 0.0, 1.0, Settings.music_volume, func(v): Settings.music_volume = v; audio.apply_volumes(); Settings.save_all())
-	_slider_row(vb, "Effects", 0.0, 1.0, Settings.sfx_volume, func(v): Settings.sfx_volume = v; audio.apply_volumes(); Settings.save_all(); audio.play("confirm"))
+	_slider_row(vb, "Master volume", 0.0, 1.0, Settings.volume, func(v): Settings.volume = v; Settings.apply(get_window()))
+	_slider_row(vb, "Music", 0.0, 1.0, Settings.music_volume, func(v): Settings.music_volume = v; audio.apply_volumes())
+	_slider_row(vb, "Effects", 0.0, 1.0, Settings.sfx_volume, func(v): Settings.sfx_volume = v; audio.apply_volumes(); audio.play("confirm"))
 	var mr := _row(vb, "Music style")
 	var mo := OptionButton.new(); mo.clip_text = true; mo.size_flags_horizontal = Control.SIZE_EXPAND_FILL; mo.custom_minimum_size = Vector2(120, maxf(36.0, Layout.tap())); var ids := ["auto", "off"]; mo.add_item("Auto (changes with the game)"); mo.add_item("Off")
 	for t in audio.catalog.music: mo.add_item("%s — %s" % [t.genre, t.title]); ids.append(t.id)
@@ -1493,12 +1507,14 @@ func _load_slot(slot: String, on_loaded: Callable = Callable()) -> void:
 	if Settings.tutorial == "on" and Settings.tutorial_step < Coach.STEPS.size() and b.g.get("mode", "operator") != "tycoon" and not OS.has_environment("GW_SMOKE"): coach.start(Settings.tutorial_step)
 	check_keynote()
 
-func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
+func _slots(mode: String, on_loaded: Callable = Callable(), from_menu := false) -> void:
 	var dl := make_dialog("slots", 660.0, Kit.CY); var h: Control = dl[0]
+	# opened from the pause menu: closing it any way but a finished save/load (Close, Esc, Back) returns to that menu
+	if from_menu: h.tree_exited.connect(func(): if not bool(h.get_meta("done", false)) and started and menu_ui == null and is_inside_tree(): _menu())
 	var vb: VBoxContainer = dl[2]
 	vb.add_child(Kit.label("SAVE GAME" if mode == "save" else "LOAD GAME", 30, Kit.CY))
 	var info := {}
-	for s in b.q("saves"): info[s.slot] = s
+	for s in b.qa("saves"): info[s.slot] = s
 	var slots: Array = ["main", "slot2", "slot3"] if mode == "save" else ["main", "slot2", "slot3", "auto"]
 	for slot in slots:
 		if mode == "load" and not info.has(slot): continue
@@ -1510,13 +1526,13 @@ func _slots(mode: String, on_loaded: Callable = Callable()) -> void:
 			if mode == "save":
 				var do_save := func():
 					var sr := b.act("save", [slot])
-					if sr.get("ok", true): cur_slot = slot; toast("Saved to %s." % nm, "good")
+					if sr.get("ok", true): cur_slot = slot; h.set_meta("done", true); toast("Saved to %s." % nm, "good")
 					else: toast(str(sr.get("message", "Could not save.")), "bad")
 					if is_instance_valid(h): h.queue_free()
 				# Writing over a different run asks first; saving again to the slot this run already uses does not.
 				if info.has(slot) and slot != cur_slot: Kit.confirm(self, "%s holds another game (%s). Replace it?" % [nm, d], do_save, "Replace")
 				else: do_save.call()
-			else: h.queue_free(); _load_slot(slot, on_loaded), "", 17)
+			else: h.set_meta("done", true); h.queue_free(); _load_slot(slot, on_loaded), "", 17)
 		bt.custom_minimum_size = Vector2(0, 62); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; vb.add_child(bt)
 	if mode == "load" and info.is_empty(): vb.add_child(Kit.label("No saved games yet.", 16, Kit.DIM))
 	vb.add_child(Kit.btn("Close", func(): h.queue_free(), "", 16))
@@ -1538,8 +1554,8 @@ func _menu() -> void:
 func _menu_do(a: String) -> void:
 	match a:
 		"resume": _menu()
-		"save": _menu(); _slots("save")
-		"load": _menu(); _slots("load")
+		"save": _menu(); _slots("save", Callable(), true)
+		"load": _menu(); _slots("load", Callable(), true)
 		"settings": _menu(); _settings()
 		"look": _menu(); if started: _change_look()
 		"coach": _menu(); if started: coach.start(0, true)   # asked for explicitly: shown in Tycoon too

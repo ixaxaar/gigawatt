@@ -22,8 +22,11 @@ static func build(app, parent: Control, only: Array = [], on_toggle: Callable = 
 		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); p.add_child(v)
 		var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 8); v.add_child(h)
 		var nm := VBoxContainer.new(); nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(nm)
-		nm.add_child(Kit.label(c.name, 14, Kit.TX, true)); if not Layout.phone or open_id == c.id or c.status.level == "now": nm.add_child(Kit.label(c.status.text, 12, col, true))
-		if not Layout.phone or c.status.level == "now": h.add_child(Kit.tag(LBL[c.status.level], col))
+		var stx := str(c.status.text); var empty_hall := false   # "Cooling 600 kW covers 0 kW" is true but reads as nonsense on a hall with no load yet
+		var rx := RegEx.create_from_string("^(\\w+) (\\d+) kW covers 0 kW\\.?$"); var mm := rx.search(stx)
+		if mm != null and c.status.level == "ok": stx = "%s kW installed · no load yet." % mm.get_string(2); empty_hall = true
+		nm.add_child(Kit.label(c.name, 14, Kit.TX, true)); if not Layout.phone or open_id == c.id or c.status.level == "now": nm.add_child(Kit.label(stx, 12, Kit.DIM if empty_hall else col, true))
+		if not Layout.phone or c.status.level == "now": h.add_child(Kit.tag("NO LOAD YET" if empty_hall else LBL[c.status.level], Kit.DIM if empty_hall else col))
 		var click := Button.new(); click.flat = true; click.set_anchors_preset(Control.PRESET_FULL_RECT); click.focus_mode = Kit.focus_mode()
 		click.pressed.connect(func(): open_id = "" if open_id == c.id else c.id; if on_toggle.is_valid(): on_toggle.call()); p.add_child(click); p.move_child(click, 0)
 		for n in [v, h, nm]: n.mouse_filter = Control.MOUSE_FILTER_IGNORE

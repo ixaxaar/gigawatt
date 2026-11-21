@@ -257,6 +257,7 @@ static func tab_btn(t: String, on: bool, col: Color, cb: Callable) -> Button:
 	var base := col if on else BTN_OFF
 	for st in ["normal", "hover", "pressed"]:
 		var s := sb(base if st != "hover" or Layout.touch else _hov(base), OUTL if (dark or on) else legible(col, BTN_OFF, 3.0), R_S - 1, 3 if (dark or on) else 2, 10); s.shadow_color = SHADOW; s.shadow_size = 1; s.shadow_offset = Vector2(3, 3)
+		if on: s.corner_radius_bottom_left = 0; s.corner_radius_bottom_right = 0; s.border_width_bottom = 8; s.border_color = TX; s.shadow_size = 0; s.content_margin_bottom = 4   # the open page's tab: square-footed with a heavy underline, so a sub-tab pill below it never reads as a second selected tab
 		b.add_theme_stylebox_override(st, s)
 	var fc := ink_on(col) if on else TX
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, fc)
@@ -739,7 +740,12 @@ static func style_option(o: OptionButton) -> void:
 static func check(text: String, on: bool, cb: Callable) -> CheckBox:
 	var c := CheckBox.new(); c.text = text; c.button_pressed = on; c.focus_mode = focus_mode(); c.add_theme_font_size_override("font_size", 15 if Layout.touch else 14)
 	if Layout.touch: c.custom_minimum_size.y = Layout.tap()
-	style_check(c); c.toggled.connect(cb); return c
+	style_check(c); c.toggled.connect(cb)
+	# a long label (a cluster name) must not widen its row or drawer: past CHECK_MAX_W the box gets a fixed width and wraps (an autowrap Button with no width collapses to one word per line, so the width is always set)
+	var fs_px := 15 if Layout.touch else 14; var tw := Fonts.regular.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_px).x + (30 if Layout.touch else 22) + 10 + 14
+	if tw > CHECK_MAX_W: c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; c.custom_minimum_size.x = CHECK_MAX_W; c.tooltip_text = text
+	return c
+const CHECK_MAX_W := 240.0
 
 ## Checkboxes: a clear, theme-tinted box (bigger on touch) that reads on every panel.
 static func style_check(c: CheckBox) -> void:

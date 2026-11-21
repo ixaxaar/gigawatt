@@ -2,6 +2,24 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Website overhaul.** New home page: a calmer graphite-and-amber look, the hall in the hero, and the features told as six illustrated steps. The wiki is restyled to match.
+
+### Fixed
+- The site picker fits narrow windows and phones; Start and Back are always reachable.
+- Closing Save or Load without acting returns to the pause menu.
+- The tutorial's "let time pass" step says what it is waiting for and when it arrives.
+- Design Lab: socket labels no longer sit on the parts; the phone rack view has a frame.
+- Energy: racks serving a customer are marked and cannot be offered on spot by mistake.
+- Operations explains what a spare operator costs.
+- Codex: one way to browse, consistent names.
+- Long cluster names wrap in checkboxes; phone Supply tabs and sub-tabs look like two levels.
+- Phone: the "MW" unit no longer wraps, the order confirmation is visible, money chips keep clear of the camera buttons, the Clients cards keep clear of the scroll cue.
+- The rack tooltip goes away when the pointer leaves a rack or labels are toggled.
+- Sliders save once on release; a lost touch release can no longer freeze screen refreshes; engine query failures no longer crash the shell.
+
 ## [0.9.5] - 2026-11-21 (alpha 6)
 
 Fourth review round: engine code, front-end code, a desktop play-through and a phone/handheld play-through.

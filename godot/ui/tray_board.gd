@@ -78,7 +78,7 @@ func compute() -> void:
 		for i in dl: var r: int = i / per; var c: int = i % per; place["dimm"].append(Vector2(lx + side_w - (c + 1) * dw - dw, y + 18 + r * (SOCK.dimm.y + 12)))
 		for i in dr: var r2: int = i / per; var c2: int = i % per; place["dimm"].append(Vector2(rx + 24 + c2 * dw, y + 18 + r2 * (SOCK.dimm.y + 12)))
 		for i in nC:
-			var p: Vector2 = place["cpu"][i]; silk.append([Vector2(p.x + SOCK.cpu.x / 2, p.y - 6), "CPU%d · SOCKET" % i, true, SOCK.cpu.x + 30.0, "CPU%d" % i])
+			var p: Vector2 = place["cpu"][i]; silk.append([Vector2(p.x + SOCK.cpu.x / 2, p.y - 48), "CPU%d · SOCKET" % i, true, SOCK.cpu.x + 30.0, "CPU%d" % i])
 			if i > 0: traces.append([Vector2(place["cpu"][i - 1].x + SOCK.cpu.x, p.y + 60), Vector2(p.x, p.y + 60), 4, 6.0, false])
 		if nC > 0 and dl > 0: traces.append([Vector2(lx + side_w - 6, y + 110), Vector2(place["cpu"][0].x, y + 110), 6, 9.0, false])
 		if nC > 0 and dr > 0: traces.append([Vector2(place["cpu"][nC - 1].x + SOCK.cpu.x, y + 110), Vector2(rx + 24, y + 110), 6, 9.0, false])
@@ -143,13 +143,14 @@ func _txt(pos: Vector2, t: String, px: int, col: Color, center := false) -> void
 func _fs(px: int) -> int: return clampi(int(round(px * _k() * 1.2)), 10, px + 5)
 
 ## Draw the first of `cands` that fits in `max_w` screen px (one size step down allowed); draw nothing if none fits, so labels never overlap.
-func _fit(at: Vector2, cands: Array, max_w: float, px: int, col: Color, center := false) -> bool:
+func _fit(at: Vector2, cands: Array, max_w: float, px: int, col: Color, center := false, plate := false) -> bool:
 	var fnt: Font = Fonts.regular; var s0 := _fs(px)
 	for t in cands:
 		for s in [s0, maxi(9, s0 - 2)]:
 			var w := fnt.get_string_size(str(t), HORIZONTAL_ALIGNMENT_LEFT, -1, s).x
 			var wm := fnt.get_string_size(_wide_digits(str(t)), HORIZONTAL_ALIGNMENT_LEFT, -1, s).x   # same choice for GPU0 and GPU1
 			if wm <= max_w:
+				if plate: draw_rect(Rect2(at + Vector2((-w * 0.5 if center else 0.0) - 2.0, -s - 1.0), Vector2(w + 4.0, s + 3.0)), Color(0.09, 0.10, 0.12), true)   # board-coloured plate so a trace running under the label does not strike through it
 				draw_string(fnt, at + Vector2(-w * 0.5 if center else 0.0, 0), str(t), HORIZONTAL_ALIGNMENT_LEFT, -1, s, col); return true
 	return false
 
@@ -349,7 +350,7 @@ func _draw() -> void:
 	for c in chips: _draw_chip(_r(c[0], c[1]), c[2], c[3])
 	for s in silk:
 		if s.size() > 5 and _fs(9) > float(s[5]) * k * 1.15: continue   # no room above the socket at this size: the header names the selected one
-		_fit(_p(s[0]), [s[1], s[4]], float(s[3]) * k, 9, Color(0.72, 0.75, 0.8, 0.9), s[2])
+		_fit(_p(s[0]) + Vector2(0, -4.0), [s[1], s[4]], float(s[3]) * k, 9, Color(0.72, 0.75, 0.8, 0.9), s[2], true)
 	# VRMs flanking each accelerator / CPU
 	for kind in ["accelerator", "cpu"]:
 		for pos in place.get(kind, []):

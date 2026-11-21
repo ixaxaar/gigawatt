@@ -83,6 +83,21 @@ func _done(s: Dictionary) -> bool:
 		"revenue": return g.history.any(func(x): return x.revenue > 0)
 	return false
 
+## One line of progress for the waiting steps: how long until the parts land (g.orders[].arriveMonth vs g.month), then the racks' install.
+func _waiting(s: Dictionary) -> String:
+	if str(s.id) != "time" and str(s.id) != "online": return ""
+	var g: Dictionary = app.b.g; var now := int(g.month); var last := -1; var first := 1 << 30
+	for o in g.get("orders", []): var a := int(o.arriveMonth); last = maxi(last, a); first = mini(first, a)
+	if last >= 0:
+		var n := maxi(0, last - now)
+		return "Waiting: parts arrive in %s (%s)." % [("%d month%s" % [n, "" if n == 1 else "s"]) if n > 0 else "under a month", Kit.date_of(last)]
+	if str(s.id) == "time": return ""
+	var inst := 0
+	for h in g.halls:
+		for r in h.racks:
+			if r.status != "online": inst += 1
+	return "Waiting: %d rack%s installing and burning in." % [inst, "" if inst == 1 else "s"] if inst > 0 else ""
+
 func _advance_if_done() -> bool:
 	var moved := false
 	while idx < STEPS.size() and STEPS[idx].kind != "read" and _done(STEPS[idx]): idx += 1; moved = true
@@ -122,6 +137,8 @@ func _build() -> void:
 	var fold := Kit.btn("▾", func(): _folded = true; _open = false; _build(), "", 14); fold.tooltip_text = "Fold the tutorial to a small pill"; fold.custom_minimum_size = Vector2(maxf(36.0, Layout.tap() * 0.8), maxf(30.0, Layout.tap() * 0.8)); h.add_child(fold)
 	v.add_child(Kit.label(str(s.title), 20, Kit.TX, true))
 	v.add_child(Kit.label(_adapt(str(s.body)), 14, Kit.DIM, true))
+	var wt := _waiting(s)
+	if wt != "": v.add_child(Kit.label(wt, 14, Kit.CY, true))   # what the step is waiting for, updated every month
 	v.add_child(Kit.label("Why: " + str(s.why), 13, Kit.AM, true))
 	var f := HFlowContainer.new(); f.add_theme_constant_override("h_separation", 8); f.add_theme_constant_override("v_separation", 6); v.add_child(f)
 	if s.kind == "read":

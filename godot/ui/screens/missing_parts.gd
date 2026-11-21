@@ -13,7 +13,7 @@ static func build(app, parent: Control, design_id: String, racks: int, on_msg: C
 		if l.short <= 0: continue
 		var nm := VBoxContainer.new(); var lk := Kit.link(BK.ell(l.name, 40), func(): app.learn(l.id), 13); lk.tooltip_text = str(l.name); nm.add_child(lk)
 		if not l.buyable: nm.add_child(Kit.label(str(l.get("reason", "Unavailable now")), 11, Kit.RD, true))
-		rows.append([nm, str(int(l.need)), str(int(l.have)), str(int(l.onOrder)) if l.onOrder > 0 else "—", Kit.usd(l.unitPrice) if l.buyable else "—", ("%s mo" % l.leadMonths) if l.buyable else "—"])
+		rows.append([nm, str(int(l.need)), str(int(l.have)), str(int(l.onOrder)), Kit.usd(l.unitPrice) if l.buyable else "—", ("%s mo" % l.leadMonths) if l.buyable else "—"])
 	if Layout.phone:   # no 6-column table in a drawer: one small card per part
 		for rw in rows:
 			var c := VBoxContainer.new(); c.add_theme_constant_override("separation", 2); parent.add_child(c)

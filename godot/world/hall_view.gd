@@ -1090,7 +1090,9 @@ func _update_labels() -> void:
 	_layout_boards(labels_on and not all)
 
 # ---------- camera & input ----------
-func _update_cam() -> void:
+var _orbit_frame := 0
+## `light`: auto-orbit frames in between skip the label, tag and cable layout (they run every 3rd frame); the camera itself always moves.
+func _update_cam(light := false) -> void:
 	if cam == null: return
 	var vh := maxf(1.0, get_viewport().get_visible_rect().size.y)
 	var off := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * dist
@@ -1120,8 +1122,9 @@ func _update_cam() -> void:
 	if _ceil != null and is_instance_valid(_ceil): _ceil.visible = pos.y < CEIL - 0.1
 	for rd in _rods:
 		if is_instance_valid(rd): rd.visible = pos.y < CEIL + 2.5
-	_update_labels()
-	_update_cables(false)
+	if not light:
+		_update_labels()
+		_update_cables(false)
 	for w in _walls:
 		if not is_instance_valid(w.node): continue
 		var cv: float = pos.x if w.axis == "x" else pos.z
@@ -1130,7 +1133,7 @@ func _update_cam() -> void:
 func _process(dt: float) -> void:
 	_t += dt
 	if _drag != 0 and Input.get_mouse_button_mask() == 0: _drag = 0   # the button was released over the interface: do not keep dragging the camera
-	if auto_orbit and not Settings.reduced_motion: yaw += dt * orbit_speed; _update_cam()
+	if auto_orbit and not Settings.reduced_motion: yaw += dt * orbit_speed; _orbit_frame += 1; _update_cam(_orbit_frame % 3 != 0)
 	if _beacon != null: _beacon.light_energy = 2.2 if Settings.reduced_motion else 1.5 + 1.5 * sin(_t * 6.0)
 	if not _fault_mats.is_empty(): for m in _fault_mats: (m as StandardMaterial3D).emission_energy_multiplier = 1.2 + (0.0 if Settings.reduced_motion else 1.6 * (0.5 + 0.5 * sin(_t * 7.0)))
 	var k := Vector2.ZERO

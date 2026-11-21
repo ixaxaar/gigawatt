@@ -75,6 +75,7 @@ func _rebuild() -> void:
 		pick[k] = pick[k].filter(func(id): return live_ids.has(id))
 		if pick[k].is_empty(): pick.erase(k)
 	var root := VBoxContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT); root.add_theme_constant_override("separation", 10); add_child(root)
+	if Layout.touch: root.offset_right = -10.0   # the touch scroll cue (a thin bar drawn over the drawer's right edge) must not sit on the cards' borders
 	var hd := Kit.head_row(12); root.add_child(hd)
 	hd.add_child(Kit.label("CLIENTS" if Layout.compact else "CUSTOMERS & CONTRACTS", 26, Kit.CY))
 	if not Layout.phone: hd.add_child(Kit.label("Sign now, deploy within the ramp window — or wait until you can serve at once.", 13, Kit.DIM, true)); Kit.hint_fix(hd, app)

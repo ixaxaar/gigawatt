@@ -433,7 +433,8 @@ func _rack(root: Control, body: VBoxContainer) -> void:
 		info = [col2, col2]
 	elif _side():   # the rack in its own scrolling frame beside the parts, both at screen height
 		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); body.add_child(row)
-		var fr := ScrollContainer.new(); fr.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; fr.custom_minimum_size.y = _row_h(); fr.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(fr)
+		var fr := ScrollContainer.new(); fr.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; fr.custom_minimum_size.y = _row_h() - 44.0; fr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var frame := PanelContainer.new(); frame.add_theme_stylebox_override("panel", Kit.sb(Kit.field(), Kit.legible(Kit.LINE, Kit.field(), 1.6), 8, 2, 6)); frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL; frame.add_child(fr); row.add_child(frame)   # a visible frame and margin: the rack diagram no longer runs to the panel's bottom edge
 		bd.size_flags_vertical = Control.SIZE_EXPAND_FILL; fr.add_child(bd); _rack_sc = fr
 		side = _side_col(row, _side_w(), _row_h())
 		if rmsg != "": side.add_child(Kit.label(rmsg, 13, Kit.AM, true))

@@ -19,9 +19,11 @@ const V_TAP_STOPS := 250.0       # a touch on a list gliding faster than this on
 
 ## True while a finger is scrolling a list, while the list glides, and for a moment after: sounds, screen rebuilds and auto-scrolls hold off until then.
 static var _down := false
+static var _down_ms := 0           # last time a finger was seen moving while _down: a lost release cannot hold rebuilds off for good
 static var _gliding := false
 static var _last_end := -100000
 static func is_busy() -> bool:
+	if _down and Time.get_ticks_msec() - _down_ms > 2500: _down = false   # no movement for a while and no release seen: the finger is gone
 	return _down or _gliding or Time.get_ticks_msec() - _last_end < SETTLE_MS
 
 var _cands: Array = []           # scroll areas under the finger, innermost first
@@ -106,7 +108,7 @@ func _input(e: InputEvent) -> void:
 
 func _begin(p: Vector2) -> void:
 	if OS.has_feature("debug"): print("TAP ", p, " top=", _top_at(p))
-	_stop_glide()
+	_stop_glide(); _down = false   # a new touch starts clean: a stale flag from a lost release dies here
 	_cands.clear(); _btn = null; _dragging = false; _pressing = false; _start = p; _last = p; _acc = Vector2.ZERO
 	_finger_total = Vector2.ZERO; _scrolled_total = Vector2.ZERO
 	_t0 = Time.get_ticks_usec(); _samples = [[_t0, p]]
@@ -134,7 +136,7 @@ func _begin(p: Vector2) -> void:
 
 func _move(p: Vector2) -> void:
 	if _cands.is_empty(): return
-	var now := Time.get_ticks_usec()
+	var now := Time.get_ticks_usec(); _down_ms = Time.get_ticks_msec()
 	_samples.append([now, p])
 	while _samples.size() > 2 and now - int(_samples[0][0]) > VEL_WINDOW_US: _samples.pop_front()
 	if not _dragging:
@@ -146,7 +148,7 @@ func _move(p: Vector2) -> void:
 
 ## The finger has moved far enough: this touch is a scroll. Everything since the press is applied (nothing below the threshold is lost).
 func _start_drag(p: Vector2) -> void:
-	_dragging = true; _down = true
+	_dragging = true; _down = true; _down_ms = Time.get_ticks_msec()
 	var d := (p - _start).abs()
 	_axis = Vector2(0, 1) if d.y > d.x * 1.6 else (Vector2(1, 0) if d.x > d.y * 1.6 else Vector2.ONE)
 	_last = _start
@@ -160,6 +162,7 @@ func _start_drag(p: Vector2) -> void:
 
 func _end(p: Vector2) -> void:
 	var was_swallow := _swallow; _swallow = false
+	_down = false   # any release clears it (the drag path below sets the settle timer itself)
 	if not _pressing: _cands.clear(); return
 	_pressing = false
 	var now := Time.get_ticks_usec()

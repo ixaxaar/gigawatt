@@ -109,10 +109,7 @@ func _overview(parent: Control, groups: Dictionary) -> void:
 	var b: Bridge = app.b
 	var np := Kit.panel("The parts encyclopedia", false, parent)
 	np[1].add_child(Kit.label("Pick a part. Every entry explains what it is, why it exists, and the tradeoffs you will face building with it. Search finds parts by name, vendor or technology (try “hbm”, “nvlink”, “liquid”).", 14, Kit.DIM, true))
-	var gr := GridContainer.new(); gr.columns = 2 if not Layout.phone else 1; gr.add_theme_constant_override("h_separation", 10); gr.add_theme_constant_override("v_separation", 8); gr.size_flags_horizontal = Control.SIZE_EXPAND_FILL; np[1].add_child(gr)
-	var kinds := groups.keys(); kinds.sort()
-	for k in kinds:
-		var bt := Kit.btn("%s  (%d)" % [KIND_LBL.get(k, str(k)), groups[k].size()], func(): folds["k_" + str(k)] = false; refresh(), "", 13); bt.alignment = HORIZONTAL_ALIGNMENT_LEFT; bt.size_flags_horizontal = Control.SIZE_EXPAND_FILL; gr.add_child(bt)
+	np[1].add_child(Kit.label("Open a category in the list %s to browse its parts (%d categories, %d parts)." % ["above" if Layout.phone else "on the left", groups.size(), groups.values().reduce(func(n, a): return n + a.size(), 0)], 13, Kit.TX, true))   # one way to browse: the accordion, so no second grid of the same categories
 	var accel: Array = b.items.values().filter(func(i): return i.kind == "accelerator" and float(i.availableFrom) <= float(b.year())); accel.sort_custom(func(a, c): return a.availableFrom > c.availableFrom)
 	if not accel.is_empty():
 		var lp := Kit.panel("Newest accelerators you can buy", false, parent)
