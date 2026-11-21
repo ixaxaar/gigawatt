@@ -10,9 +10,29 @@ instance uniform vec3 accent = vec3(0.35, 1.0, 0.5);
 instance uniform int state = 0;          // 0 online, 1 commissioning, 2 failed
 instance uniform float heat = 0.0;       // 0..1, thermal view (-1 = off)
 instance uniform bool rear = false;
+// MultiMesh mode (the hall): the per-rack values come from the instance colour (accent) and custom data
+// (seed, fill, state + 8 for the rear face, heat) instead of the instance uniforms above, so every face is one draw call.
+uniform bool mm = false;
+varying flat vec4 v_dat;
+varying flat vec3 v_acc;
+varying flat vec2 v_flag;   // x = state, y = rear
 
-float h11(float x) { return fract(sin(x * 127.1 + seed * 31.7) * 43758.5453); }
-float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.3) * 43758.5453); }
+float h11s(float x, float sd) { return fract(sin(x * 127.1 + sd * 31.7) * 43758.5453); }
+float h21s(vec2 p, float sd) { return fract(sin(dot(p, vec2(127.1, 311.7)) + sd * 17.3) * 43758.5453); }
+
+void vertex() {
+	if (mm) {
+		float sr = INSTANCE_CUSTOM.z + 0.5;
+		float r = step(8.0, sr);
+		v_dat = vec4(INSTANCE_CUSTOM.x, INSTANCE_CUSTOM.y, 0.0, INSTANCE_CUSTOM.w);
+		v_flag = vec2(floor(sr - r * 8.0), r);
+		v_acc = COLOR.rgb;
+	} else {
+		v_dat = vec4(seed, fill, 0.0, heat);
+		v_flag = vec2(float(state), rear ? 1.0 : 0.0);
+		v_acc = accent;
+	}
+}
 // anti-aliased rectangle: p in some cell space, fw = footprint of one pixel in that space (from the un-wrapped coordinate)
 float boxa(vec2 p, vec2 c, vec2 s, vec2 fw) {
 	vec2 d = abs(p - c) - s; vec2 w = fw * 0.5 + 1e-5;
@@ -33,6 +53,8 @@ vec3 heat_ramp(float t) {
 }
 
 void fragment() {
+	float seed_ = v_dat.x; float fill_ = v_dat.y; float heat_ = v_dat.w; vec3 accent_ = v_acc;
+	int state_ = int(v_flag.x + 0.5); bool rear_ = v_flag.y > 0.5;
 	vec2 uv = UV;
 	vec2 fuv = fwidth(uv);
 	float U = 42.0;
@@ -54,12 +76,12 @@ void fragment() {
 	float block = floor((top_idx - 2.0) / 4.0);
 	float in_block = mod(top_idx - 2.0, 4.0);
 	float blocks_total = 9.0;
-	bool filled = block < floor(fill * blocks_total + 0.5);
+	bool filled = block < floor(fill_ * blocks_total + 0.5);
 	vec2 bp = vec2(uv.x, (in_block + (1.0 - lf)) / 4.0); // 0..1 across a 4U block
 	vec2 fbp = vec2(fuv.x, flf / 4.0);
 	float edge = smoothstep(0.0, 0.03 + flf, lf) * smoothstep(0.0, 0.03 + flf, 1.0 - lf);
 	int L = lod;
-	if (!rear) {
+	if (!rear_) {
 		if (is_switch) {
 			alb = vec3(0.05, 0.055, 0.06);
 			// 32 ports in two rows
@@ -70,8 +92,8 @@ void fragment() {
 			port = mix(port, 0.4 * inrow, 1.0 - lodfade(fpg.x));
 			alb = mix(alb, vec3(0.0), port);
 			float led = boxa(pc, vec2(0.5, 0.9), vec2(0.1, 0.05), fpg) * inrow;
-			float on = step(0.4, fract(sin(floor(pg.x) * 3.1 + floor(pg.y) * 7.7 + floor(t * (1.0 + h21(vec2(floor(pg.x), 1.0)))) * 1.3 + seed) * 999.0));
-			em += led * on * vec3(0.2, 1.0, 0.4) * 2.0 * (state == 2 ? 0.0 : 1.0);
+			float on = step(0.4, fract(sin(floor(pg.x) * 3.1 + floor(pg.y) * 7.7 + floor(t * (1.0 + h21s(vec2(floor(pg.x), 1.0), seed_))) * 1.3 + seed_) * 999.0));
+			em += led * on * vec3(0.2, 1.0, 0.4) * 2.0 * (state_ == 2 ? 0.0 : 1.0);
 		} else if (is_patch) {
 			alb = vec3(0.04);
 			float jacks = stepa(0.5, fract(uv.x * 48.0), fuv.x * 48.0) * boxa(vec2(fract(uv.x * 24.0), lf), vec2(0.5, 0.5), vec2(0.28, 0.3), vec2(fuv.x * 24.0, flf));
@@ -80,9 +102,9 @@ void fragment() {
 			// fibre pigtails in yellow / blue
 			float pig = smoothstep(0.88 - fuv.x * 110.0, 0.88 + fuv.x * 110.0, sin(uv.x * 220.0) * 0.5 + 0.5) * step(0.25, lf) * step(lf, 0.75);
 			pig = mix(pig, 0.08, 1.0 - lodfade(fuv.x * 35.0));
-			alb = mix(alb, mix(vec3(0.85, 0.7, 0.1), vec3(0.1, 0.4, 0.8), step(0.5, h21(vec2(floor(uv.x * 35.0), 3.0)))), pig * 0.8);
+			alb = mix(alb, mix(vec3(0.85, 0.7, 0.1), vec3(0.1, 0.4, 0.8), step(0.5, h21s(vec2(floor(uv.x * 35.0), 3.0), seed_))), pig * 0.8);
 			// failed rack: a red status strip across the top of the face, readable from the camera height
-			if (state == 2) em += vec3(1.0, 0.08, 0.05) * 3.0 * (0.6 + 0.4 * sin(t * 5.0));
+			if (state_ == 2) em += vec3(1.0, 0.08, 0.05) * 3.0 * (0.6 + 0.4 * sin(t * 5.0));
 		} else if (is_pdu) {
 			alb = vec3(0.03, 0.03, 0.035);
 			float o = stepa(0.5, fract(uv.x * 20.0), fuv.x * 20.0) * boxa(vec2(fract(uv.x * 10.0), lf), vec2(0.5, 0.5), vec2(0.25, 0.28), vec2(fuv.x * 10.0, flf));
@@ -108,17 +130,17 @@ void fragment() {
 			float bay = bay_col * mix(boxa(fract(dp), vec2(0.5, 0.5), vec2(0.4, 0.34), fdp), 0.54, 1.0 - lodfade(fdp.x * 0.5)) * float(L < 1);
 			alb = mix(alb, vec3(0.012), bay);
 			float bled = bay_col * boxa(fract(dp), vec2(0.82, 0.5), vec2(0.07, 0.08), fdp);
-			float blink = step(0.55, fract(sin(floor(dp.x) * 11.0 + floor(dp.y) * 5.0 + floor(t * (2.0 + h21(vec2(block, floor(dp.x)))) * 3.0) + block * 13.0) * 777.0));
+			float blink = step(0.55, fract(sin(floor(dp.x) * 11.0 + floor(dp.y) * 5.0 + floor(t * (2.0 + h21s(vec2(block, floor(dp.x)), seed_)) * 3.0) + block * 13.0) * 777.0));
 			em += bled * (0.25 + blink) * vec3(0.15, 0.6, 1.0) * 2.0;
-			// accent ear LEDs + power button
+			// accent_ ear LEDs + power button
 			float ac = boxa(bp, vec2(0.965, 0.25), vec2(0.018, 0.045), fbp) + boxa(bp, vec2(0.965, 0.5), vec2(0.018, 0.045), fbp) + boxa(bp, vec2(0.965, 0.75), vec2(0.018, 0.045), fbp);
-			float pulse = 0.65 + 0.35 * sin(t * 2.0 + block * 1.7 + seed);
-			vec3 lc = accent;
-			if (state == 1) { lc = vec3(1.0, 0.65, 0.1); pulse = step(0.5, fract(t * 1.5 + block * 0.2)); }
-			if (state == 2) { lc = vec3(1.0, 0.1, 0.08); pulse = (block == 2.0) ? 1.0 : 0.15; }
+			float pulse = 0.65 + 0.35 * sin(t * 2.0 + block * 1.7 + seed_);
+			vec3 lc = accent_;
+			if (state_ == 1) { lc = vec3(1.0, 0.65, 0.1); pulse = step(0.5, fract(t * 1.5 + block * 0.2)); }
+			if (state_ == 2) { lc = vec3(1.0, 0.1, 0.08); pulse = (block == 2.0) ? 1.0 : 0.15; }
 			em += ac * lc * pulse * 2.4;
 			// vendor stripe
-			em += boxa(bp, vec2(0.5, 0.03), vec2(0.44, 0.012), fbp) * accent * 0.25;
+			em += boxa(bp, vec2(0.5, 0.03), vec2(0.44, 0.012), fbp) * accent_ * 0.25;
 			alb *= edge * 0.6 + 0.4;
 		} else {
 			// blanking panel
@@ -126,13 +148,13 @@ void fragment() {
 			rough = 0.8; metal = 0.1;
 		}
 	} else {
-		// rear: fans + PSUs + cable looms
+		// rear_: fans + PSUs + cable looms
 		if (is_switch || is_patch || is_pdu) {
 			alb = vec3(0.03);
-			float cab = smoothstep(0.55 - fuv.x * 45.0, 0.55 + fuv.x * 45.0, sin(uv.x * 90.0 + h21(vec2(row, 2.0)) * 6.0) * 0.5 + 0.5);
+			float cab = smoothstep(0.55 - fuv.x * 45.0, 0.55 + fuv.x * 45.0, sin(uv.x * 90.0 + h21s(vec2(row, 2.0), seed_) * 6.0) * 0.5 + 0.5);
 			cab = mix(cab, 0.4, 1.0 - lodfade(fuv.x * 15.0));
-			alb = mix(alb, mix(vec3(0.06, 0.06, 0.07), vec3(0.8, 0.5, 0.05), step(0.7, h21(vec2(floor(uv.x * 20.0), row)))), cab * 0.7);
-			if (state == 2 && is_switch) em += vec3(1.0, 0.08, 0.05) * 3.0 * (0.6 + 0.4 * sin(t * 5.0));
+			alb = mix(alb, mix(vec3(0.06, 0.06, 0.07), vec3(0.8, 0.5, 0.05), step(0.7, h21s(vec2(floor(uv.x * 20.0), row), seed_))), cab * 0.7);
+			if (state_ == 2 && is_switch) em += vec3(1.0, 0.08, 0.05) * 3.0 * (0.6 + 0.4 * sin(t * 5.0));
 		} else if (filled) {
 			alb = vec3(0.045, 0.048, 0.054);
 			// fan wall top 2/3, PSUs bottom
@@ -143,12 +165,12 @@ void fragment() {
 			float disc = (1.0 - smoothstep(0.42 - ffw, 0.42 + ffw, length(fc))) * fans;
 			float ring = smoothstep(0.12 - ffw, 0.12 + ffw, length(fc)) * disc;
 			alb = mix(alb, vec3(0.012), disc);
-			float blade = step(0.5, fract(atan(fc.y, fc.x) * 2.0 + t * (state == 2 ? 0.0 : 4.0)));
+			float blade = step(0.5, fract(atan(fc.y, fc.x) * 2.0 + t * (state_ == 2 ? 0.0 : 4.0)));
 			alb = mix(alb, vec3(0.05), ring * mix(blade, 0.5, 1.0 - lodfade(ffw * 4.0)));
 			vec2 pq = vec2(fract(bp.x * 4.0), bp.y / 0.34); vec2 fpq = vec2(fbp.x * 4.0, fbp.y / 0.34);
 			float psu = (1.0 - fans) * boxa(pq, vec2(0.5, 0.5), vec2(0.42, 0.38), fpq);
 			alb = mix(alb, vec3(0.1, 0.1, 0.11), psu);
-			em += (1.0 - fans) * boxa(pq, vec2(0.8, 0.5), vec2(0.05, 0.1), fpq) * (state == 2 ? vec3(1.0, 0.1, 0.1) : vec3(0.2, 1.0, 0.3)) * 1.8;
+			em += (1.0 - fans) * boxa(pq, vec2(0.8, 0.5), vec2(0.05, 0.1), fpq) * (state_ == 2 ? vec3(1.0, 0.1, 0.1) : vec3(0.2, 1.0, 0.3)) * 1.8;
 		} else {
 			alb = vec3(0.02);
 		}
@@ -157,7 +179,7 @@ void fragment() {
 		float s1 = mix(0.5 + 0.5 * sin(uv.y * 400.0), 0.5, 1.0 - lodfade(lfw * 0.25));
 		float s2 = mix(0.5 + 0.5 * sin(uv.y * 400.0 + 2.0), 0.5, 1.0 - lodfade(lfw * 0.25));
 		float loom = (1.0 - stepa(0.09, uv.x, fuv.x)) * s1 + stepa(0.91, uv.x, fuv.x) * s2;
-		alb = mix(alb, mix(vec3(0.02), vec3(0.15, 0.15, 0.4), step(0.5, h11(floor(uv.y * 40.0)))), clamp(loom, 0.0, 1.0) * step(0.5, h11(seed)));
+		alb = mix(alb, mix(vec3(0.02), vec3(0.15, 0.15, 0.4), step(0.5, h11s(floor(uv.y * 40.0), seed_))), clamp(loom, 0.0, 1.0) * step(0.5, h11s(seed_, seed_)));
 	}
 	// posts last, so they frame every row
 	alb = mix(alb, vec3(0.012), clamp(post, 0.0, 1.0)); rough = mix(rough, 0.45, clamp(post, 0.0, 1.0));
@@ -165,8 +187,8 @@ void fragment() {
 	float yb = 1.0 - uv.y;
 	float ao = mix(0.35, 1.0, smoothstep(0.0, 0.07, yb)) * mix(0.7, 1.0, smoothstep(0.0, 0.025, uv.y));
 	alb *= ao;
-	if (heat >= 0.0) {
-		vec3 hc = heat_ramp(heat);
+	if (heat_ >= 0.0) {
+		vec3 hc = heat_ramp(heat_);
 		alb = mix(alb, hc * 0.35, 0.8); em = em * 0.15 + hc * 0.45;
 	}
 	if (L == 0) {   // emboss: ports, vents and bays are darker than the plate around them, so the dark parts read as recessed

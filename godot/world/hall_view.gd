@@ -16,6 +16,7 @@ const CEIL := 4.6           # ceiling / roof steel height
 const CAM_MIN_Y := 3.1      # over the rows the camera stays above the busway
 const TOP_PITCH := 1.5697   # straight down (a hair off vertical so look_at keeps the yaw)
 const LABEL_ALL := 10.0     # closer than this every rack shows its label
+const I := Transform3D.IDENTITY
 const BOARD_PS := 0.00034   # cluster tag size (fixed on screen: about 16 px tall at 900 px)
 static var RACK_SHADER: Shader = load("res://assets/shaders/rack_face.gdshader")
 static var FLOOR_SHADER: Shader = load("res://assets/shaders/floor.gdshader")
@@ -92,6 +93,7 @@ static var _smoke_mat: StandardMaterial3D
 func _ready() -> void:
 	_build_environment()
 	dyn = Node3D.new(); add_child(dyn)
+	life = HallLife.new(); life.view = self; add_child(life)
 	cam = Camera3D.new(); cam.fov = 50.0; cam.far = 400.0; cam.near = 0.1; add_child(cam); cam.current = true
 	_ca = CameraAttributesPractical.new(); _ca.dof_blur_far_enabled = true; _ca.dof_blur_far_distance = 40.0; _ca.dof_blur_far_transition = 20.0; _ca.dof_blur_amount = 0.04; cam.attributes = _ca
 	_hover_mesh = MeshInstance3D.new(); add_child(_hover_mesh); _hover_mesh.visible = false
@@ -133,7 +135,7 @@ func apply_quality() -> void:
 	Settings.apply_fps()
 	HallMaterials.reset(); _fade_cache.clear(); _mat_cache.clear()
 	_apply_mood()
-	if b != null and dyn != null: rebuild()
+	if b != null and dyn != null: rebuild(true)
 
 ## 3D render resolution only (also re-run when the window is resized: the automatic scale depends on the pixel count).
 func apply_scale() -> void:
@@ -221,6 +223,28 @@ func _multi(parent: Node3D, mesh: Mesh, mat: Material, tfs: Array, shadows := fa
 	if not shadows: mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi); return mi
 
+## Batched boxes: every box with the same size, material and options is drawn as one MultiMesh (one draw call, no node per box).
+## `xf` places a local frame (a rack), `pos` is inside it. `vis` > 0 hides the batch beyond that many metres (scaled by the tier);
+## `chunk` splits such a batch into local groups so the distance test is per neighbourhood, not per hall.
+var _bat := {}
+func _bx(xf: Transform3D, pos: Vector3, size: Vector3, mat: Material, shadows := true, vis := 0.0, chunk := 0) -> void:
+	var mesh := _box_mesh(size)
+	var key := [mesh.get_instance_id(), mat.get_instance_id(), shadows, vis, chunk]
+	var e = _bat.get(key)
+	if e == null: e = {"mesh": mesh, "mat": mat, "shadows": shadows, "vis": vis, "tfs": []}; _bat[key] = e
+	(e.tfs as Array).append(xf * Transform3D(Basis(), pos))
+
+func _flush_batches() -> void:
+	for e in _bat.values():
+		var mi := _multi(dyn, e.mesh, e.mat, e.tfs, e.shadows)
+		if float(e.vis) > 0.0: _small(mi, float(e.vis))
+	_bat.clear()
+	if _face_tf.is_empty(): return
+	var mm := MultiMesh.new(); mm.transform_format = MultiMesh.TRANSFORM_3D; mm.use_colors = true; mm.use_custom_data = true; mm.mesh = _face_quad; mm.instance_count = _face_tf.size()
+	for i in _face_tf.size(): mm.set_instance_transform(i, _face_tf[i]); mm.set_instance_color(i, _face_col[i]); mm.set_instance_custom_data(i, _face_dat[i])
+	var fi := MultiMeshInstance3D.new(); fi.multimesh = mm; fi.material_override = _face_mat; fi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; dyn.add_child(fi)
+	_face_tf.clear(); _face_col.clear(); _face_dat.clear()
+
 ## Small props vanish with distance (thermal dots, taps, bundles): fewer draws in big halls, scaled by the tier.
 func _small(mi: GeometryInstance3D, metres: float) -> GeometryInstance3D:
 	mi.visibility_range_end = metres * float(Settings.tier().vis_scale); mi.visibility_range_end_margin = 2.0; mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; return mi
@@ -263,11 +287,38 @@ func _layout(hall: Dictionary) -> void:
 func hall_size() -> Vector2: return Vector2((cols - 1) * PITCH + RW, row_z[row_z.size() - 1] + RD)
 
 # ---------- build ----------
-func rebuild() -> void:
+## Everything the hall's look depends on, as one hash. rebuild() is called after every action in the game; when this is
+## unchanged (most clicks change nothing in the hall) the scene is kept as it is.
+func _signature(hall: Dictionary) -> int:
+	var a: Array = [hall_i, str(hall.get("id", "")), int(hall.rackSlots), str(hall.coolingClass), hall.powerEquip, hall.coolingEquip, snappedf(float(hall.coolingKW), 1.0), snappedf(float(hall.itPowerKW), 1.0),
+		thermal, labels_on, place_mode, Settings.quality, Settings.colorblind, _site, _links_down(), cols]
+	for r in hall.racks:
+		var m: Dictionary = _ml.get(r.id, {})
+		var st: Dictionary = _rs.get(r.designId, {})
+		a.append([int(r.slot), str(r.status), str(r.designId), str(r.get("clusterId", "")), str(m.get("customer", "")), str(m.get("role", "")), str(m.get("status", "")), str(m.get("design", "")), st.get("kW", 0.0), st.get("accels", 0)])
+	for c in b.g.clusters: a.append([str(c.id), str(c.name)])
+	for ac in b.g.activeContracts: a.append([ac.clusterIds, str(ac.contract.customer)])
+	return a.hash()
+
+var _sig := 0
+var life: HallLife
+var _prev_st := {}   # slot -> rack status at the last rebuild of this hall (a change gets a pulse of light)
+signal rack_event(kind: String, count: int)
+func rebuild(force := false) -> void:
 	if b == null: return
 	_rs = b.q("rackStatsAll")
 	_ml.clear()
 	for m in b.q("machineLedger"): _ml[m.id] = m
+	hall_i = clampi(hall_i, 0, b.g.halls.size() - 1)
+	_site = Site.style_of(b.g)
+	var sig := _signature(b.g.halls[hall_i])
+	if not force and sig == _sig and dyn.get_child_count() > 0:
+		for r in b.g.halls[hall_i].racks:   # same picture, fresh data behind it (hover and inspect read these)
+			var sb = _slot_box.get(int(r.slot))
+			if sb != null: sb.rack = r
+		return
+	_sig = sig
+	_bat.clear(); _face_tf.clear(); _face_col.clear(); _face_dat.clear()
 	for c in dyn.get_children(): c.queue_free()
 	_rack_boxes.clear(); _slot_box.clear(); _beacon = null; _lamps.clear(); _labels.clear(); _boards.clear(); _walls.clear(); _row_over.clear(); _smokes.clear(); _rods.clear(); _ceil = null; _over = null
 	_lamp_n = 0; _label_turn = 99.0; _emit_cache.clear(); _rack_nodes.clear(); _spec_cache.clear(); _cab_cam = Vector3(1e9, 0, 0)
@@ -305,6 +356,8 @@ func rebuild() -> void:
 	_over = Node3D.new(); dyn.add_child(_over); _build_overhead(sz, cx, _over)
 	_build_ceiling()
 	_build_cables(hall)
+	_flush_batches()
+	_rack_changes(hall, fresh)
 	_build_probe()
 	if ratio > 1.0 and heat > 0.0:
 		_beacon = OmniLight3D.new(); _beacon.light_color = Color(1, 0.1, 0.05); _beacon.omni_range = 14.0; _beacon.position = Vector3(cx, 3.8, cz); dyn.add_child(_beacon)
@@ -327,10 +380,10 @@ func _build_shell(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 	var red := _emit(Site.accent(_site), 1.1, false)
 	var m := 0.7; var lw := 0.12                                                                  # painted boundary line
 	var x0 := cx - sz.x * 0.5 - m; var x1 := cx + sz.x * 0.5 + m; var z0 := cz - sz.y * 0.5 - m; var z1 := cz + sz.y * 0.5 + m
-	_box(dyn, Vector3(cx, 0.004, z0), Vector3(x1 - x0, 0.008, lw), red)
-	_box(dyn, Vector3(cx, 0.004, z1), Vector3(x1 - x0, 0.008, lw), red)
-	_box(dyn, Vector3(x0, 0.004, cz), Vector3(lw, 0.008, z1 - z0), red)
-	_box(dyn, Vector3(x1, 0.004, cz), Vector3(lw, 0.008, z1 - z0), red)
+	_bx(I, Vector3(cx, 0.004, z0), Vector3(x1 - x0, 0.008, lw), red)
+	_bx(I, Vector3(cx, 0.004, z1), Vector3(x1 - x0, 0.008, lw), red)
+	_bx(I, Vector3(x0, 0.004, cz), Vector3(lw, 0.008, z1 - z0), red)
+	_bx(I, Vector3(x1, 0.004, cz), Vector3(lw, 0.008, z1 - z0), red)
 
 func _plane(pos: Vector3, pm: PlaneMesh, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new(); mi.mesh = pm; mi.material_override = mat; mi.position = pos; mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF; dyn.add_child(mi); return mi
@@ -350,21 +403,21 @@ func _build_aisles(sz: Vector2, cx: float, ratio: float) -> void:
 			var pf := MeshInstance3D.new(); var pm := PlaneMesh.new(); pm.size = Vector2(w, d); pf.mesh = pm; pf.position = Vector3(cx, 0.004, mid)
 			var sm := ShaderMaterial.new(); sm.shader = FLOOR_SHADER; sm.set_shader_parameter("perf_rect", Vector4(-1000, -1000, 1000, 1000)); _floor_tex(sm); pf.material_override = sm; dyn.add_child(pf)
 			# containment: glass roof with a frame and panel seams, glass end doors between two jambs under a header
-			_box(dyn, Vector3(cx, 2.12, mid), Vector3(w, 0.02, d), roof)
-			for ez in [z0 + 0.02, z1 - 0.02]: _box(dyn, Vector3(cx, 2.13, ez), Vector3(w, 0.05, 0.04), frame)
+			_bx(I, Vector3(cx, 2.12, mid), Vector3(w, 0.02, d), roof)
+			for ez in [z0 + 0.02, z1 - 0.02]: _bx(I, Vector3(cx, 2.13, ez), Vector3(w, 0.05, 0.04), frame)
 			var sx := -0.3 + 1.2
 			while sx < w - 0.6: seams.append(Transform3D(Basis().scaled(Vector3(1, 1, d)), Vector3(sx, 2.14, mid))); sx += 1.2
 			for ex in [-0.33, (cols - 1) * PITCH + 0.33]:
-				_box(dyn, Vector3(ex, 1.06, mid), Vector3(0.02, 2.06, d - 0.1), door)
-				for jz in [z0 + 0.03, z1 - 0.03]: _box(dyn, Vector3(ex, 1.06, jz), Vector3(0.06, 2.12, 0.05), frame)
-				_box(dyn, Vector3(ex, 2.1, mid), Vector3(0.07, 0.08, d), frame)
-				_box(dyn, Vector3(ex + (0.04 if ex > 0 else -0.04), 1.05, mid + d * 0.22), Vector3(0.025, 0.3, 0.025), frame)   # door handle
+				_bx(I, Vector3(ex, 1.06, mid), Vector3(0.02, 2.06, d - 0.1), door)
+				for jz in [z0 + 0.03, z1 - 0.03]: _bx(I, Vector3(ex, 1.06, jz), Vector3(0.06, 2.12, 0.05), frame)
+				_bx(I, Vector3(ex, 2.1, mid), Vector3(0.07, 0.08, d), frame)
+				_bx(I, Vector3(ex + (0.04 if ex > 0 else -0.04), 1.05, mid + d * 0.22), Vector3(0.025, 0.3, 0.025), frame)   # door handle
 			for lx in range(0, cols, 3):
 				if not _lamp_ok(): _light_pool(Vector3(lx * PITCH + 0.6, 0.006, mid), d, Color(0.78, 0.9, 1.0, 0.07)); continue
 				var sp := SpotLight3D.new(); sp.light_color = _mood.cold; sp.light_energy = 3.8 * float(_mood.get("lamp_e", 1.0)); sp.spot_range = 6.5; sp.spot_angle = 52.0; sp.spot_angle_attenuation = 1.6; sp.light_volumetric_fog_energy = 1.4
 				sp.position = Vector3(lx * PITCH + 0.6, 3.4, mid); sp.rotation_degrees = Vector3(-90, 0, 0); _lamps.append(sp); dyn.add_child(sp)
 		else:
-			if ratio > 0.01: _box(dyn, Vector3(cx, 0.006, mid), Vector3(w, 0.004, d), _emit(Color(1.0, 0.25, 0.1, 0.05 + 0.1 * clampf(ratio, 0, 1.5)), 1.0, true))
+			if ratio > 0.01: _bx(I, Vector3(cx, 0.006, mid), Vector3(w, 0.004, d), _emit(Color(1.0, 0.25, 0.1, 0.05 + 0.1 * clampf(ratio, 0, 1.5)), 1.0, true))
 			for lx2 in range(1, cols, 4):
 				if not _lamp_ok(): _light_pool(Vector3(lx2 * PITCH + 0.6, 0.006, mid), d, Color(1.0, 0.72, 0.5, 0.05)); continue
 				var sp2 := SpotLight3D.new(); sp2.light_color = _mood.hot; sp2.light_energy = (1.6 + 2.0 * ratio) * float(_mood.get("lamp_e", 1.0)); sp2.spot_range = 6.0; sp2.spot_angle = 50.0; sp2.light_volumetric_fog_energy = 0.8
@@ -390,16 +443,26 @@ func _rack_label(p: Vector3, r: Dictionary) -> void:
 	else: who = "IDLE"; col = Color(1.0, 0.72, 0.25); idle = true
 	if not thermal and (idle or status == "failed"):
 		var sc := _emit(Color(1.0, 0.62, 0.12) if idle else Color(1.0, 0.12, 0.08), 3.0, false)   # a lit rim round the whole lid: readable from the campus view, the lid itself stays dark for the label
-		for sz_ in [-1, 1]: _box(dyn, p + Vector3(0, RH + 0.03, sz_ * (RD * 0.5 - 0.04)), Vector3(RW - 0.04, 0.02, 0.05), sc)
-		for sx_ in [-1, 1]: _box(dyn, p + Vector3(sx_ * (RW * 0.5 - 0.04), RH + 0.03, 0), Vector3(0.05, 0.02, RD - 0.13), sc)
+		for sz_ in [-1, 1]: _bx(I, p + Vector3(0, RH + 0.03, sz_ * (RD * 0.5 - 0.04)), Vector3(RW - 0.04, 0.02, 0.05), sc, false)
+		for sx_ in [-1, 1]: _bx(I, p + Vector3(sx_ * (RW * 0.5 - 0.04), RH + 0.03, 0), Vector3(0.05, 0.02, RD - 0.13), sc, false)
 	if not labels_on: return
-	var l := Label3D.new(); l.font = label_font(); l.text = nm + "\n" + who; l.font_size = 44; l.pixel_size = 0.0034; l.modulate = col; l.outline_size = 12; l.outline_modulate = Color(0, 0, 0, 0.92)
-	l.rotation = Vector3(-PI / 2, PI / 2, 0); l.position = p + Vector3(0, RH + 0.25, 0); l.shaded = false; l.double_sided = true; l.line_spacing = -4
-	dyn.add_child(l); _labels.append({"node": l, "always": status == "failed", "pos": p, "kind": "text"})
-	l.visible = false
-	if m.get("customer") != null and Settings.quality >= 1:   # the customer's logo on the rack top, visible with the label
-		var sp := Sprite3D.new(); sp.texture = _logo_tex(str(m.customer)); sp.pixel_size = 0.0034; sp.shaded = false; sp.double_sided = false; sp.transparent = true
-		sp.rotation = Vector3(-PI / 2, 0, 0); sp.position = p + Vector3(0, RH + 0.26, -0.43); dyn.add_child(sp); _labels.append({"node": sp, "always": false, "pos": p, "kind": "logo"}); sp.visible = false
+	# the label (and the customer's logo beside it) is only made when it is first shown: most racks are never looked at that closely
+	_labels.append({"node": null, "always": status == "failed", "pos": p, "kind": "text", "text": nm + "\n" + who, "col": col})
+	if m.get("customer") != null and Settings.quality >= 1: _labels.append({"node": null, "always": false, "pos": p, "kind": "logo", "who": str(m.customer)})
+
+func _label_node(e: Dictionary) -> Node3D:
+	var p: Vector3 = e.pos
+	var along_z := absi(int(roundf(_label_turn / (PI * 0.5)))) % 2 == 1
+	if e.kind == "text":
+		var l := Label3D.new(); l.font = label_font(); l.text = e.text; l.font_size = 44; l.pixel_size = 0.0034 if along_z else 0.0021; l.modulate = e.col; l.outline_size = 12; l.outline_modulate = Color(0, 0, 0, 0.92)
+		l.rotation = Vector3(-PI / 2, _label_turn, 0); l.position = p + Vector3(0, RH + 0.25, 0); l.shaded = false; l.double_sided = true; l.line_spacing = -4
+		dyn.add_child(l); e.node = l; return l
+	var sp := Sprite3D.new(); sp.texture = _logo_tex(str(e.who)); sp.pixel_size = 0.0034; sp.shaded = false; sp.double_sided = false; sp.transparent = true
+	sp.rotation = Vector3(-PI / 2, _label_turn, 0); sp.position = _logo_pos(p, _label_turn, along_z); dyn.add_child(sp); e.node = sp; return sp
+
+func _logo_pos(p: Vector3, psi: float, along_z: bool) -> Vector3:
+	var line_dir := Basis(Vector3.UP, psi) * Vector3(1, 0, 0); var up := Vector3(-sin(psi), 0, -cos(psi))   # the text's "up" on the rack top (away from the camera)
+	return p + Vector3(0, RH + 0.26, 0) + (line_dir * 0.47 if along_z else up * 0.36)
 
 ## Controller camera: left stick pans, right stick orbits, triggers zoom.
 func pad_move(pan: Vector2, orbit: Vector2, zoom: float, dt: float) -> void:
@@ -487,44 +550,44 @@ func _build_slot(i: int, p: Vector3) -> void:
 	var L := 0.14
 	for sx in [-1, 1]:
 		for sz_ in [-1, 1]:
-			_box(dyn, p + Vector3(sx * (RW * 0.5 - 0.02), 0.006, sz_ * (RD * 0.5 - L * 0.5)), Vector3(0.025, 0.004, L), mat)
-			_box(dyn, p + Vector3(sx * (RW * 0.5 - L * 0.5), 0.006, sz_ * (RD * 0.5 - 0.02)), Vector3(L, 0.004, 0.025), mat)
-	if valid: _box(dyn, p + Vector3(0, 0.005, 0), Vector3(RW - 0.06, 0.003, RD - 0.06), _emit(Color(0.2, 1.0, 0.5, 0.12), 1.0, true))
+			_bx(I, p + Vector3(sx * (RW * 0.5 - 0.02), 0.006, sz_ * (RD * 0.5 - L * 0.5)), Vector3(0.025, 0.004, L), mat, false)
+			_bx(I, p + Vector3(sx * (RW * 0.5 - L * 0.5), 0.006, sz_ * (RD * 0.5 - 0.02)), Vector3(L, 0.004, 0.025), mat, false)
+	if valid: _bx(I, p + Vector3(0, 0.005, 0), Vector3(RW - 0.06, 0.003, RD - 0.06), _emit(Color(0.2, 1.0, 0.5, 0.12), 1.0, true), false)
 
 func _build_rack(i: int, p: Vector3, r: Dictionary) -> void:
 	var sy := _sysinfo(r.designId)
 	var row := i / cols
 	var st: String = r.status
-	var parent := Node3D.new(); parent.position = p; parent.rotation.y = 0.0 if row % 2 == 0 else PI; dyn.add_child(parent)
-	var cs := _box(parent, Vector3(0, 0.002, 0), Vector3(RW + 0.08, 0.004, RD + 0.08), _emit(Color(0, 0, 0, 0.5), 0.0, true)); cs.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # contact shadow, every tier
+	var xf := Transform3D(Basis(Vector3.UP, 0.0 if row % 2 == 0 else PI), p)
+	_bx(xf, Vector3(0, 0.002, 0), Vector3(RW + 0.08, 0.004, RD + 0.08), _emit(Color(0, 0, 0, 0.5), 0.0, true), false)   # contact shadow, every tier
 	if st == "installing" or st == "ordered":
-		_box(parent, Vector3(0, 0.08, 0), Vector3(0.7, 0.16, 1.2), _solid(Color(0.42, 0.3, 0.17), 0.9, 0.0))               # pallet
-		_box(parent, Vector3(0, 0.95, 0), Vector3(0.62, 1.55, 1.05), _solid(Color(0.5, 0.37, 0.22), 0.95, 0.0))             # cardboard carton
-		_box(parent, Vector3(0, 1.725, 0), Vector3(0.625, 0.01, 0.12), _solid(Color(0.36, 0.26, 0.15), 0.6, 0.0))           # packing tape
+		_bx(xf, Vector3(0, 0.08, 0), Vector3(0.7, 0.16, 1.2), _solid(Color(0.42, 0.3, 0.17), 0.9, 0.0))               # pallet
+		_bx(xf, Vector3(0, 0.95, 0), Vector3(0.62, 1.55, 1.05), _solid(Color(0.5, 0.37, 0.22), 0.95, 0.0))             # cardboard carton
+		_bx(xf, Vector3(0, 1.725, 0), Vector3(0.625, 0.01, 0.12), _solid(Color(0.36, 0.26, 0.15), 0.6, 0.0))           # packing tape
 		var wrap := _glass(Color(0.85, 0.88, 0.92, 0.06)); wrap.roughness = 0.35
-		_box(parent, Vector3(0, 0.95, 0), Vector3(0.64, 1.58, 1.07), wrap)                                                   # stretch wrap
-		_box(parent, Vector3(0, 1.4, 0.54), Vector3(0.3, 0.1, 0.005), _solid(Color(0.8, 0.8, 0.76), 0.9, 0.0))              # shipping label
+		_bx(xf, Vector3(0, 0.95, 0), Vector3(0.64, 1.58, 1.07), wrap, false)                                            # stretch wrap
+		_bx(xf, Vector3(0, 1.4, 0.54), Vector3(0.3, 0.1, 0.005), _solid(Color(0.8, 0.8, 0.76), 0.9, 0.0), false)       # shipping label
 	else:
 		var shell: Material = Site.rack_material(_site)
-		_box(parent, Vector3(0, RH * 0.5, 0), Vector3(RW - 0.004, RH, RD - 0.05), shell)
+		_bx(xf, Vector3(0, RH * 0.5, 0), Vector3(RW - 0.004, RH, RD - 0.05), shell)
 		if thermal and st == "online":   # HEAT view: the lid carries the heat colour, readable from the usual high camera
-			_box(parent, Vector3(0, RH + 0.01, 0), Vector3(RW - 0.004, 0.02, RD - 0.03), _emit(heat_color(float(sy.kW) / 60.0), 1.3, false))
+			_bx(xf, Vector3(0, RH + 0.01, 0), Vector3(RW - 0.004, 0.02, RD - 0.03), _emit(heat_color(snappedf(float(sy.kW) / 60.0, 0.05)), 1.3, false))
 		else:
-			_box(parent, Vector3(0, RH + 0.01, 0), Vector3(RW - 0.004, 0.02, RD - 0.03), shell)
-		var front := _face(i, sy, st, false); front.position = Vector3(0, 0.07 + 0.935, RD * 0.5 - 0.025 + 0.002); parent.add_child(front)
-		var rear := _face(i, sy, st, true); rear.position = Vector3(0, 0.07 + 0.935, -RD * 0.5 + 0.025 - 0.002); rear.rotation.y = PI; parent.add_child(rear)
+			_bx(xf, Vector3(0, RH + 0.01, 0), Vector3(RW - 0.004, 0.02, RD - 0.03), shell)
+		_face(i, sy, st, false, xf * Transform3D(Basis(), Vector3(0, 0.07 + 0.935, RD * 0.5 - 0.025 + 0.002)))
+		_face(i, sy, st, true, xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0, 0.07 + 0.935, -RD * 0.5 + 0.025 - 0.002)))
 		if st == "failed" and Settings.tier().smoke:
-			var sm := _make_smoke(); sm.position = Vector3(0, RH + 0.1, 0); parent.add_child(sm); _smokes.append({"node": sm, "pos": p})
-	if st == "online" or st == "commissioning" or st == "failed": _rack_nodes[i] = {"node": parent, "design": r.designId, "dim": st != "online", "detail": 0}
-	if st != "ordered": _thermal_dots(parent, r, st)
+			var sm := _make_smoke(); sm.position = p + Vector3(0, RH + 0.1, 0); dyn.add_child(sm); _smokes.append({"node": sm, "pos": p})
+	if st == "online" or st == "commissioning" or st == "failed": _rack_nodes[i] = {"node": null, "xf": xf, "design": r.designId, "dim": st != "online", "detail": 0}
+	if st != "ordered": _thermal_dots(xf, r, st, row * 100 + (i % cols) / 6)
 	var ci := _cluster_of(r)
 	if not ci.is_empty() and st != "ordered":
 		(_clusters[ci.id].slots as Array).append(i)
 		if not thermal:   # HEAT view shows heat only: no cluster colours competing with the ramp
 			var cc: Color = ci.color
-			for sx in [-1, 1]: _box(parent, Vector3(sx * (RW * 0.5 - 0.03), RH + 0.03, 0), Vector3(0.045, 0.035, RD - 0.04), _emit(cc, 1.3, false))   # cluster-coloured edge rails (the top stays dark for the label)
-			_box(parent, Vector3(0, 0.006, RD * 0.5 + 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false))    # floor tag, front
-			_box(parent, Vector3(0, 0.006, -RD * 0.5 - 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false))   # floor tag, rear
+			for sx in [-1, 1]: _bx(xf, Vector3(sx * (RW * 0.5 - 0.03), RH + 0.03, 0), Vector3(0.045, 0.035, RD - 0.04), _emit(cc, 1.3, false), false)   # cluster-coloured edge rails (the top stays dark for the label)
+			_bx(xf, Vector3(0, 0.006, RD * 0.5 + 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false), false)    # floor tag, front
+			_bx(xf, Vector3(0, 0.006, -RD * 0.5 - 0.22), Vector3(RW - 0.06, 0.008, 0.16), _emit(cc, 1.4, false), false)   # floor tag, rear
 	_rack_boxes.append({"slot": i, "aabb": AABB(p + Vector3(-RW * 0.5, 0, -RD * 0.5), Vector3(RW, RH, RD)), "rack": r}); _slot_box[i] = _rack_boxes[_rack_boxes.size() - 1]
 
 ## Soft smoke over a failed rack: camera-facing quads with a radial falloff that fade near geometry and near the camera.
@@ -554,7 +617,7 @@ func _update_smoke() -> void:
 
 ## Four dots on the front edge of the rack top: how hard this rack is running against what the hall can cool.
 ## green = fine, amber = hall near its limit, red = overloaded or failed; unlit dots are headroom.
-func _thermal_dots(parent: Node3D, r: Dictionary, st: String) -> void:
+func _thermal_dots(xf: Transform3D, r: Dictionary, st: String, chunk: int) -> void:
 	var kw: float = _rs.get(r.designId, {}).get("kW", 0.0)
 	var lit := clampi(int(ceil(4.0 * kw / maxf(1.0, _max_rack_kw))), 1, 4) if st == "online" else (4 if st == "failed" else 0)
 	var col := Color(0.25, 1.0, 0.5)
@@ -564,7 +627,7 @@ func _thermal_dots(parent: Node3D, r: Dictionary, st: String) -> void:
 	elif _hall_ratio >= 0.8: col = Color(1.0, 0.75, 0.2)
 	for k in 4:
 		var on := k < lit
-		_small(_box(parent, Vector3(-0.2 + k * 0.133, RH + 0.05, RD * 0.5 - 0.075), Vector3(0.085, 0.02, 0.085), _emit(col, 0.9, false) if on else _solid(Color(0.06, 0.07, 0.08), 0.8, 0.0)), 22.0)
+		_bx(xf, Vector3(-0.2 + k * 0.133, RH + 0.05, RD * 0.5 - 0.075), Vector3(0.085, 0.02, 0.085), _emit(col, 0.9, false) if on else _solid(Color(0.06, 0.07, 0.08), 0.8, 0.0), false, 22.0, chunk)
 
 ## Cluster + customer that a placed rack belongs to ({} if unclustered). Colour is stable per cluster id.
 func _cluster_of(r: Dictionary) -> Dictionary:
@@ -607,18 +670,20 @@ func _sysinfo(design_id: String) -> Dictionary:
 var _face_quad: QuadMesh
 func _ensure_face_mat() -> void:
 	if _face_mat == null:
-		_face_mat = ShaderMaterial.new(); _face_mat.shader = RACK_SHADER
+		_face_mat = ShaderMaterial.new(); _face_mat.shader = RACK_SHADER; _face_mat.set_shader_parameter("mm", true)
 		_face_quad = QuadMesh.new(); _face_quad.size = Vector2(RW - 0.03, 1.87)
 	_face_mat.set_shader_parameter("lod", int(Settings.tier().face_lod))
 
-func _face(i: int, sy: Dictionary, st: String, rear: bool) -> MeshInstance3D:
-	var mi := MeshInstance3D.new(); mi.mesh = _face_quad; mi.material_override = _face_mat
-	mi.set_instance_shader_parameter("seed", float(i * 7 + 3)); mi.set_instance_shader_parameter("fill", clampf(0.4 + float(sy.kW) / 80.0, 0.4, 1.0))
-	var c := _vendor_color(sy); mi.set_instance_shader_parameter("accent", Vector3(c.r, c.g, c.b))
-	mi.set_instance_shader_parameter("state", 0 if st == "online" else (1 if st == "commissioning" else 2)); mi.set_instance_shader_parameter("rear", rear)
-	mi.set_instance_shader_parameter("heat", clampf(float(sy.kW) / 60.0, 0.0, 1.0) if thermal and st == "online" else -1.0)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
+## One rack face (front or rear) as an instance of the shared face MultiMesh: accent in the instance colour,
+## seed / fill / state (+8 for the rear) / heat in the custom data.
+var _face_tf: Array = []
+var _face_col: Array = []
+var _face_dat: Array = []
+func _face(i: int, sy: Dictionary, st: String, rear: bool, xf: Transform3D) -> void:
+	var c := _vendor_color(sy)
+	_face_tf.append(xf); _face_col.append(Color(c.r, c.g, c.b, 1.0))
+	var state := 0 if st == "online" else (1 if st == "commissioning" else 2)
+	_face_dat.append(Color(float(i * 7 + 3), clampf(0.4 + float(sy.kW) / 80.0, 0.4, 1.0), float(state + (8 if rear else 0)), clampf(float(sy.kW) / 60.0, 0.0, 1.0) if thermal and st == "online" else -1.0))
 
 func _build_plant(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 	var cool_n := 0; var pow_n := 0
@@ -634,21 +699,21 @@ func _build_plant(hall: Dictionary, sz: Vector2, cx: float, cz: float) -> void:
 				var liquid: bool = it.get("serves", "") == "dlc" or it.get("serves", "") == "immersion"
 				var pos := Vector3(-3.6, 0, cdu_z0 + cool_n * 1.15)
 				var body := _pbr("steel", 0.7, Color(0.75, 0.9, 1.25), 0.8, 1.0) if liquid else _pbr("shell", 0.9, Color(2.3, 2.3, 2.25), 0.9, 0.0)   # CDU: stainless; CRAH: grey paint
-				_box(dyn, pos + Vector3(0, 1.05, 0), Vector3(0.9, 2.1, 0.95), body)
-				_box(dyn, pos + Vector3(0.455, 1.0, 0), Vector3(0.02, 1.5, 0.7), _solid(Color(0.05, 0.06, 0.07), 0.5, 0.2))                      # louvres / door inset
-				_box(dyn, pos + Vector3(0.47, 1.75, 0.25), Vector3(0.01, 0.1, 0.22), _emit(Color(0.3, 0.8, 1.0), 1.4, false))                      # display
-				_box(dyn, pos + Vector3(0.47, 1.75, -0.2), Vector3(0.01, 0.04, 0.04), _emit(Color(0.3, 1.0, 0.5), 2.0, false))
+				_bx(I, pos + Vector3(0, 1.05, 0), Vector3(0.9, 2.1, 0.95), body)
+				_bx(I, pos + Vector3(0.455, 1.0, 0), Vector3(0.02, 1.5, 0.7), _solid(Color(0.05, 0.06, 0.07), 0.5, 0.2))                      # louvres / door inset
+				_bx(I, pos + Vector3(0.47, 1.75, 0.25), Vector3(0.01, 0.1, 0.22), _emit(Color(0.3, 0.8, 1.0), 1.4, false))                      # display
+				_bx(I, pos + Vector3(0.47, 1.75, -0.2), Vector3(0.01, 0.04, 0.04), _emit(Color(0.3, 1.0, 0.5), 2.0, false))
 				if liquid:
 					_cyl(dyn, Vector3(pos.x + 0.2, 0.14, pos.z), 0.045, 0.9, pipe_b, "x"); _cyl(dyn, Vector3(pos.x + 0.2, 0.26, pos.z), 0.045, 0.9, pipe_r, "x")
 				cool_n += 1
 			else:
 				var pos2 := Vector3(cx - 3.0 + pow_n * 0.9, 0, -3.6)
 				var tall := 2.3 if it.get("powerType", "") != "transformer" else 1.7
-				_box(dyn, pos2 + Vector3(0, tall * 0.5, 0), Vector3(0.85, tall, 0.9), _pbr("shell", 0.9, Color(2.5, 2.5, 2.45), 0.9, 0.0))       # switchgear: grey paint
-				_box(dyn, pos2 + Vector3(0, tall * 0.5, 0.455), Vector3(0.72, tall - 0.2, 0.012), _pbr("steel", 0.9, Color(1.9, 1.9, 2.0), 0.8, 0.0))     # door panel
-				_box(dyn, pos2 + Vector3(0.3, tall * 0.5, 0.47), Vector3(0.03, 0.18, 0.02), _solid(Color(0.7, 0.7, 0.72), 0.3, 0.9))              # handle
-				_box(dyn, pos2 + Vector3(-0.25, tall - 0.4, 0.47), Vector3(0.12, 0.08, 0.01), _emit(Color(1.0, 0.65, 0.1), 1.8, false))            # status
-				_box(dyn, pos2 + Vector3(-0.1, tall - 0.4, 0.47), Vector3(0.04, 0.04, 0.01), _emit(Color(0.2, 1.0, 0.4), 2.0, false))
+				_bx(I, pos2 + Vector3(0, tall * 0.5, 0), Vector3(0.85, tall, 0.9), _pbr("shell", 0.9, Color(2.5, 2.5, 2.45), 0.9, 0.0))       # switchgear: grey paint
+				_bx(I, pos2 + Vector3(0, tall * 0.5, 0.455), Vector3(0.72, tall - 0.2, 0.012), _pbr("steel", 0.9, Color(1.9, 1.9, 2.0), 0.8, 0.0))     # door panel
+				_bx(I, pos2 + Vector3(0.3, tall * 0.5, 0.47), Vector3(0.03, 0.18, 0.02), _solid(Color(0.7, 0.7, 0.72), 0.3, 0.9))              # handle
+				_bx(I, pos2 + Vector3(-0.25, tall - 0.4, 0.47), Vector3(0.12, 0.08, 0.01), _emit(Color(1.0, 0.65, 0.1), 1.8, false))            # status
+				_bx(I, pos2 + Vector3(-0.1, tall - 0.4, 0.47), Vector3(0.04, 0.04, 0.01), _emit(Color(0.2, 1.0, 0.4), 2.0, false))
 				pow_n += 1
 	if hall.coolingClass == "dlc" and cool_n > 0:
 		var zlen := row_z[row_z.size() - 1] + 1.0
@@ -779,6 +844,28 @@ func _build_ceiling() -> void:
 		var pc := CylinderMesh.new(); pc.top_radius = 0.035; pc.bottom_radius = 0.035; pc.height = 1.0; pc.radial_segments = 8
 		_multi(_ceil, pc, _solid(Color(0.75, 0.08, 0.06), 0.45, 0.2), pipes)
 
+## Compare each rack's state with the last rebuild: racks that just arrived, came online or went down get a pulse of light
+## in that state's colour (and the owner hears about it through rack_event). Then hand the hall to the technicians.
+func _rack_changes(hall: Dictionary, fresh: bool) -> void:
+	var now := {}; var n := {"online": 0, "failed": 0, "arrived": 0}
+	for r in hall.racks:
+		var slot := int(r.slot); var st := str(r.status); now[slot] = st
+		if fresh or is_zero_approx(_t): continue
+		var old: String = str(_prev_st.get(slot, ""))
+		if old == st: continue
+		var kind := ""
+		if st == "failed": kind = "failed"
+		elif st == "online" and old != "": kind = "online"
+		elif old == "" or (st == "installing" and old == "ordered"): kind = "arrived"
+		if kind == "": continue
+		n[kind] += 1
+		if int(n.online) + int(n.failed) + int(n.arrived) <= 24:
+			life.pulse(slot_pos(slot), Color(1.0, 0.15, 0.1) if kind == "failed" else (Color(0.25, 1.0, 0.55) if kind == "online" else Color(0.45, 0.8, 1.0)))
+	_prev_st = now
+	for k in n:
+		if int(n[k]) > 0: rack_event.emit(k, int(n[k]))
+	life.sync(hall.racks, int(b.g.get("staff", 2)), _built_key, fresh)
+
 ## One box-projected reflection probe per hall, captured once per rebuild: metal and glass reflect the hall itself (lamps, racks)
 ## instead of the sky. High and up on Forward+ (lower tiers reflect the dark sky, which is close enough).
 func _build_probe() -> void:
@@ -820,7 +907,7 @@ func _lamp_ok() -> bool:
 ## Potato tier: a soft pool of light painted on the floor instead of a real spotlight.
 func _light_pool(p: Vector3, d: float, col: Color) -> void:
 	if int(Settings.tier().lights) >= 8 and _lamp_n % 2 == 0: return
-	_box(dyn, p, Vector3(1.8, 0.003, maxf(1.0, d * 0.8)), _emit(col, 1.0, true))
+	_bx(I, p, Vector3(1.8, 0.003, maxf(1.0, d * 0.8)), _emit(col, 1.0, true), false)
 
 ## Interior of the hall including the plant column and the switchgear strip: the walls stand on this rectangle.
 func _wall_rect(hall: Dictionary) -> Rect2:
@@ -939,9 +1026,8 @@ func _update_cables(force: bool) -> void:
 	_update_smoke()
 	var cand := []
 	for slot in _rack_nodes:
-		var e: Dictionary = _rack_nodes[slot]; var node: Node3D = e.node
-		if not is_instance_valid(node): continue
-		var d := cam.position.distance_to(node.global_position); var want := 0
+		var e: Dictionary = _rack_nodes[slot]
+		var d := cam.position.distance_to((e.xf as Transform3D).origin); var want := 0
 		if q >= 3: want = 2 if d < 8.0 else (1 if d < 22.0 else 0)
 		elif q == 2: want = 1 if d < 22.0 else 0
 		elif q == 1: want = 1 if d < 12.0 else 0
@@ -950,10 +1036,12 @@ func _update_cables(force: bool) -> void:
 	var live := {}
 	for k in mini(cand.size(), 90): live[cand[k][1]] = cand[k][2]
 	for slot in _rack_nodes:
-		var e: Dictionary = _rack_nodes[slot]; var node: Node3D = e.node
-		if not is_instance_valid(node): continue
+		var e: Dictionary = _rack_nodes[slot]
 		var want: int = live.get(slot, 0)
 		if want == int(e.detail): continue
+		var node: Node3D = e.node
+		if node == null or not is_instance_valid(node):   # a rack only gets a node of its own once it is close enough to grow cabling
+			node = Node3D.new(); node.transform = e.xf; dyn.add_child(node); e.node = node
 		var old := node.get_node_or_null("cables")
 		if old != null: old.queue_free(); node.remove_child(old)
 		e.detail = want
@@ -977,27 +1065,26 @@ func _update_labels() -> void:
 		_label_turn = turn
 		var along_z := absi(int(roundf(turn / (PI * 0.5)))) % 2 == 1   # the text runs along the 1.2 m depth of the rack, or across its 0.6 m width
 		var psi := turn
-		var line_dir := Basis(Vector3.UP, psi) * Vector3(1, 0, 0)
 		for e in _labels:
-			if not is_instance_valid(e.node): continue
+			if e.node == null or not is_instance_valid(e.node): continue
 			var p: Vector3 = e.pos
 			if e.get("kind", "") == "text":
 				var l: Label3D = e.node; l.rotation = Vector3(-PI / 2, psi, 0); l.pixel_size = 0.0034 if along_z else 0.0021
 			else:
-				var sp: Sprite3D = e.node; sp.rotation = Vector3(-PI / 2, psi, 0)
-				var up := Vector3(-sin(psi), 0, -cos(psi))   # the text's "up" on the rack top (away from the camera)
-				sp.position = p + Vector3(0, RH + 0.26, 0) + (line_dir * 0.47 if along_z else up * 0.36)
+				var sp: Sprite3D = e.node; sp.rotation = Vector3(-PI / 2, psi, 0); sp.position = _logo_pos(p, psi, along_z)
 	var all := _labels_show()
 	var far_ok: bool = Settings.tier().labels_far
 	var near_cursor := _cursor_ok and dist < 34.0
 	for e in _labels:
-		if not is_instance_valid(e.node): continue
 		var show := all
 		if not show and labels_on:
 			if e.always and far_ok: show = true
 			elif near_cursor:
 				var p: Vector3 = e.pos
 				show = Vector2(p.x - _cursor_g.x, p.z - _cursor_g.z).length() < 1.6
+		if e.node == null or not is_instance_valid(e.node):
+			if not show or not is_inside_tree(): continue
+			_label_node(e)
 		e.node.visible = show
 	_layout_boards(labels_on and not all)
 

@@ -2,6 +2,11 @@
 
 All notable changes to GIGAWATT. Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+- **The hall is alive.** Technicians in hi-vis walk the hot aisles and work at the racks that need them (down first, then installs and burn-in). A rack that arrives, comes online or fails gets a pulse of light in that state's colour, with a sound for online and failure.
+- **Much lighter hall.** Rack parts are drawn in batches (one draw per kind of part instead of up to 19 objects per rack): about 45% fewer draw calls in a full 200-rack hall. The hall is no longer rebuilt after every click, only when something in it actually changed, and rack labels are only created when you look closely.
+
 ## [0.9.3] - 2026-11-20 (alpha 4)
 
 Third review round: five reviewers (real Pixel 9a, desktop 720p to 4K, handheld/tablet/odd windows, graphics, website), then fixes in five lanes.

@@ -202,6 +202,7 @@ func _build_shell() -> void:
 	tip_panel = PanelContainer.new(); tip_panel.add_theme_stylebox_override("panel", Kit.sb(Kit.field(0.96), Kit.CY, 8, 1, 10)); tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.visible = false
 	tip_lbl = Kit.rich("", 13); tip_lbl.custom_minimum_size = Vector2(300, 0); tip_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; tip_panel.add_child(tip_lbl); root.add_child(tip_panel)
 	hall.hover_changed.connect(_on_rack_hover)
+	hall.rack_event.connect(func(kind: String, _n: int): if not quiet and started and kind != "arrived": sfx("online" if kind == "online" else "incident"))   # racks coming online / going down are heard as well as seen
 	toasts = VBoxContainer.new(); toasts.set_anchors_preset(Control.PRESET_TOP_RIGHT); toasts.offset_left = -480; toasts.offset_right = -14; toasts.offset_top = 76; toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE; toasts.add_theme_constant_override("separation", 6); root.add_child(toasts)
 	_build_cam_tools()
 	bar_tip = PanelContainer.new(); bar_tip.add_theme_stylebox_override("panel", Kit.sb(Kit.field(0.97), Kit.CY, 8, 1, 10)); bar_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE; bar_tip.visible = false
